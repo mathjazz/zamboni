@@ -1,48 +1,59 @@
 # -*- coding: utf-8 -*-
 import base64
+import hashlib
 import json
 import logging
 import os
+import shutil
+import subprocess
 import sys
-import time
+import tempfile
 import traceback
-import urllib2
 import urlparse
 import uuid
 import zipfile
 
 from django import forms
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
-from django.utils import translation
-from django.utils.http import urlencode
 
+import requests
 from appvalidator import validate_app, validate_packaged_app
-from celery_tasktree import task_with_callbacks
-from celeryutils import task
+from celery import task
 from django_statsd.clients import statsd
 from PIL import Image
-from tower import ugettext as _
+from django.utils.translation import ugettext as _
 
-import amo
-from addons.models import Addon
-from amo.decorators import set_modified_on, write
-from amo.helpers import absolutify
-from amo.utils import (remove_icons, resize_image, send_mail_jinja, strip_bom,
-                       to_language)
-from files.models import FileUpload, File, FileValidation
-from files.utils import SafeUnzip
-
+import mkt
+from lib.post_request_task.task import task as post_request_task
 from mkt.constants import APP_PREVIEW_SIZES
-from mkt.constants.regions import REGIONS_CHOICES_SLUG
-from mkt.webapps.models import AddonExcludedRegion, Webapp
+from mkt.constants.regions import REGIONS_CHOICES_ID_DICT
+from mkt.files.models import File, FileUpload, FileValidation
+from mkt.files.utils import SafeUnzip
+from mkt.site.decorators import set_modified_on, use_master
+from mkt.site.helpers import absolutify
+from mkt.site.mail import send_mail_jinja
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage, public_storage)
+from mkt.site.utils import (remove_icons, remove_promo_imgs, resize_image,
+                            strip_bom)
+from mkt.webapps.models import AddonExcludedRegion, Preview, Webapp
+from mkt.webapps.utils import iarc_get_app_info
 
 
 log = logging.getLogger('z.mkt.developers.task')
 
 
-@task
-@write
+CT_URL = (
+    'https://developer.mozilla.org/docs/Web/Apps/Manifest#Serving_manifests'
+)
+
+REQUESTS_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Mobile; rv:18.0) Gecko/18.0 Firefox/18.0'
+}
+
+
+@post_request_task
+@use_master
 def validator(upload_id, **kw):
     if not settings.VALIDATE_ADDONS:
         return None
@@ -81,11 +92,13 @@ def validator(upload_id, **kw):
         # it for normal logging.
         tb = traceback.format_exception(*sys.exc_info())
         upload.update(task_error=''.join(tb))
-        raise
+        # Don't raise if we're being eager, setting the error is enough.
+        if not settings.CELERY_ALWAYS_EAGER:
+            raise
 
 
 @task
-@write
+@use_master
 def file_validator(file_id, **kw):
     if not settings.VALIDATE_ADDONS:
         return None
@@ -104,57 +117,150 @@ def file_validator(file_id, **kw):
 def run_validator(file_path, url=None):
     """A pre-configured wrapper around the app validator."""
 
+    temp_path = None
+    # Make a copy of the file since we can't assume the
+    # uploaded file is on the local filesystem.
+    temp_path = tempfile.mktemp()
+    copy_stored_file(
+        file_path, temp_path,
+        src_storage=private_storage, dst_storage=local_storage)
+
     with statsd.timer('mkt.developers.validator'):
-        is_packaged = zipfile.is_zipfile(file_path)
+        is_packaged = zipfile.is_zipfile(temp_path)
         if is_packaged:
             log.info(u'Running `validate_packaged_app` for path: %s'
                      % (file_path))
             with statsd.timer('mkt.developers.validate_packaged_app'):
-                return validate_packaged_app(file_path,
+                return validate_packaged_app(
+                    temp_path,
                     market_urls=settings.VALIDATOR_IAF_URLS,
                     timeout=settings.VALIDATOR_TIMEOUT,
                     spidermonkey=settings.SPIDERMONKEY)
         else:
             log.info(u'Running `validate_app` for path: %s' % (file_path))
             with statsd.timer('mkt.developers.validate_app'):
-                return validate_app(storage.open(file_path).read(),
-                    market_urls=settings.VALIDATOR_IAF_URLS,
-                    url=url)
+                return validate_app(open(temp_path).read(),
+                                    market_urls=settings.VALIDATOR_IAF_URLS,
+                                    url=url)
+
+    # Clean up copied files.
+    os.unlink(temp_path)
 
 
-@task
+def _hash_file(fd):
+    return hashlib.md5(fd.read()).hexdigest()[:8]
+
+
+@post_request_task
+@use_master
 @set_modified_on
-def resize_icon(src, dst, size, locally=False, **kw):
-    """Resizes addon icons."""
+def resize_icon(src, dst, sizes, src_storage=private_storage,
+                dst_storage=public_storage, **kw):
+    """Resizes addon/websites icons."""
     log.info('[1@None] Resizing icon: %s' % dst)
+
     try:
-        if isinstance(size, list):
-            for s in size:
-                resize_image(src, '%s-%s.png' % (dst, s), (s, s),
-                             remove_src=False, locally=locally)
-            if locally:
-                os.remove(src)
-            else:
-                storage.delete(src)
-        else:
-            resize_image(src, dst, (size, size), remove_src=True,
-                         locally=locally)
-        return True
+        for s in sizes:
+            size_dst = '%s-%s.png' % (dst, s)
+            resize_image(src, size_dst, (s, s), remove_src=False,
+                         src_storage=src_storage, dst_storage=dst_storage)
+            pngcrush_image.delay(size_dst, storage=dst_storage, **kw)
+        with src_storage.open(src) as fd:
+            icon_hash = _hash_file(fd)
+        src_storage.delete(src)
+
+        log.info('Icon resizing completed for: %s' % dst)
+        return {'icon_hash': icon_hash}
     except Exception, e:
-        log.error("Error saving addon icon: %s" % e)
+        log.error("Error resizing icon: %s; %s" % (e, dst))
+
+
+@post_request_task
+@use_master
+@set_modified_on
+def resize_promo_imgs(src, dst, sizes, **kw):
+    """Resizes webapp/website promo imgs."""
+    log.info('[1@None] Resizing promo imgs: %s' % dst)
+    try:
+        for s in sizes:
+            size_dst = '%s-%s.png' % (dst, s)
+            # Crop only to the width, keeping the aspect ratio.
+            resize_image(src, size_dst, (s, 0), remove_src=False)
+            pngcrush_image.delay(size_dst, **kw)
+
+        with private_storage.open(src) as fd:
+            promo_img_hash = _hash_file(fd)
+        private_storage.delete(src)
+
+        log.info('Promo img hash resizing completed for: %s' % dst)
+        return {'promo_img_hash': promo_img_hash}
+    except Exception, e:
+        log.error("Error resizing promo img hash: %s; %s" % (e, dst))
 
 
 @task
+@use_master
 @set_modified_on
-def resize_preview(src, instance, **kw):
+def pngcrush_image(src, hash_field='image_hash', storage=public_storage, **kw):
+    """
+    Optimizes a PNG image by running it through Pngcrush. Returns hash.
+
+    src -- filesystem image path
+    hash_field -- field name to save the new hash on instance if passing
+                  instance through set_modified_on
+    """
+    log.info('[1@None] Optimizing image: %s' % src)
+    tmp_src = tempfile.NamedTemporaryFile(suffix='.png')
+    with storage.open(src) as srcf:
+        shutil.copyfileobj(srcf, tmp_src)
+        tmp_src.seek(0)
+    try:
+        # pngcrush -ow has some issues, use a temporary file and do the final
+        # renaming ourselves.
+        suffix = '.opti.png'
+        tmp_path = '%s%s' % (os.path.splitext(tmp_src.name)[0], suffix)
+        cmd = [settings.PNGCRUSH_BIN, '-q', '-rem', 'alla', '-brute',
+               '-reduce', '-e', suffix, tmp_src.name]
+        sp = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = sp.communicate()
+        if sp.returncode != 0:
+            log.error('Error optimizing image: %s; %s' % (src, stderr.strip()))
+            kw['storage'] = storage
+            pngcrush_image.retry(args=[src], kwargs=kw, max_retries=3)
+            return False
+
+        # Return hash for set_modified_on.
+        with open(tmp_path) as fd:
+            image_hash = _hash_file(fd)
+
+        copy_stored_file(tmp_path, src, src_storage=local_storage,
+                         dst_storage=storage)
+        log.info('Image optimization completed for: %s' % src)
+        os.remove(tmp_path)
+        tmp_src.close()
+        return {
+            hash_field: image_hash
+        }
+
+    except Exception, e:
+        log.error('Error optimizing image: %s; %s' % (src, e))
+    return {}
+
+
+@post_request_task
+@use_master
+@set_modified_on
+def resize_preview(src, pk, **kw):
     """Resizes preview images and stores the sizes on the preview."""
+    instance = Preview.objects.get(pk=pk)
     thumb_dst, full_dst = instance.thumbnail_path, instance.image_path
-    sizes = {}
+    sizes = instance.sizes or {}
     log.info('[1@None] Resizing preview and storing size: %s' % thumb_dst)
     try:
         thumbnail_size = APP_PREVIEW_SIZES[0][:2]
         image_size = APP_PREVIEW_SIZES[1][:2]
-        with storage.open(src, 'rb') as fp:
+        with private_storage.open(src, 'rb') as fp:
             size = Image.open(fp).size
         if size[0] > size[1]:
             # If the image is wider than tall, then reverse the wanted size
@@ -163,58 +269,46 @@ def resize_preview(src, instance, **kw):
             thumbnail_size = thumbnail_size[::-1]
             image_size = image_size[::-1]
 
-        sizes['thumbnail'] = resize_image(src, thumb_dst,
-                                          thumbnail_size,
+        if kw.get('generate_thumbnail', True):
+            sizes['thumbnail'] = resize_image(src, thumb_dst,
+                                              thumbnail_size,
+                                              remove_src=False)
+        if kw.get('generate_image', True):
+            sizes['image'] = resize_image(src, full_dst,
+                                          image_size,
                                           remove_src=False)
-        sizes['image'] = resize_image(src, full_dst,
-                                      image_size,
-                                      remove_src=False)
         instance.sizes = sizes
         instance.save()
+        log.info('Preview resized to: %s' % thumb_dst)
+
+        # Remove src file now that it has been processed.
+        private_storage.delete(src)
+
         return True
+
     except Exception, e:
-        log.error("Error saving preview: %s" % e)
-
-
-@task
-@write
-def get_preview_sizes(ids, **kw):
-    log.info('[%s@%s] Getting preview sizes for addons starting at id: %s...'
-             % (len(ids), get_preview_sizes.rate_limit, ids[0]))
-    addons = Addon.objects.filter(pk__in=ids).no_transforms()
-
-    for addon in addons:
-        previews = addon.previews.all()
-        log.info('Found %s previews for: %s' % (previews.count(), addon.pk))
-        for preview in previews:
-            try:
-                log.info('Getting size for preview: %s' % preview.pk)
-                sizes = {
-                    'thumbnail': Image.open(preview.thumbnail_path).size,
-                    'image': Image.open(preview.image_path).size,
-                }
-                preview.update(sizes=sizes)
-            except Exception, err:
-                log.error('Failed to find size of preview: %s, error: %s'
-                          % (addon.pk, err))
+        log.error("Error saving preview: %s; %s" % (e, thumb_dst))
 
 
 def _fetch_content(url):
     with statsd.timer('developers.tasks.fetch_content'):
         try:
-            stream = urllib2.urlopen(url, timeout=30)
-            if not 200 <= stream.getcode() < 300:
-                raise Exception(
-                    'An invalid HTTP status code was returned.')
-            if not stream.headers.keys():
-                raise Exception(
-                    'The HTTP server did not return headers.')
-            return stream
-        except urllib2.HTTPError, e:
-            raise Exception(
-                '%s responded with %s (%s).' % (url, e.code, e.msg))
-        except urllib2.URLError, e:
-            # Unpack the URLError to try and find a useful message.
+            res = requests.get(url, timeout=30, stream=True,
+                               headers=REQUESTS_HEADERS)
+
+            if not 200 <= res.status_code < 300:
+                statsd.incr('developers.tasks.fetch_content.error')
+                raise Exception('An invalid HTTP status code was returned.')
+
+            if not res.headers.keys():
+                statsd.incr('developers.tasks.fetch_content.error')
+                raise Exception('The HTTP server did not return headers.')
+
+            statsd.incr('developers.tasks.fetch_content.success')
+            return res
+        except requests.RequestException as e:
+            statsd.incr('developers.tasks.fetch_content.error')
+            log.error('fetch_content connection error: %s' % e)
             raise Exception('The file could not be retrieved.')
 
 
@@ -225,40 +319,79 @@ class ResponseTooLargeException(Exception):
 def get_content_and_check_size(response, max_size):
     # Read one extra byte. Reject if it's too big so we don't have issues
     # downloading huge files.
-    content = response.read(max_size + 1)
+    content = response.iter_content(chunk_size=max_size + 1).next()
     if len(content) > max_size:
         raise ResponseTooLargeException('Too much data.')
     return content
 
 
-def save_icon(webapp, content):
-    tmp_dst = os.path.join(settings.TMP_PATH, 'icon', uuid.uuid4().hex)
-    with storage.open(tmp_dst, 'wb') as fd:
-        fd.write(content)
-
-    dirname = webapp.get_icon_dir()
-    destination = os.path.join(dirname, '%s' % webapp.id)
-    remove_icons(destination)
-    resize_icon.delay(tmp_dst, destination, amo.ADDON_ICON_SIZES,
-                      set_modified_on=[webapp])
-
-    # Need to set the icon type so .get_icon_url() works
-    # normally submit step 4 does it through AddonFormMedia,
-    # but we want to beat them to the punch.
-    # resize_icon outputs pngs, so we know it's 'image/png'
-    webapp.icon_type = 'image/png'
-    webapp.save()
-
-
-@task_with_callbacks
-@write
-def fetch_icon(webapp, **kw):
-    """Downloads a webapp icon from the location specified in the manifest.
-    Returns False if icon was not able to be retrieved
+def save_icon(obj, icon_content):
     """
+    Saves the icon for `obj` to its final destination. `obj` can be an app or a
+    website.
+    """
+    tmp_dst = os.path.join(settings.TMP_PATH, 'icon', uuid.uuid4().hex)
+    with public_storage.open(tmp_dst, 'wb') as fd:
+        fd.write(icon_content)
+
+    dirname = obj.get_icon_dir()
+    destination = os.path.join(dirname, '%s' % obj.pk)
+    remove_icons(destination)
+    icon_hash = resize_icon(tmp_dst, destination, mkt.CONTENT_ICON_SIZES,
+                            set_modified_on=[obj], src_storage=public_storage,
+                            dst_storage=public_storage)
+
+    # Need to set icon type so .get_icon_url() works normally
+    # submit step 4 does it through AppFormMedia, but we want to beat them to
+    # the punch. resize_icon outputs pngs so we know it's 'image/png'.
+    obj.icon_hash = icon_hash['icon_hash']  # In case, we're running not async.
+    try:
+        obj.icon_type = 'image/png'
+    except AttributeError:
+        # icon_type can be just a @property on models that only implement png.
+        pass
+    obj.save()
+
+
+def save_promo_imgs(obj, img_content):
+    """
+    Saves the promo image for `obj` to its final destination.
+    `obj` can be an app or a website.
+    """
+    tmp_dst = os.path.join(settings.TMP_PATH, 'promo_imgs', uuid.uuid4().hex)
+    with private_storage.open(tmp_dst, 'wb') as fd:
+        fd.write(img_content)
+
+    dirname = obj.get_promo_img_dir()
+    destination = os.path.join(dirname, '%s' % obj.pk)
+    remove_promo_imgs(destination)
+    resize_promo_imgs(
+        tmp_dst, destination, mkt.PROMO_IMG_SIZES,
+        set_modified_on=[obj])
+
+
+@post_request_task
+@use_master
+def fetch_icon(pk, file_pk=None, **kw):
+    """
+    Downloads a webapp icon from the location specified in the manifest.
+
+    Returns False if icon was not able to be retrieved
+
+    If `file_pk` is not provided it will use the file from the app's
+    `current_version`.
+
+    """
+    webapp = Webapp.objects.get(pk=pk)
     log.info(u'[1@None] Fetching icon for webapp %s.' % webapp.name)
-    manifest = webapp.get_manifest_json()
-    if not manifest or not 'icons' in manifest:
+    if file_pk:
+        file_obj = File.objects.get(pk=file_pk)
+    else:
+        file_obj = (webapp.current_version and
+                    webapp.current_version.all_files[0])
+    manifest = webapp.get_manifest_json(file_obj)
+
+    if not manifest or 'icons' not in manifest:
         # Set the icon type to empty.
         webapp.update(icon_type='')
         return
@@ -266,6 +399,7 @@ def fetch_icon(webapp, **kw):
     try:
         biggest = max(int(size) for size in manifest['icons'])
     except ValueError:
+        log.error('No icon to fetch for webapp "%s"' % webapp.name)
         return False
 
     icon_url = manifest['icons'][str(biggest)]
@@ -278,7 +412,7 @@ def fetch_icon(webapp, **kw):
             if icon_url.startswith('/'):
                 icon_url = icon_url[1:]
             try:
-                zf = SafeUnzip(webapp.get_latest_file().file_path)
+                zf = SafeUnzip(private_storage.open(file_obj.file_path))
                 zf.is_valid()
                 content = zf.extract_path(icon_url)
             except (KeyError, forms.ValidationError):  # Not found in archive.
@@ -305,6 +439,7 @@ def fetch_icon(webapp, **kw):
                 log.warning(u'[Webapp:%s] Icon exceeds maximum size.' % webapp)
                 return False
 
+    log.info('Icon fetching completed for app "%s"; saving icon' % webapp.name)
     save_icon(webapp, content)
 
 
@@ -325,8 +460,6 @@ def failed_validation(*messages, **kwargs):
                        'prelim': True})
 
 
-CT_URL = (
-    'https://developer.mozilla.org/docs/Web/Apps/Manifest#Serving_manifests')
 def _fetch_manifest(url, upload=None):
     def fail(message, upload=None):
         if upload is None:
@@ -343,7 +476,7 @@ def _fetch_manifest(url, upload=None):
                'again.'), upload=upload)
         return
 
-    ct = response.headers.get('Content-Type', '')
+    ct = response.headers.get('content-type', '')
     if not ct.startswith('application/x-web-app-manifest+json'):
         fail(_('Manifests must be served with the HTTP header '
                '"Content-Type: application/x-web-app-manifest+json". See %s '
@@ -371,7 +504,7 @@ def _fetch_manifest(url, upload=None):
     if len(ct_split) > 1:
         # Figure out if we've got a charset specified.
         kv_pairs = dict(tuple(p.split('=', 1)) for p in ct_split[1:] if
-                              '=' in p)
+                        '=' in p)
         if 'charset' in kv_pairs and kv_pairs['charset'].lower() != 'utf-8':
             fail(_("The manifest's encoding does not match the charset "
                    'provided in the HTTP Content-Type.'),
@@ -381,8 +514,8 @@ def _fetch_manifest(url, upload=None):
     return content
 
 
-@task
-@write
+@post_request_task
+@use_master
 def fetch_manifest(url, upload_pk=None, **kw):
     log.info(u'[1@None] Fetching manifest: %s.' % url)
     upload = FileUpload.objects.get(pk=upload_pk)
@@ -391,42 +524,14 @@ def fetch_manifest(url, upload_pk=None, **kw):
     if content is None:
         return
 
-    upload.add_file([content], url, len(content), is_webapp=True)
+    upload.add_file([content], url, len(content))
     # Send the upload to the validator.
     validator(upload.pk, url=url)
 
 
 @task
-def subscribe_to_responsys(campaign, address, format='html', source_url='',
-                           lang='', country='', **kw):
-    """
-    Subscribe a user to a list in responsys. There should be two
-    fields within the Responsys system named by the "campaign"
-    parameter: <campaign>_FLG and <campaign>_DATE.
-    """
-
-    data = {
-        'LANG_LOCALE': lang,
-        'COUNTRY_': country,
-        'SOURCE_URL': source_url,
-        'EMAIL_ADDRESS_': address,
-        'EMAIL_FORMAT_': 'H' if format == 'html' else 'T',
-        }
-
-    data['%s_FLG' % campaign] = 'Y'
-    data['%s_DATE' % campaign] = date.today().strftime('%Y-%m-%d')
-    data['_ri_'] = settings.RESPONSYS_ID
-
-    try:
-        res = urllib2.urlopen('http://awesomeness.mozilla.org/pub/rf',
-                              data=urlencode(data))
-        return res.code == 200
-    except urllib2.URLError:
-        return False
-
-
-@task
-def region_email(ids, regions, **kw):
+def region_email(ids, region_ids, **kw):
+    regions = [REGIONS_CHOICES_ID_DICT[id] for id in region_ids]
     region_names = regions = sorted([unicode(r.name) for r in regions])
 
     # Format the region names with commas and fanciness.
@@ -446,14 +551,15 @@ def region_email(ids, regions, **kw):
 
     for id_ in ids:
         log.info('[Webapp:%s] Emailing devs about new region(s): %s.' %
-                (id_, region_names))
+                 (id_, region_names))
 
         product = Webapp.objects.get(id=id_)
         to = set(product.authors.values_list('email', flat=True))
 
         if len(regions) == 1:
-            subject = _(u'{region} region added to the Firefox Marketplace'
-                ).format(region=regions[0])
+            subject = _(
+                u'{region} region added to the Firefox Marketplace').format(
+                    region=regions[0])
         else:
             subject = _(u'New regions added to the Firefox Marketplace')
 
@@ -469,8 +575,9 @@ def region_email(ids, regions, **kw):
 
 
 @task
-@write
-def region_exclude(ids, regions, **kw):
+@use_master
+def region_exclude(ids, region_ids, **kw):
+    regions = [REGIONS_CHOICES_ID_DICT[id] for id in region_ids]
     region_names = ', '.join(sorted([unicode(r.name) for r in regions]))
 
     log.info('[%s@%s] Excluding new region(s): %s.' %
@@ -487,8 +594,25 @@ def region_exclude(ids, regions, **kw):
 
 @task
 def save_test_plan(f, filename, addon):
-    dst_root = os.path.join(settings.ADDONS_PATH, str(addon.id))
-    dst = os.path.join(dst_root, filename)
-    with open(dst, 'wb+') as destination:
+    path = os.path.join(settings.ADDONS_PATH, str(addon.id), filename)
+    with private_storage.open(path, 'wb+') as destination:
         for chunk in f.chunks():
             destination.write(chunk)
+
+
+@task
+@use_master
+def refresh_iarc_ratings(ids, **kw):
+    """
+    Refresh old or corrupt IARC ratings by re-fetching the certificate.
+    """
+    for app in Webapp.objects.filter(id__in=ids):
+        data = iarc_get_app_info(app)
+
+        if data.get('rows'):
+            row = data['rows'][0]
+
+            # We found a rating, so store the id and code for future use.
+            app.set_descriptors(row.get('descriptors', []))
+            app.set_interactives(row.get('interactives', []))
+            app.set_content_ratings(row.get('ratings', {}))

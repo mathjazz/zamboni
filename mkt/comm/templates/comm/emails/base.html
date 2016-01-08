@@ -1,0 +1,21 @@
+{% block content %}{% endblock %}
+
+{% if nonuser_mozilla_contact %}
+You may reply by creating a Firefox Account under your email and posting to {{ thread_url }}
+
+If you wish to stop receiving email notifications for this thread, ask a reviewer
+to remove you from being a Mozilla contact for this {{ obj_type }}.
+{% else %}
+You may reply to this email or post to {{ thread_url }}
+
+{% if is_app %}
+If you wish to stop receiving email notifications for this thread, you can click 'Unsubscribe' at {{ thread_url }}
+{% endif %}
+{% endif %}
+
+--
+{% block footer %}
+{{ note.author.name if note.author }}
+Firefox Marketplace Reviewer
+{{ settings.SITE_URL }}
+{% endblock %}

@@ -1,40 +1,42 @@
 import json
 import os
-import shutil
 import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.urlresolvers import reverse
 from django.utils.http import http_date
 
+from cache_nuggets.lib import Message
 from mock import patch
 from nose import SkipTest
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
-import amo
-import amo.tests
-from amo.utils import Message
-from amo.urlresolvers import reverse
-from files.helpers import FileViewer, DiffHelper
-from files.models import File
+import mkt
+import mkt.site.tests
+from mkt.files.helpers import DiffHelper, FileViewer
+from mkt.files.models import File
+from mkt.site.fixtures import fixture
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage, public_storage)
+from mkt.users.models import UserProfile
 from mkt.webapps.models import Webapp
-from users.models import UserProfile
+
 
 packaged_app = 'mkt/submit/tests/packaged/full-tpa.zip'
-not_binary = 'manifest.webapp'
+not_binary = 'script.js'
 binary = 'icons/256.png'
 
 
 class FilesBase(object):
 
     def login_as_editor(self):
-        assert self.client.login(username='editor@mozilla.com',
-                                 password='password')
+        self.login('editor@mozilla.com')
 
     def setUp(self):
         self.app = Webapp.objects.get(pk=337141)
-        self.app.update(is_packaged=True, status=amo.WEBAPPS_UNREVIEWED_STATUS)
+        self.app.update(is_packaged=True, status=mkt.WEBAPPS_UNREVIEWED_STATUS)
         self.dev = self.app.authors.all()[0]
         self.regular = UserProfile.objects.get(pk=999)
         self.version = self.app.versions.latest()
@@ -52,17 +54,15 @@ class FilesBase(object):
 
         for file_obj in self.files:
             src = os.path.join(settings.ROOT, packaged_app)
-            try:
-                os.makedirs(os.path.dirname(file_obj.file_path))
-            except OSError:
-                pass
-            shutil.copyfile(src, file_obj.file_path)
+            if file_obj.status in mkt.LISTED_STATUSES:
+                target = public_storage
+            else:
+                target = private_storage
+            copy_stored_file(src, file_obj.file_path,
+                             src_storage=local_storage,
+                             dst_storage=target)
 
-        self.file_viewer = FileViewer(self.file, is_webapp=True)
-        # Setting this to True, so we are delaying the extraction of files,
-        # in the tests, the files won't be extracted.
-        # Most of these tests extract as needed to.
-        self.create_switch(name='delay-file-viewer')
+        self.file_viewer = FileViewer(self.file)
 
     def tearDown(self):
         self.file_viewer.cleanup()
@@ -77,67 +77,21 @@ class FilesBase(object):
         self.client.logout()
         self.check_urls(403)
 
-    def test_view_access_anon_view_unreviewed_source(self):
-        self.app.update(view_source=True)
-        self.file_viewer.extract()
-        self.client.logout()
-        self.check_urls(403)
-
-    def test_view_access_anon_view_source(self):
-        self.app.update(view_source=True, status=amo.STATUS_PUBLIC)
-        self.file_viewer.extract()
-        self.client.logout()
-        self.check_urls(200)
-
     def test_view_access_editor(self):
-        self.file_viewer.extract()
-        self.check_urls(200)
-
-    def test_view_access_editor_view_source(self):
-        self.app.update(view_source=True)
         self.file_viewer.extract()
         self.check_urls(200)
 
     def test_view_access_developer(self):
         self.client.logout()
-        assert self.client.login(username=self.dev.email, password='password')
-        self.file_viewer.extract()
-        self.check_urls(200)
-
-    def test_view_access_reviewed(self):
-        self.app.update(view_source=True)
-        self.file_viewer.extract()
-        self.client.logout()
-
-        for status in amo.UNREVIEWED_STATUSES:
-            self.app.update(status=status)
-            self.check_urls(403)
-
-        for status in amo.REVIEWED_STATUSES:
-            self.app.update(status=status)
-            self.check_urls(200)
-
-    def test_view_access_developer_view_source(self):
-        self.client.logout()
-        assert self.client.login(username=self.dev.email, password='password')
-        self.app.update(view_source=True)
+        self.login(self.dev.email)
         self.file_viewer.extract()
         self.check_urls(200)
 
     def test_view_access_another_developer(self):
         self.client.logout()
-        assert self.client.login(username=self.regular.email,
-                                 password='password')
+        self.login(self.regular.email)
         self.file_viewer.extract()
         self.check_urls(403)
-
-    def test_view_access_another_developer_view_source(self):
-        self.client.logout()
-        assert self.client.login(username=self.regular.email,
-                                 password='password')
-        self.app.update(view_source=True, status=amo.STATUS_PUBLIC)
-        self.file_viewer.extract()
-        self.check_urls(200)
 
     def test_poll_extracted(self):
         self.file_viewer.extract()
@@ -186,15 +140,6 @@ class FilesBase(object):
         url = res.context['file_link']['url']
         eq_(url, reverse('reviewers.apps.review', args=[self.app.app_slug]))
 
-    def test_file_header_anon(self):
-        self.client.logout()
-        self.file_viewer.extract()
-        self.app.update(view_source=True, status=amo.STATUS_PUBLIC)
-        res = self.client.get(self.file_url(not_binary))
-        eq_(res.status_code, 200)
-        url = res.context['file_link']['url']
-        eq_(url, reverse('detail', args=[self.app.pk]))
-
     def test_content_no_file(self):
         self.file_viewer.extract()
         res = self.client.get(self.file_url())
@@ -202,16 +147,7 @@ class FilesBase(object):
         eq_(len(doc('#content')), 0)
 
     def test_no_files(self):
-        res = self.client.get(self.file_url())
-        eq_(res.status_code, 200)
-        assert 'files' not in res.context
-
-    @patch('waffle.switch_is_active')
-    def test_no_files_switch(self, switch_is_active):
-        switch_is_active.side_effect = lambda x: x != 'delay-file-viewer'
-        # By setting the switch to False, we are not delaying the file
-        # extraction. The files will be extracted and there will be
-        # files in context.
+        self.file_viewer.cleanup()
         res = self.client.get(self.file_url())
         eq_(res.status_code, 200)
         assert 'files' in res.context
@@ -237,16 +173,7 @@ class FilesBase(object):
         self.file_viewer.extract()
         res = self.client.get(self.file_url(not_binary))
         doc = pq(res.content)
-        eq_(doc('#commands td:last').text(), 'Back to review')
-
-    def test_files_back_link_anon(self):
-        self.file_viewer.extract()
-        self.client.logout()
-        self.app.update(view_source=True, status=amo.STATUS_PUBLIC)
-        res = self.client.get(self.file_url(not_binary))
-        eq_(res.status_code, 200)
-        doc = pq(res.content)
-        eq_(doc('#commands td:last').text(), 'Back to app')
+        eq_(doc('#commands td')[-1].text_content(), 'Back to review')
 
     def test_diff_redirect(self):
         ids = self.files[0].id, self.files[1].id
@@ -263,6 +190,11 @@ class FilesBase(object):
         eq_(res.status_code, 302)
         self.assert3xx(res, reverse('mkt.files.list', args=ids))
 
+    def test_browse_deleted_version(self):
+        self.file.version.delete()
+        res = self.client.post(self.file_url(), {'left': self.file.id})
+        eq_(res.status_code, 404)
+
     def test_file_chooser(self):
         res = self.client.get(self.file_url())
         doc = pq(res.content)
@@ -278,14 +210,15 @@ class FilesBase(object):
         eq_(vers.eq(0).text(), '')
         f = self.versions[1].all_files[0]
         eq_(vers.eq(1).text(), '%s (%s)' % (self.versions[1].version,
-                                            amo.STATUS_CHOICES_API[f.status]))
+                                            mkt.STATUS_CHOICES_API[f.status]))
         f = self.versions[0].all_files[0]
         eq_(vers.eq(2).text(), '%s (%s)' % (self.versions[0].version,
-                                            amo.STATUS_CHOICES_API[f.status]))
+                                            mkt.STATUS_CHOICES_API[f.status]))
 
 
-class TestFileViewer(FilesBase, amo.tests.WebappTestCase):
-    fixtures = ['base/apps', 'base/users', 'webapps/337141-steamcube']
+class TestFileViewer(FilesBase, mkt.site.tests.WebappTestCase):
+    fixtures = fixture('group_editor', 'user_editor', 'user_editor_group',
+                       'user_999', 'webapp_337141')
 
     def poll_url(self):
         return reverse('mkt.files.poll', args=[self.file.pk])
@@ -301,15 +234,16 @@ class TestFileViewer(FilesBase, amo.tests.WebappTestCase):
             status_code = self.client.get(url).status_code
             assert status_code == status, (
                 'Request to %s returned status code %d (expected %d)' %
-                    (url, status_code, status))
+                (url, status_code, status))
 
     def add_file(self, name, contents):
         dest = os.path.join(self.file_viewer.dest, name)
-        open(dest, 'w').write(contents)
+        with private_storage.open(dest, 'w') as f:
+            f.write(contents)
 
     def test_files_xss(self):
         self.file_viewer.extract()
-        self.add_file('<script>alert("foo")', '')
+        self.add_file('<script>alert("foo")', '.')
         res = self.client.get(self.file_url())
         eq_(res.status_code, 200)
         doc = pq(res.content)
@@ -425,13 +359,13 @@ class TestFileViewer(FilesBase, amo.tests.WebappTestCase):
         eq_(len(doc('#id_right option[value][selected]')), 0)
 
 
-class TestDiffViewer(FilesBase, amo.tests.WebappTestCase):
-    fixtures = ['base/apps', 'base/users', 'webapps/337141-steamcube']
+class TestDiffViewer(FilesBase, mkt.site.tests.WebappTestCase):
+    fixtures = fixture('group_editor', 'user_editor', 'user_editor_group',
+                       'user_999', 'webapp_337141')
 
     def setUp(self):
         super(TestDiffViewer, self).setUp()
-        self.file_viewer = DiffHelper(self.files[0], self.files[1],
-                                      is_webapp=True)
+        self.file_viewer = DiffHelper(self.files[0], self.files[1])
 
     def poll_url(self):
         return reverse('mkt.files.compare.poll', args=[self.files[0].pk,
@@ -439,7 +373,8 @@ class TestDiffViewer(FilesBase, amo.tests.WebappTestCase):
 
     def add_file(self, file_obj, name, contents):
         dest = os.path.join(file_obj.dest, name)
-        open(dest, 'w').write(contents)
+        with private_storage.open(dest, 'w') as f:
+            f.write(contents)
 
     def file_url(self, file=None):
         args = [self.files[0].pk, self.files[1].pk]
@@ -452,7 +387,7 @@ class TestDiffViewer(FilesBase, amo.tests.WebappTestCase):
             status_code = self.client.get(url).status_code
             assert status_code == status, (
                 'Request to %s returned status code %d (expected %d)' %
-                    (url, status_code, status))
+                (url, status_code, status))
 
     def test_tree_no_file(self):
         self.file_viewer.extract()
@@ -482,7 +417,8 @@ class TestDiffViewer(FilesBase, amo.tests.WebappTestCase):
 
     def test_view_one_missing(self):
         self.file_viewer.extract()
-        os.remove(os.path.join(self.file_viewer.right.dest, 'manifest.webapp'))
+        private_storage.delete(os.path.join(self.file_viewer.right.dest,
+                                            'script.js'))
         res = self.client.get(self.file_url(not_binary))
         doc = pq(res.content)
         eq_(len(doc('pre')), 3)
@@ -490,22 +426,25 @@ class TestDiffViewer(FilesBase, amo.tests.WebappTestCase):
 
     def test_view_left_binary(self):
         self.file_viewer.extract()
-        filename = os.path.join(self.file_viewer.left.dest, 'manifest.webapp')
-        open(filename, 'w').write('MZ')
+        filename = os.path.join(self.file_viewer.left.dest, 'script.js')
+        with private_storage.open(filename, 'w') as f:
+            f.write('MZ')
         res = self.client.get(self.file_url(not_binary))
         assert 'This file is not viewable online' in res.content
 
     def test_view_right_binary(self):
         self.file_viewer.extract()
-        filename = os.path.join(self.file_viewer.right.dest, 'manifest.webapp')
-        open(filename, 'w').write('MZ')
+        filename = os.path.join(self.file_viewer.right.dest, 'script.js')
+        with private_storage.open(filename, 'w') as f:
+            f.write('MZ')
         assert not self.file_viewer.is_diffable()
         res = self.client.get(self.file_url(not_binary))
         assert 'This file is not viewable online' in res.content
 
     def test_different_tree(self):
         self.file_viewer.extract()
-        os.remove(os.path.join(self.file_viewer.left.dest, not_binary))
+        private_storage.delete(os.path.join(self.file_viewer.left.dest,
+                                            not_binary))
         res = self.client.get(self.file_url(not_binary))
         doc = pq(res.content)
         eq_(doc('h4:last').text(), 'Deleted files:')

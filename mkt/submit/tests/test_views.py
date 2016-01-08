@@ -2,51 +2,46 @@
 import datetime
 import json
 import os
-import shutil
 
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
+from django.core.urlresolvers import reverse
 
 import mock
 from nose.tools import eq_, ok_
 from pyquery import PyQuery as pq
 
-import amo
-import amo.tests
-from amo.tests import formset, initial
-from amo.tests.test_helpers import get_image_path
-from amo.urlresolvers import reverse
-from addons.models import (Addon, AddonCategory, AddonDeviceType, AddonUser,
-                           Category)
-from apps.users.models import UserNotification
-from apps.users.notifications import app_surveys
-from constants.applications import DEVICE_TYPES
-from files.tests.test_models import UploadTest as BaseUploadTest
-from translations.models import Translation
-from users.models import UserProfile
-
 import mkt
+from mkt.constants.applications import DEVICE_TYPES
+from mkt.files.tests.test_models import UploadTest as BaseUploadTest
+from mkt.reviewers.models import EscalationQueue
 from mkt.site.fixtures import fixture
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage, public_storage)
+from mkt.site.tests import formset, initial, MktPaths, TestCase, user_factory
+from mkt.site.tests.test_utils_ import get_image_path
+from mkt.submit.decorators import read_dev_agreement_required
 from mkt.submit.forms import AppFeaturesForm, NewWebappVersionForm
 from mkt.submit.models import AppSubmissionChecklist
-from mkt.submit.decorators import read_dev_agreement_required
-from mkt.webapps.models import AddonExcludedRegion as AER, AppFeatures, Webapp
+from mkt.translations.models import Translation
+from mkt.users.models import UserNotification, UserProfile
+from mkt.users.notifications import app_surveys
+from mkt.webapps.models import AddonDeviceType, AddonUser, AppFeatures, Webapp
 
 
-class TestSubmit(amo.tests.TestCase):
+class TestSubmit(TestCase):
     fixtures = fixture('user_999')
 
     def setUp(self):
         self.fi_mock = mock.patch(
             'mkt.developers.tasks.fetch_icon').__enter__()
         self.user = self.get_user()
-        assert self.client.login(username=self.user.email, password='password')
+        self.login(self.user.email)
 
     def tearDown(self):
         self.fi_mock.__exit__()
 
     def get_user(self):
-        return UserProfile.objects.get(username='regularuser')
+        return UserProfile.objects.get(email='regular@mozilla.com')
 
     def get_url(self, url):
         return reverse('submit.app.%s' % url, args=[self.webapp.app_slug])
@@ -146,7 +141,10 @@ class TestTerms(TestSubmit):
         notes = UserNotification.objects.filter(user=self.user, enabled=True,
                                                 notification_id=app_surveys.id)
         eq_(notes.count(), 1, 'Expected to not be subscribed to newsletter')
-        assert subscribe_mock.called
+        subscribe_mock.assert_called_with(
+            self.user.email, 'app-dev', lang='en-US',
+            country='restofworld', format='H',
+            source_url='http://testserver/developers/submit')
 
     def test_disagree(self):
         r = self.client.post(self.url)
@@ -158,7 +156,7 @@ class TestTerms(TestSubmit):
         f = mock.Mock()
         f.__name__ = 'function'
         request = mock.Mock()
-        request.amo_user.read_dev_agreement = None
+        request.user.read_dev_agreement = None
         request.get_full_path.return_value = self.url
         func = read_dev_agreement_required(f)
         res = func(request)
@@ -237,46 +235,42 @@ class UploadAddon(object):
         if data is None:
             data = {'free_platforms': ['free-desktop']}
         data.update(upload=self.upload.pk)
-        r = self.client.post(self.url, data, follow=True)
-        eq_(r.status_code, 200)
+        response = self.client.post(self.url, data, follow=True)
+        eq_(response.status_code, 200)
         if not expect_errors:
             # Show any unexpected form errors.
-            if r.context and 'form' in r.context:
-                eq_(r.context['form'].errors, {})
-        return r
+            if response.context and 'form' in response.context:
+                eq_(response.context['form'].errors, {})
+        return response
 
 
-class BaseWebAppTest(BaseUploadTest, UploadAddon, amo.tests.TestCase):
-    fixtures = fixture('app_firefox', 'platform_all', 'user_999', 'user_10482')
+class BaseWebAppTest(BaseUploadTest, UploadAddon, TestCase):
+    fixtures = fixture('user_999', 'user_10482')
 
     def setUp(self):
         super(BaseWebAppTest, self).setUp()
         self.manifest = self.manifest_path('mozball.webapp')
         self.manifest_url = 'http://allizom.org/mozball.webapp'
-        self.upload = self.get_upload(abspath=self.manifest)
-        self.upload.update(name=self.manifest_url, is_webapp=True)
+        self.upload = self.get_upload(abspath=self.manifest,
+                                      user=UserProfile.objects.get(pk=999))
+        self.upload.update(name=self.manifest_url)
         self.url = reverse('submit.app')
-        assert self.client.login(username='regular@mozilla.com',
-                                 password='password')
+        self.login('regular@mozilla.com')
 
     def post_addon(self, data=None):
-        eq_(Addon.objects.count(), 0)
+        eq_(Webapp.objects.count(), 0)
         self.post(data=data)
-        return Addon.objects.get()
+        return Webapp.objects.get()
 
 
 class TestCreateWebApp(BaseWebAppTest):
-
-    def setUp(self):
-        super(TestCreateWebApp, self).setUp()
-        self.create_switch('buchets')
 
     @mock.patch('mkt.developers.tasks.fetch_icon')
     def test_post_app_redirect(self, fi_mock):
         r = self.post()
         webapp = Webapp.objects.get()
         self.assert3xx(r,
-            reverse('submit.app.details', args=[webapp.app_slug]))
+                       reverse('submit.app.details', args=[webapp.app_slug]))
         assert fi_mock.delay.called, (
             'The fetch_icon task was expected to be called')
 
@@ -321,8 +315,7 @@ class TestCreateWebApp(BaseWebAppTest):
         self.post_addon()
 
         # Submit same manifest as different user.
-        assert self.client.login(username='clouserw@gmail.com',
-                                 password='password')
+        self.login('clouserw@mozilla.com')
         self.upload = self.get_upload(abspath=self.manifest)
         r = self.client.post(reverse('mkt.developers.upload_manifest'),
                              dict(manifest=self.manifest_url))
@@ -334,55 +327,53 @@ class TestCreateWebApp(BaseWebAppTest):
 
     def test_app_from_uploaded_manifest(self):
         addon = self.post_addon()
-        eq_(addon.type, amo.ADDON_WEBAPP)
         eq_(addon.is_packaged, False)
         assert addon.guid is not None, (
             'Expected app to have a UUID assigned to guid')
         eq_(unicode(addon.name), u'MozillaBall ょ')
-        eq_(addon.slug, 'app-%s' % addon.id)
         eq_(addon.app_slug, u'mozillaball-ょ')
         eq_(addon.description, u'Exciting Open Web development action!')
         eq_(addon.manifest_url, u'http://allizom.org/mozball.webapp')
         eq_(addon.app_domain, u'http://allizom.org')
         eq_(Translation.objects.get(id=addon.description.id, locale='it'),
             u'Azione aperta emozionante di sviluppo di fotoricettore!')
-        eq_(addon.current_version.developer_name, 'Mozilla Labs')
-        eq_(addon.current_version.manifest,
+        eq_(addon.latest_version.developer_name, 'Mozilla Labs')
+        eq_(addon.latest_version.manifest,
             json.loads(open(self.manifest).read()))
 
     def test_manifest_with_any_extension(self):
         self.manifest = os.path.join(settings.ROOT, 'mkt', 'developers',
                                      'tests', 'addons', 'mozball.owa')
-        self.upload = self.get_upload(abspath=self.manifest, is_webapp=True)
+        self.upload = self.get_upload(abspath=self.manifest,
+                                      user=UserProfile.objects.get(pk=999))
         addon = self.post_addon()
-        eq_(addon.type, amo.ADDON_WEBAPP)
+        ok_(addon.id)
 
     def test_version_from_uploaded_manifest(self):
         addon = self.post_addon()
-        eq_(addon.current_version.version, '1.0')
+        eq_(addon.latest_version.version, '1.0')
 
     def test_file_from_uploaded_manifest(self):
         addon = self.post_addon()
-        files = addon.current_version.files.all()
+        files = addon.latest_version.files.all()
         eq_(len(files), 1)
-        eq_(files[0].status, amo.STATUS_PENDING)
+        eq_(files[0].status, mkt.STATUS_PENDING)
 
     def test_set_platform(self):
         app = self.post_addon(
             {'free_platforms': ['free-android-tablet', 'free-desktop']})
         self.assertSetEqual(app.device_types,
-                            [amo.DEVICE_TABLET, amo.DEVICE_DESKTOP])
+                            [mkt.DEVICE_TABLET, mkt.DEVICE_DESKTOP])
 
     def test_free(self):
         app = self.post_addon({'free_platforms': ['free-firefoxos']})
-        self.assertSetEqual(app.device_types, [amo.DEVICE_GAIA])
-        eq_(app.premium_type, amo.ADDON_FREE)
+        self.assertSetEqual(app.device_types, [mkt.DEVICE_GAIA])
+        eq_(app.premium_type, mkt.ADDON_FREE)
 
     def test_premium(self):
-        self.create_flag('allow-b2g-paid-submission')
         app = self.post_addon({'paid_platforms': ['paid-firefoxos']})
-        self.assertSetEqual(app.device_types, [amo.DEVICE_GAIA])
-        eq_(app.premium_type, amo.ADDON_PREMIUM)
+        self.assertSetEqual(app.device_types, [mkt.DEVICE_GAIA])
+        eq_(app.premium_type, mkt.ADDON_PREMIUM)
 
     def test_supported_locales(self):
         addon = self.post_addon()
@@ -390,19 +381,21 @@ class TestCreateWebApp(BaseWebAppTest):
         eq_(addon.versions.latest().supported_locales, 'es,it')
 
     def test_short_locale(self):
-        # This manifest has a locale code of "pt" which is in the
-        # SHORTER_LANGUAGES setting and should get converted to "pt-PT".
+        # This manifest has a locale code of "zh" which is in the
+        # SHORTER_LANGUAGES setting and should get converted to "zh-CN".
         self.manifest = self.manifest_path('short-locale.webapp')
-        self.upload = self.get_upload(abspath=self.manifest)
+        self.upload = self.get_upload(abspath=self.manifest,
+                                      user=UserProfile.objects.get(pk=999))
         addon = self.post_addon()
-        eq_(addon.default_locale, 'pt-PT')
+        eq_(addon.default_locale, 'zh-CN')
         eq_(addon.versions.latest().supported_locales, 'es')
 
     def test_unsupported_detail_locale(self):
-        # This manifest has a locale code of "en-GB" which is unsupported, so
+        # This manifest has a locale code of "en-CA" which is unsupported, so
         # we default to "en-US".
         self.manifest = self.manifest_path('unsupported-default-locale.webapp')
-        self.upload = self.get_upload(abspath=self.manifest)
+        self.upload = self.get_upload(abspath=self.manifest,
+                                      user=UserProfile.objects.get(pk=999))
         addon = self.post_addon()
         eq_(addon.default_locale, 'en-US')
         eq_(addon.versions.latest().supported_locales, 'es,it')
@@ -412,7 +405,7 @@ class TestCreateWebApp(BaseWebAppTest):
             'free_platforms': ['free-desktop'],
             'has_contacts': 'on'
         })
-        features = addon.current_version.features
+        features = addon.latest_version.features
         ok_(isinstance(features, AppFeatures))
         field_names = [f.name for f in AppFeaturesForm().all_fields()]
         for field in field_names:
@@ -463,49 +456,90 @@ class TestCreateWebAppFromManifest(BaseWebAppTest):
         eq_(rs.status_code, 302)
 
 
-class BasePackagedAppTest(BaseUploadTest, UploadAddon, amo.tests.TestCase):
+class SetupFilesMixin(MktPaths):
+    def setup_files(self, filename='mozball.zip'):
+        # Local source filename must exist.
+        assert os.path.exists(self.packaged_app_path(filename))
+
+        # Remote filename must not be empty.
+        assert self.file.filename
+
+        # Original packaged file.
+        copy_stored_file(self.packaged_app_path(filename),
+                         self.file.file_path,
+                         src_storage=local_storage,
+                         dst_storage=private_storage)
+
+        # Signed packaged file.
+        copy_stored_file(self.packaged_app_path(filename),
+                         self.file.signed_file_path,
+                         src_storage=local_storage,
+                         dst_storage=public_storage)
+
+
+class BasePackagedAppTest(SetupFilesMixin, BaseUploadTest, UploadAddon,
+                          TestCase):
     fixtures = fixture('webapp_337141', 'user_999')
 
     def setUp(self):
         super(BasePackagedAppTest, self).setUp()
         self.app = Webapp.objects.get(pk=337141)
         self.app.update(is_packaged=True)
-        self.version = self.app.current_version
+        self.version = self.app.latest_version
         self.file = self.version.all_files[0]
         self.file.update(filename='mozball.zip')
 
-        self.package = self.packaged_app_path('mozball.zip')
-        self.upload = self.get_upload(abspath=self.package)
-        self.upload.update(name='mozball.zip', is_webapp=True)
+        self.upload = self.get_upload(
+            abspath=self.package,
+            user=UserProfile.objects.get(email='regular@mozilla.com'))
+        self.upload.update(name='mozball.zip')
         self.url = reverse('submit.app')
-        assert self.client.login(username='regular@mozilla.com',
-                                 password='password')
+        self.login('regular@mozilla.com')
+
+    @property
+    def package(self):
+        return self.packaged_app_path('mozball.zip')
 
     def post_addon(self, data=None):
-        eq_(Addon.objects.count(), 1)
+        eq_(Webapp.objects.count(), 1)
         self.post(data=data)
-        return Addon.objects.order_by('-id')[0]
+        return Webapp.objects.order_by('-id')[0]
 
-    def setup_files(self, filename='mozball.zip'):
-        # Make sure the source file is there.
-        # Original packaged file.
-        if not storage.exists(self.file.file_path):
-            try:
-                # We don't care if these dirs exist.
-                os.makedirs(os.path.dirname(self.file.file_path))
-            except OSError:
-                pass
-            shutil.copyfile(self.packaged_app_path(filename),
-                            self.file.file_path)
-        # Signed packaged file.
-        if not storage.exists(self.file.signed_file_path):
-            try:
-                # We don't care if these dirs exist.
-                os.makedirs(os.path.dirname(self.file.signed_file_path))
-            except OSError:
-                pass
-            shutil.copyfile(self.packaged_app_path(filename),
-                            self.file.signed_file_path)
+
+class TestEscalatePrereleaseWebApp(BasePackagedAppTest):
+    def setUp(self):
+        super(TestEscalatePrereleaseWebApp, self).setUp()
+        user_factory(email=settings.NOBODY_EMAIL_ADDRESS)
+
+    def post(self):
+        super(TestEscalatePrereleaseWebApp, self).post(data={
+            'free_platforms': ['free-firefoxos'],
+            'packaged': True,
+        })
+
+    def test_prerelease_permissions_get_escalated(self):
+        validation = json.loads(self.upload.validation)
+        validation['permissions'] = ['moz-attention']
+        self.upload.update(validation=json.dumps(validation))
+        eq_(EscalationQueue.objects.count(), 0)
+        self.post()
+        eq_(EscalationQueue.objects.count(), 1)
+
+    def test_prerelease_permissions_get_escalated_external_app(self):
+        validation = json.loads(self.upload.validation)
+        validation['permissions'] = ['moz-external-app']
+        self.upload.update(validation=json.dumps(validation))
+        eq_(EscalationQueue.objects.count(), 0)
+        self.post()
+        eq_(EscalationQueue.objects.count(), 1)
+
+    def test_normal_permissions_dont_get_escalated(self):
+        validation = json.loads(self.upload.validation)
+        validation['permissions'] = ['contacts']
+        self.upload.update(validation=json.dumps(validation))
+        eq_(EscalationQueue.objects.count(), 0)
+        self.post()
+        eq_(EscalationQueue.objects.count(), 0)
 
 
 class TestCreatePackagedApp(BasePackagedAppTest):
@@ -515,27 +549,25 @@ class TestCreatePackagedApp(BasePackagedAppTest):
         res = self.post()
         webapp = Webapp.objects.order_by('-created')[0]
         self.assert3xx(res,
-            reverse('submit.app.details', args=[webapp.app_slug]))
+                       reverse('submit.app.details', args=[webapp.app_slug]))
 
     @mock.patch('mkt.webapps.models.Webapp.get_cached_manifest')
     @mock.patch('mkt.submit.forms.verify_app_domain')
     def test_app_from_uploaded_package(self, _verify, _mock):
         addon = self.post_addon(
             data={'packaged': True, 'free_platforms': ['free-firefoxos']})
-        eq_(addon.type, amo.ADDON_WEBAPP)
-        eq_(addon.current_version.version, '1.0')
+        eq_(addon.latest_version.version, '1.0')
         eq_(addon.is_packaged, True)
         assert addon.guid is not None, (
             'Expected app to have a UUID assigned to guid')
         eq_(unicode(addon.name), u'Packaged MozillaBall ょ')
-        eq_(addon.slug, 'app-%s' % addon.id)
         eq_(addon.app_slug, u'packaged-mozillaball-ょ')
         eq_(addon.description, u'Exciting Open Web development action!')
         eq_(addon.manifest_url, None)
         eq_(addon.app_domain, 'app://hy.fr')
         eq_(Translation.objects.get(id=addon.description.id, locale='it'),
             u'Azione aperta emozionante di sviluppo di fotoricettore!')
-        eq_(addon.current_version.developer_name, 'Mozilla Labs')
+        eq_(addon.latest_version.developer_name, 'Mozilla Labs')
 
         assert _verify.called, (
             '`verify_app_domain` should be called for packaged apps with '
@@ -558,8 +590,9 @@ class TestDetails(TestSubmit):
     def setUp(self):
         super(TestDetails, self).setUp()
         self.webapp = self.get_webapp()
-        self.webapp.update(status=amo.STATUS_NULL)
+        self.webapp.update(status=mkt.STATUS_NULL)
         self.url = reverse('submit.app.details', args=[self.webapp.app_slug])
+        self.cat1 = 'books-comics'
 
     def get_webapp(self):
         return Webapp.objects.get(id=337141)
@@ -586,7 +619,8 @@ class TestDetails(TestSubmit):
 
     def _step(self):
         self.user.update(read_dev_agreement=datetime.datetime.now())
-        self.cl = AppSubmissionChecklist.objects.create(addon=self.webapp,
+        self.cl = AppSubmissionChecklist.objects.create(
+            addon=self.webapp,
             terms=True, manifest=True)
 
         # Associate app with user.
@@ -599,8 +633,7 @@ class TestDetails(TestSubmit):
         self.device_types = [self.dtype]
 
         # Associate category with app.
-        self.cat1 = Category.objects.create(type=amo.ADDON_WEBAPP, name='Fun')
-        AddonCategory.objects.create(addon=self.webapp, category=self.cat1)
+        self.webapp.update(categories=[self.cat1])
 
     def test_anonymous(self):
         self._test_anonymous()
@@ -614,8 +647,7 @@ class TestDetails(TestSubmit):
 
     def test_not_owner(self):
         self._step()
-        assert self.client.login(username='clouserw@gmail.com',
-                                 password='password')
+        self.login('clouserw@mozilla.com')
         eq_(self.client.get(self.url).status_code, 403)
 
     def test_page(self):
@@ -650,9 +682,9 @@ class TestDetails(TestSubmit):
             'homepage': 'http://www.goodreads.com/user/show/7595895-krupa',
             'support_url': 'http://www.goodreads.com/user_challenges/351558',
             'support_email': 'krupa+to+the+rescue@goodreads.com',
-            'categories': [self.cat1.id],
-            'flash': '1',
-            'publish': '1'
+            'categories': [self.cat1],
+            'publish_type': mkt.PUBLISH_IMMEDIATE,
+            'notes': 'yes'
         }
         # Add the required screenshot.
         data.update(self.preview_formset({
@@ -674,19 +706,18 @@ class TestDetails(TestSubmit):
             'app_slug': 'testname',
             'description': 'desc',
             'privacy_policy': 'XXX &lt;script&gt;alert("xss")&lt;/script&gt;',
-            'uses_flash': True,
-            'make_public': amo.PUBLIC_IMMEDIATELY
+            'publish_type': mkt.PUBLISH_IMMEDIATE,
         }
         if expected:
             expected_data.update(expected)
+
+        self.assertSetEqual(addon.device_types, self.device_types)
 
         for field, expected in expected_data.iteritems():
             got = unicode(getattr(addon, field))
             expected = unicode(expected)
             eq_(got, expected,
                 'Expected %r for %r. Got %r.' % (expected, field, got))
-
-        self.assertSetEqual(addon.device_types, self.device_types)
 
     @mock.patch('mkt.submit.views.record_action')
     def test_success(self, record_action):
@@ -698,7 +729,8 @@ class TestDetails(TestSubmit):
         self.webapp = self.get_webapp()
         self.assert3xx(r, self.get_url('done'))
 
-        eq_(self.webapp.status, amo.STATUS_PENDING)
+        eq_(self.webapp.status, mkt.STATUS_NULL)
+
         assert record_action.called
 
     def test_success_paid(self):
@@ -706,7 +738,6 @@ class TestDetails(TestSubmit):
 
         self.webapp = self.get_webapp()
         self.make_premium(self.webapp)
-
         data = self.get_dict()
         r = self.client.post(self.url, data)
         self.assertNoFormErrors(r)
@@ -714,8 +745,8 @@ class TestDetails(TestSubmit):
         self.webapp = self.get_webapp()
         self.assert3xx(r, self.get_url('done'))
 
-        eq_(self.webapp.status, amo.STATUS_NULL)
-        eq_(self.webapp.highest_status, amo.STATUS_PENDING)
+        eq_(self.webapp.status, mkt.STATUS_NULL)
+        eq_(self.webapp.highest_status, mkt.STATUS_PENDING)
 
     def test_success_prefill_device_types_if_empty(self):
         """
@@ -726,7 +757,7 @@ class TestDetails(TestSubmit):
         self._step()
 
         AddonDeviceType.objects.all().delete()
-        self.device_types = amo.DEVICE_TYPES.values()
+        self.device_types = mkt.DEVICE_TYPES.values()
 
         data = self.get_dict()
         r = self.client.post(self.url, data)
@@ -735,16 +766,15 @@ class TestDetails(TestSubmit):
         self.webapp = self.get_webapp()
         self.assert3xx(r, self.get_url('done'))
 
-    def test_success_for_public_waiting(self):
+    def test_success_for_approved(self):
         self._step()
 
-        data = self.get_dict()
-        del data['publish']
-
+        data = self.get_dict(publish_type=mkt.PUBLISH_PRIVATE)
         r = self.client.post(self.url, data)
         self.assertNoFormErrors(r)
 
-        self.check_dict(data=data, expected={'make_public': amo.PUBLIC_WAIT})
+        self.check_dict(data=data,
+                        expected={'publish_type': mkt.PUBLISH_PRIVATE})
         self.webapp = self.get_webapp()
         self.assert3xx(r, self.get_url('done'))
 
@@ -767,7 +797,7 @@ class TestDetails(TestSubmit):
         }))
         rp = self.client.post(self.url, data)
         eq_(rp.status_code, 302)
-        ad = Addon.objects.get(pk=self.webapp.pk)
+        ad = Webapp.objects.get(pk=self.webapp.pk)
         eq_(ad.previews.all().count(), 1)
 
     def test_icon(self):
@@ -780,10 +810,11 @@ class TestDetails(TestSubmit):
         eq_(rp.status_code, 302)
         ad = self.get_webapp()
         eq_(ad.icon_type, 'image/png')
-        for size in amo.ADDON_ICON_SIZES:
+        for size in mkt.CONTENT_ICON_SIZES:
             fn = '%s-%s.png' % (ad.id, size)
-            assert os.path.exists(os.path.join(ad.get_icon_dir(), fn)), (
-                'Expected %s in %s' % (fn, os.listdir(ad.get_icon_dir())))
+            assert public_storage.exists(
+                os.path.join(ad.get_icon_dir(), fn)), ('Expected %s in %s' % (
+                    fn, public_storage.listdir(ad.get_icon_dir())[1]))
 
     def test_screenshot_or_video_required(self):
         self._step()
@@ -820,7 +851,7 @@ class TestDetails(TestSubmit):
         self.assertNoFormErrors(r)
         app = Webapp.objects.exclude(app_slug=self.webapp.app_slug)[0]
         self.assert3xx(r, reverse('submit.app.done', args=[app.app_slug]))
-        eq_(self.get_webapp().status, amo.STATUS_PENDING)
+        eq_(self.get_webapp().status, mkt.STATUS_NULL)
 
     def test_slug_invalid(self):
         self._step()
@@ -828,7 +859,8 @@ class TestDetails(TestSubmit):
         d = self.get_dict(app_slug='slug!!! aksl23%%')
         r = self.client.post(self.url, d)
         eq_(r.status_code, 200)
-        self.assertFormError(r, 'form_basic', 'app_slug',
+        self.assertFormError(
+            r, 'form_basic', 'app_slug',
             "Enter a valid 'slug' consisting of letters, numbers, underscores "
             "or hyphens.")
 
@@ -873,7 +905,7 @@ class TestDetails(TestSubmit):
         r = self.client.post(self.url, self.get_dict(homepage='xxx'))
         self.assertFormError(r, 'form_basic', 'homepage', 'Enter a valid URL.')
 
-    def test_support_url_optional(self):
+    def test_support_url_optional_if_email_present(self):
         self._step()
         r = self.client.post(self.url, self.get_dict(support_url=None))
         self.assertNoFormErrors(r)
@@ -884,17 +916,30 @@ class TestDetails(TestSubmit):
         self.assertFormError(r, 'form_basic', 'support_url',
                              'Enter a valid URL.')
 
-    def test_support_email_required(self):
+    def test_support_email_optional_if_url_present(self):
         self._step()
         r = self.client.post(self.url, self.get_dict(support_email=None))
-        self.assertFormError(r, 'form_basic', 'support_email',
-                             'This field is required.')
+        self.assertNoFormErrors(r)
 
     def test_support_email_invalid(self):
         self._step()
         r = self.client.post(self.url, self.get_dict(support_email='xxx'))
         self.assertFormError(r, 'form_basic', 'support_email',
-                             'Enter a valid e-mail address.')
+                             'Enter a valid email address.')
+
+    def test_support_need_email_or_url(self):
+        self._step()
+        res = self.client.post(self.url, self.get_dict(support_email=None,
+                                                       support_url=None))
+        self.assertFormError(
+            res, 'form_basic', 'support',
+            'You must provide either a website, an email, or both.')
+        ok_(pq(res.content)('#support-fields .error #trans-support_url'))
+        ok_(pq(res.content)('#support-fields .error #trans-support_email'))
+
+        # While the inputs will get the error styles, there is no need for an
+        # individual error message on each, the hint on the parent is enough.
+        eq_(pq(res.content)('#support-fields .error .errorlist').text(), '')
 
     def test_categories_required(self):
         self._step()
@@ -904,59 +949,40 @@ class TestDetails(TestSubmit):
 
     def test_categories_max(self):
         self._step()
-        eq_(amo.MAX_CATEGORIES, 2)
-        cat2 = Category.objects.create(type=amo.ADDON_WEBAPP, name='bling')
-        cat3 = Category.objects.create(type=amo.ADDON_WEBAPP, name='blang')
-        cats = [self.cat1.id, cat2.id, cat3.id]
+        eq_(mkt.MAX_CATEGORIES, 2)
+        cat2 = 'games'
+        cat3 = 'social'
+        cats = [self.cat1, cat2, cat3]
         r = self.client.post(self.url, self.get_dict(categories=cats))
         eq_(r.context['form_cats'].errors['categories'],
             ['You can have only 2 categories.'])
 
     def _post_cats(self, cats):
         self.client.post(self.url, self.get_dict(categories=cats))
-        eq_(sorted(self.get_webapp().categories.values_list('id', flat=True)),
-            sorted(cats))
+        eq_(sorted(self.get_webapp().categories), sorted(cats))
 
     def test_categories_add(self):
         self._step()
-        cat2 = Category.objects.create(type=amo.ADDON_WEBAPP, name='bling')
-        self._post_cats([self.cat1.id, cat2.id])
+        cat2 = 'games'
+        self._post_cats([self.cat1, cat2])
 
     def test_categories_add_and_remove(self):
         self._step()
-        cat2 = Category.objects.create(type=amo.ADDON_WEBAPP, name='bling')
-        self._post_cats([cat2.id])
+        cat2 = 'games'
+        self._post_cats([cat2])
 
     def test_categories_remove(self):
         # Add another category here so it gets added to the initial formset.
-        cat2 = Category.objects.create(type=amo.ADDON_WEBAPP, name='bling')
-        AddonCategory.objects.create(addon=self.webapp, category=cat2)
+        cat2 = 'games'
+        self.webapp.update(categories=[self.cat1, cat2])
         self._step()
 
         # `cat2` should get removed.
-        self._post_cats([self.cat1.id])
-
-    def test_games_default_excluded_in_regions(self):
-        games = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        self._step()
-
-        r = self.client.post(self.url, self.get_dict(categories=[games.id]))
-        self.assertNoFormErrors(r)
-        self.assertSetEqual(AER.objects.values_list('region', flat=True),
-            [x.id for x in mkt.regions.ALL_REGIONS_WITH_CONTENT_RATINGS])
-
-    def test_other_categories_are_not_excluded(self):
-        # Keep the category around for good measure.
-        Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        self._step()
-
-        r = self.client.post(self.url, self.get_dict())
-        self.assertNoFormErrors(r)
-        eq_(AER.objects.count(), 0)
+        self._post_cats([self.cat1])
 
 
 class TestDone(TestSubmit):
-    fixtures = ['base/users', 'webapps/337141-steamcube']
+    fixtures = fixture('user_999', 'webapp_337141')
 
     def setUp(self):
         super(TestDone, self).setUp()
@@ -978,7 +1004,8 @@ class TestDone(TestSubmit):
 
     def test_progress_display(self):
         self._step()
-        self._test_progress_display(['terms', 'manifest', 'details'], 'done')
+        self._test_progress_display(['terms', 'manifest', 'details'],
+                                    'next_steps')
 
     def test_done(self):
         self._step()
@@ -986,16 +1013,15 @@ class TestDone(TestSubmit):
         eq_(res.status_code, 200)
 
 
-class TestNextSteps(amo.tests.TestCase):
+class TestNextSteps(TestCase):
     # TODO: Delete this test suite once we deploy IARC.
     fixtures = fixture('user_999', 'webapp_337141')
 
     def setUp(self):
-        self.create_switch('iarc')
-
-        self.user = UserProfile.objects.get(username='regularuser')
-        assert self.client.login(username=self.user.email, password='password')
+        self.user = UserProfile.objects.get(email='regular@mozilla.com')
+        self.login(self.user.email)
         self.webapp = Webapp.objects.get(id=337141)
+        self.webapp.update(status=mkt.STATUS_PENDING)
         self.url = reverse('submit.app.done', args=[self.webapp.app_slug])
 
     def test_200(self, **kw):

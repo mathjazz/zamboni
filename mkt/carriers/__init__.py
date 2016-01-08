@@ -1,2 +1,2 @@
-from .carriers import *
-from mkt.constants.carriers import *
+from .carriers import *  # noqa
+from mkt.constants.carriers import *  # noqa

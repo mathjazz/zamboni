@@ -2,9 +2,9 @@ import functools
 
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 
-from amo.decorators import login_required
-from access import acl
-from addons.decorators import addon_view
+from mkt.access import acl
+from mkt.site.decorators import login_required
+from mkt.webapps.decorators import app_view
 
 
 def dev_required(owner_for_post=False, allow_editors=False, support=False,
@@ -17,15 +17,14 @@ def dev_required(owner_for_post=False, allow_editors=False, support=False,
     allowed. Users in the Developers group are allowed read-only.
     """
     def decorator(f):
-        @addon_view
+        @app_view
         @login_required
         @functools.wraps(f)
         def wrapper(request, addon, *args, **kw):
             from mkt.submit.views import _resume
-            if webapp:
-                kw['webapp'] = addon.is_webapp()
-            fun = lambda: f(request, addon_id=addon.id, addon=addon,
-                            *args, **kw)
+
+            def fun():
+                return f(request, addon_id=addon.id, addon=addon, *args, **kw)
 
             if allow_editors and acl.check_reviewer(request):
                 return fun()
@@ -38,7 +37,7 @@ def dev_required(owner_for_post=False, allow_editors=False, support=False,
             if support:
                 # Let developers and support people do their thangs.
                 if (acl.check_addon_ownership(request, addon, support=True) or
-                    acl.check_addon_ownership(request, addon, dev=True)):
+                        acl.check_addon_ownership(request, addon, dev=True)):
                     return fun()
             else:
                 # Require an owner or dev for POST requests.
@@ -73,10 +72,3 @@ def dev_required(owner_for_post=False, allow_editors=False, support=False,
         return decorator(f)
     else:
         return decorator
-
-
-# Mark a view as a web app
-def use_apps(f):
-    def wrapper(request, *args, **kwargs):
-        return f(request, *args, webapp=True, **kwargs)
-    return wrapper

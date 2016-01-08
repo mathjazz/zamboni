@@ -1,21 +1,27 @@
 import datetime
+import math
 import urlparse
 
+from django.conf import settings
+from django.core.urlresolvers import reverse
+from django.db import connection
 from django.utils.encoding import smart_str
 
 import jinja2
-import waffle
 from jingo import register
-from tower import ugettext as _, ugettext_lazy as _lazy
+from django.utils.translation import pgettext, ugettext as _
+from django.utils.translation import ugettext_lazy as _lazy
 
-
-from access import acl
-from amo.helpers import impala_breadcrumbs
-from amo.urlresolvers import reverse
-
-from mkt.developers.helpers import mkt_page_title
+import mkt
+from mkt.access import acl
+from mkt.reviewers.models import EscalationQueue, QUEUE_TARAKO, ReviewerScore
 from mkt.reviewers.utils import (AppsReviewing, clean_sort_param,
-                                 create_sort_link, device_queue_search)
+                                 create_sort_link)
+from mkt.search.serializers import es_to_datetime
+from mkt.site.helpers import mkt_breadcrumbs, page_title
+from mkt.site.utils import env
+from mkt.versions.models import Version
+from mkt.webapps.helpers import new_context
 
 
 @register.function
@@ -39,11 +45,12 @@ def reviewers_breadcrumbs(context, queue=None, items=None):
                   'escalated': _('Escalations'),
                   'device': _('Device'),
                   'moderated': _('Moderated Reviews'),
+                  'abuse': _('Abuse Reports'),
+                  'abusewebsites': _('Website Abuse Reports'),
                   'reviewing': _('Reviewing'),
+                  'homescreen': _('Homescreens'),
 
-                  'pending_themes': _('Pending Themes'),
-                  'flagged_themes': _('Flagged Themes'),
-                  'rereview_themes': _('Update Themes')}
+                  'region': _('Regional Queues')}
 
         if items:
             url = reverse('reviewers.apps.queue_%s' % queue)
@@ -54,18 +61,15 @@ def reviewers_breadcrumbs(context, queue=None, items=None):
 
     if items:
         crumbs.extend(items)
-    return impala_breadcrumbs(context, crumbs, add_default=True)
+    return mkt_breadcrumbs(context, items=crumbs, add_default=True)
 
 
 @register.function
 @jinja2.contextfunction
-def reviewers_page_title(context, title=None, addon=None):
-    if addon:
-        title = u'%s | %s' % (title, addon.name)
-    else:
-        section = _lazy('Reviewer Tools')
-        title = u'%s | %s' % (title, section) if title else section
-    return mkt_page_title(context, title)
+def reviewers_page_title(context, title=None):
+    section = _lazy('Reviewer Tools')
+    title = u'%s | %s' % (title, section) if title else section
+    return page_title(context, title)
 
 
 @register.function
@@ -74,7 +78,8 @@ def queue_tabnav(context):
     """
     Returns tuple of tab navigation for the queue pages.
 
-    Each tuple contains three elements: (named_url. tab_code, tab_text)
+    Each tuple contains three elements: (url, tab_code, tab_text)
+
     """
     request = context['request']
     counts = context['queue_counts']
@@ -83,36 +88,64 @@ def queue_tabnav(context):
     # Apps.
     if acl.action_allowed(request, 'Apps', 'Review'):
         rv = [
-            ('reviewers.apps.queue_pending', 'pending',
-             _('Apps ({0})', counts['pending']).format(counts['pending'])),
+            (reverse('reviewers.apps.queue_pending'), 'pending',
+             pgettext(counts['pending'], 'Apps ({0})')
+             .format(counts['pending'])),
 
-            ('reviewers.apps.queue_rereview', 'rereview',
-             _('Re-reviews ({0})', counts['rereview']).format(
-             counts['rereview'])),
+            (reverse('reviewers.apps.queue_rereview'), 'rereview',
+             pgettext(counts['rereview'], 'Re-reviews ({0})').format(
+                 counts['rereview'])),
 
-            ('reviewers.apps.queue_updates', 'updates',
-             _('Updates ({0})', counts['updates']).format(counts['updates'])),
+            (reverse('reviewers.apps.queue_updates'), 'updates',
+             pgettext(counts['updates'], 'Updates ({0})')
+             .format(counts['updates'])),
         ]
         if acl.action_allowed(request, 'Apps', 'ReviewEscalated'):
-            rv.append(('reviewers.apps.queue_escalated', 'escalated',
-                       _('Escalations ({0})', counts['escalated']).format(
-                       counts['escalated'])))
-        rv.extend([
-            ('reviewers.apps.queue_moderated', 'moderated',
-             _('Moderated Reviews ({0})', counts['moderated'])
-             .format(counts['moderated'])),
-
-            ('reviewers.apps.apps_reviewing', 'reviewing',
+            rv.append((reverse('reviewers.apps.queue_escalated'), 'escalated',
+                       pgettext(counts['escalated'], 'Escalations ({0})')
+                       .format(counts['escalated'])))
+        rv.append(
+            (reverse('reviewers.apps.apps_reviewing'), 'reviewing',
              _('Reviewing ({0})').format(len(apps_reviewing))),
-        ])
+        )
+        if acl.action_allowed(request, 'Apps', 'ReviewRegionCN'):
+            url_ = reverse('reviewers.apps.queue_region',
+                           args=[mkt.regions.CHN.slug])
+            rv.append((url_, 'region',
+                      _('China ({0})').format(counts['region_cn'])))
+        if acl.action_allowed(request, 'Apps', 'ReviewTarako'):
+            url_ = reverse('reviewers.apps.additional_review',
+                           args=[QUEUE_TARAKO])
+            rv.append((url_, 'additional',
+                      _('Tarako ({0})').format(counts['additional_tarako'])))
+        rv.append(
+            (reverse('reviewers.apps.queue_homescreen'), 'homescreen',
+             pgettext(counts['homescreen'], 'Homescreens ({0})').format(
+                 counts['homescreen'])),
+        )
     else:
         rv = []
 
-    if waffle.switch_is_active('buchets') and 'pro' in request.GET:
-        device_srch = device_queue_search(request)
-        rv.append(('reviewers.apps.queue_device', 'device',
-                  _('Device ({0})').format(device_srch.count()),))
+    if acl.action_allowed(request, 'Apps', 'ModerateReview'):
+        rv.append(
+            (reverse('reviewers.apps.queue_moderated'), 'moderated',
+             pgettext(counts['moderated'], 'Moderated Reviews ({0})')
+             .format(counts['moderated'])),
+        )
 
+    if acl.action_allowed(request, 'Apps', 'ReadAbuse'):
+        rv.append(
+            (reverse('reviewers.apps.queue_abuse'), 'abuse',
+             pgettext(counts['abuse'], 'Abuse Reports ({0})')
+             .format(counts['abuse'])),
+        )
+
+    if acl.action_allowed(request, 'Websites', 'ReadAbuse'):
+        rv.append(
+            (reverse('reviewers.websites.queue_abuse'), 'abusewebsites',
+             pgettext(counts['abusewebsites'], 'Website Abuse Reports ({0})')
+             .format(counts['abusewebsites'])),
+        )
     return rv
 
 
@@ -124,66 +157,15 @@ def logs_tabnav(context):
 
     Each tuple contains three elements: (named url, tab_code, tab_text)
     """
-    rv = [
-        ('reviewers.apps.logs', 'apps', _('Reviews'))
-    ]
+    request = context['request']
+    if acl.action_allowed(request, 'Apps', 'Review'):
+        rv = [('reviewers.apps.logs', 'logs', _('Reviews'))]
+    else:
+        rv = []
+    if acl.action_allowed(request, 'Apps', 'ModerateReview'):
+        rv.append(('reviewers.apps.moderatelog',
+                   'moderatelog', _('Moderated Reviews')))
     return rv
-
-
-@register.function
-@jinja2.contextfunction
-def logs_tabnav_themes(context):
-    """
-    Returns tuple of tab navigation for the log pages.
-
-    Each tuple contains three elements: (named url, tab_code, tab_text)
-    """
-    rv = [
-        ('reviewers.themes.logs', 'themes', _('Reviews'))
-    ]
-    if acl.action_allowed(context['request'], 'SeniorPersonasTools', 'View'):
-        rv.append(('reviewers.themes.deleted', 'deleted', _('Deleted')))
-
-    return rv
-
-
-@register.function
-@jinja2.contextfunction
-def queue_tabnav_themes(context):
-    """Similar to queue_tabnav, but for themes."""
-    tabs = []
-    if acl.action_allowed(context['request'], 'Personas', 'Review'):
-        tabs.append((
-            'reviewers.themes.list', 'pending_themes', _('Pending'),
-        ))
-    if acl.action_allowed(context['request'], 'SeniorPersonasTools', 'View'):
-        tabs.append((
-            'reviewers.themes.list_flagged', 'flagged_themes', _('Flagged'),
-        ))
-        tabs.append((
-            'reviewers.themes.list_rereview', 'rereview_themes',
-            _('Updates'),
-        ))
-    return tabs
-
-
-@register.function
-@jinja2.contextfunction
-def queue_tabnav_themes_interactive(context):
-    """Tabnav for the interactive shiny theme queues."""
-    tabs = []
-    if acl.action_allowed(context['request'], 'Personas', 'Review'):
-        tabs.append((
-            'reviewers.themes.queue_themes', 'pending', _('Pending'),
-        ))
-    if acl.action_allowed(context['request'], 'SeniorPersonasTools', 'View'):
-        tabs.append((
-            'reviewers.themes.queue_flagged', 'flagged', _('Flagged'),
-        ))
-        tabs.append((
-            'reviewers.themes.queue_rereview', 'rereview', _('Updates'),
-        ))
-    return tabs
 
 
 @register.function
@@ -207,6 +189,107 @@ def sort_link(context, pretty_name, sort_field):
 
 
 @register.function
+def file_compare(file_obj, version):
+    return version.files.all()[0]
+
+
+@register.function
+def file_review_status(addon, file):
+    if file.status in [mkt.STATUS_DISABLED, mkt.STATUS_REJECTED]:
+        if file.reviewed is not None:
+            return _(u'Rejected')
+        # Can't assume that if the reviewed date is missing its
+        # unreviewed.  Especially for versions.
+        else:
+            return _(u'Rejected or Unreviewed')
+    return mkt.STATUS_CHOICES[file.status]
+
+
+@register.function
+def version_status(addon, version):
+    return ','.join(unicode(s) for s in version.status)
+
+
+@register.inclusion_tag('reviewers/includes/reviewers_score_bar.html')
 @jinja2.contextfunction
-def is_expired_lock(context, lock):
-    return lock.expiry < datetime.datetime.now()
+def reviewers_score_bar(context, types=None):
+    user = context.get('user')
+
+    return new_context(dict(
+        request=context.get('request'),
+        mkt=mkt, settings=settings,
+        points=ReviewerScore.get_recent(user),
+        total=ReviewerScore.get_total(user),
+        **ReviewerScore.get_leaderboards(user, types=types)))
+
+
+@register.filter
+def mobile_reviewers_paginator(pager):
+    # Paginator for non-responsive version of Reviewer Tools.
+    t = env.get_template('reviewers/includes/reviewers_paginator.html')
+    return jinja2.Markup(t.render({'pager': pager}))
+
+
+def get_avg_app_waiting_time():
+    """
+    Returns the rolling average from the past 30 days of the time taken for a
+    pending app to become public.
+    """
+    cursor = connection.cursor()
+    cursor.execute('''
+        SELECT AVG(DATEDIFF(reviewed, nomination)) FROM versions
+        RIGHT JOIN addons ON versions.addon_id = addons.id
+        WHERE status = %s AND reviewed >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    ''', (mkt.STATUS_PUBLIC, ))
+    row = cursor.fetchone()
+    days = 0
+    if row:
+        try:
+            days = math.ceil(float(row[0]))
+        except TypeError:
+            pass
+    return days
+
+
+@register.function
+def get_position(addon):
+    excluded_ids = EscalationQueue.objects.values_list('addon', flat=True)
+    # Look at all regular versions of webapps which have pending files.
+    # This includes both new apps and updates to existing apps, to combine
+    # both the regular and updates queue in one big list (In theory, it
+    # should take the same time for reviewers to process an app in either
+    # queue). Escalated apps are excluded just like in reviewer tools.
+    qs = (Version.objects.filter(addon__disabled_by_user=False,
+                                 files__status=mkt.STATUS_PENDING,
+                                 deleted=False)
+          .exclude(addon__status__in=(mkt.STATUS_DISABLED,
+                                      mkt.STATUS_DELETED, mkt.STATUS_NULL))
+          .exclude(addon__id__in=excluded_ids)
+          .order_by('nomination', 'created').select_related('addon')
+          .no_transforms().values_list('addon_id', 'nomination'))
+    position = 0
+    nomination_date = None
+    for idx, (addon_id, nomination) in enumerate(qs, start=1):
+        if addon_id == addon.id:
+            position = idx
+            nomination_date = nomination
+            break
+    total = qs.count()
+    days = 1
+    days_in_queue = 0
+    if nomination_date:
+        # Estimated waiting time is calculated from the rolling average of
+        # the queue waiting time in the past 30 days but subtracting from
+        # it the number of days this app has already spent in the queue.
+        days_in_queue = (datetime.datetime.now() - nomination_date).days
+        days = max(get_avg_app_waiting_time() - days_in_queue, days)
+    return {'days': int(days), 'days_in_queue': int(days_in_queue),
+            'pos': position, 'total': total}
+
+
+@register.filter
+def es2datetime(s):
+    """
+    Returns a datetime given an Elasticsearch date/datetime field.
+    """
+    return es_to_datetime(s)

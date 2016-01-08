@@ -1,81 +1,64 @@
 import json
 import urllib
+from collections import OrderedDict
 from datetime import datetime
 
 from django.conf import settings
 from django.core.cache import cache
-from django.utils import translation
-from django.utils.datastructures import SortedDict
+from django.db.models import Q
 
 import commonware.log
-import waffle
-from tower import ugettext_lazy as _lazy
+from elasticsearch_dsl import Search
+from elasticsearch_dsl import filter as es_filter
+from django.utils.translation import ugettext_lazy as _lazy
 
-import amo
-from access import acl
-from amo.helpers import absolutify
-from amo.urlresolvers import reverse
-from amo.utils import JSONEncoder, send_mail_jinja, to_language
-from comm.utils import create_comm_thread, get_recipients
-from editors.models import EscalationQueue, RereviewQueue, ReviewerScore
-from files.models import File
-
+import mkt
+from mkt.abuse.models import AbuseReport
+from mkt.access import acl
+from mkt.comm.utils import create_comm_note
 from mkt.constants import comm
-from mkt.constants.features import FeatureProfile
+from mkt.files.models import File
+from mkt.ratings.models import Review
+from mkt.reviewers.models import EscalationQueue, RereviewQueue, ReviewerScore
 from mkt.site.helpers import product_as_dict
+from mkt.site.models import manual_order
+from mkt.site.utils import cached_property, JSONEncoder
+from mkt.translations.query import order_by_translation
+from mkt.versions.models import Version
 from mkt.webapps.models import Webapp
+from mkt.webapps.indexers import HomescreenIndexer, WebappIndexer
+from mkt.webapps.tasks import set_storefront_data
+from mkt.websites.models import Website
 
 
 log = commonware.log.getLogger('z.mailer')
 
 
-def send_mail(subject, template, context, emails, perm_setting=None, cc=None,
-              attachments=None, reply_to=None):
-    if not reply_to:
-        reply_to = settings.MKT_REVIEWERS_EMAIL
-
-    # Link to our newfangled "Account Settings" page.
-    manage_url = absolutify('/settings') + '#notifications'
-    send_mail_jinja(subject, template, context, recipient_list=emails,
-                    from_email=settings.MKT_REVIEWERS_EMAIL,
-                    use_blacklist=False, perm_setting=perm_setting,
-                    manage_url=manage_url, headers={'Reply-To': reply_to},
-                    cc=cc, attachments=attachments)
-
-
-def send_note_emails(note):
-    if not waffle.switch_is_active('comm-dashboard'):
-        return
-
-    recipients = get_recipients(note, False)
-    name = note.thread.addon.name
-    data = {
-        'name': name,
-        'sender': note.author.name,
-        'comments': note.body,
-        'thread_id': str(note.thread.id)
-    }
-    for email, tok in recipients:
-        reply_to = '{0}{1}@{2}'.format(comm.REPLY_TO_PREFIX, tok,
-                                       settings.POSTFIX_DOMAIN)
-        subject = u'%s has been reviewed.' % name
-        send_mail(subject, 'reviewers/emails/decisions/post.txt', data,
-                  [email], perm_setting='app_reviewed', reply_to=reply_to)
+def get_review_type(request, addon, version):
+    if EscalationQueue.objects.filter(addon=addon).exists():
+        queue = 'escalated'
+    elif RereviewQueue.objects.filter(addon=addon).exists():
+        queue = 'rereview'
+    elif addon.is_homescreen():
+        queue = 'homescreen'
+    else:
+        queue = 'pending'
+    return queue
 
 
 class ReviewBase(object):
 
-    def __init__(self, request, addon, version, review_type,
-                 attachment_formset=None):
+    def __init__(self, request, addon, version, attachment_formset=None,
+                 testedon_formset=None):
         self.request = request
         self.user = self.request.user
         self.addon = addon
         self.version = version
-        self.review_type = review_type
+        self.review_type = get_review_type(request, addon, version)
         self.files = None
         self.comm_thread = None
         self.attachment_formset = attachment_formset
-        self.in_pending = self.addon.status == amo.STATUS_PENDING
+        self.testedon_formset = testedon_formset
         self.in_rereview = RereviewQueue.objects.filter(
             addon=self.addon).exists()
         self.in_escalate = EscalationQueue.objects.filter(
@@ -101,113 +84,75 @@ class ReviewBase(object):
             return files
 
     def set_addon(self, **kw):
-        """Alters addon and sets reviewed timestamp on version."""
+        """Alters addon using provided kwargs."""
         self.addon.update(_signal=False, **kw)
+
+    def set_reviewed(self):
+        """Sets reviewed timestamp on version."""
         self.version.update(_signal=False, reviewed=datetime.now())
 
-    def set_files(self, status, files, copy_to_mirror=False,
-                  hide_disabled_file=False):
-        """Change the files to be the new status
-        and copy, remove from the mirror as appropriate."""
+    def set_files(self, status, files, hide_disabled_file=False):
+        """Change the files to be the new status and hide as appropriate."""
         for file in files:
             file.update(_signal=False, datestatuschanged=datetime.now(),
                         reviewed=datetime.now(), status=status)
-            if copy_to_mirror:
-                file.copy_to_mirror()
             if hide_disabled_file:
                 file.hide_disabled_file()
 
-    def log_action(self, action):
+    def create_note(self, action):
+        """
+        Permissions default to developers + reviewers + Mozilla contacts.
+        For escalation/comment, exclude the developer from the conversation.
+        """
         details = {'comments': self.data['comments'],
                    'reviewtype': self.review_type}
         if self.files:
             details['files'] = [f.id for f in self.files]
 
-        amo.log(action, self.addon, self.version, user=self.user.get_profile(),
-                created=datetime.now(), details=details,
-                attachments=self.attachment_formset)
+        tested = self.get_tested()  # You really should...
+        if tested:
+            self.data['comments'] += '\n\n%s' % tested
 
-    def notify_email(self, template, subject, fresh_thread=False):
-        """Notify the authors that their app has been reviewed."""
-        data = self.data.copy()
-        data.update(self.get_context_data())
-        data['tested'] = ''
-        dt, br = data.get('device_types'), data.get('browsers')
-        if dt and br:
-            data['tested'] = 'Tested on %s with %s' % (dt, br)
-        elif dt and not br:
-            data['tested'] = 'Tested on %s' % dt
-        elif not dt and br:
-            data['tested'] = 'Tested with %s' % br
+        # Commbadge (the future).
+        note_type = comm.ACTION_MAP(action.id)
+        self.comm_thread, self.comm_note = create_comm_note(
+            self.addon, self.version, self.request.user,
+            self.data['comments'], note_type=note_type,
+            attachments=self.attachment_formset)
 
-        if self.comm_thread and waffle.switch_is_active('comm-dashboard'):
-            recipients = get_recipients(self.comm_note)
+        # ActivityLog (ye olde).
+        mkt.log(action, self.addon, self.version, user=self.user,
+                created=datetime.now(), details=details)
 
-            data['thread_id'] = str(self.comm_thread.id)
-            for email, tok in recipients:
-                subject = u'%s has been reviewed.' % data['name']
-                reply_to = '{0}{1}@{2}'.format(comm.REPLY_TO_PREFIX, tok,
-                                               settings.POSTFIX_DOMAIN)
-                send_mail(subject,
-                          'reviewers/emails/decisions/%s.txt' % template, data,
-                          [email], perm_setting='app_reviewed',
-                          attachments=self.get_attachments(),
-                          reply_to=reply_to)
+    def get_tested(self):
+        """
+        Get string indicating devices/browsers used by reviewer to test.
+        Will be automatically attached to the note body.
+        """
+        tested_on_text = []
+        if not self.testedon_formset:
+            return ''
+        for form in self.testedon_formset.forms:
+            if form.cleaned_data:
+                dtype = form.cleaned_data.get('device_type', None)
+                device = form.cleaned_data.get('device', None)
+                version = form.cleaned_data.get('version', None)
+
+                if device and version:
+                    text = ('%s platform on %s with version %s' %
+                            (dtype, device, version))
+                elif device and not version:
+                    text = '%s platform on %s' % (dtype, device)
+                elif not device and version:
+                    text = '%s with version %s' % (dtype, version)
+                else:
+                    text = dtype
+                if text:
+                    tested_on_text.append(text)
+        if not len(tested_on_text):
+            return ''
         else:
-            emails = list(self.addon.authors.values_list('email', flat=True))
-            cc_email = self.addon.mozilla_contact or None
-
-            send_mail(subject % data['name'],
-                      'reviewers/emails/decisions/%s.txt' % template, data,
-                      emails, perm_setting='app_reviewed', cc=cc_email,
-                      attachments=self.get_attachments())
-
-    def get_context_data(self):
-        # We need to display the name in some language that is relevant to the
-        # recipient(s) instead of using the reviewer's. addon.default_locale
-        # should work.
-        if self.addon.name.locale != self.addon.default_locale:
-            lang = to_language(self.addon.default_locale)
-            with translation.override(lang):
-                app = Webapp.objects.get(id=self.addon.id)
-        else:
-            app = self.addon
-        return {'name': app.name,
-                'reviewer': self.request.user.get_profile().name,
-                'detail_url': absolutify(
-                    app.get_url_path(add_prefix=False)),
-                'review_url': absolutify(reverse('reviewers.apps.review',
-                                                 args=[app.app_slug],
-                                                 add_prefix=False)),
-                'status_url': absolutify(app.get_dev_url('versions')),
-                'comments': self.data['comments'],
-                'MKT_SUPPORT_EMAIL': settings.MKT_SUPPORT_EMAIL,
-                'SITE_URL': settings.SITE_URL}
-
-    def request_information(self):
-        """Send a request for information to the authors."""
-        emails = list(self.addon.authors.values_list('email', flat=True))
-        self.log_action(amo.LOG.REQUEST_INFORMATION)
-        self.version.update(has_info_request=True)
-        log.info(u'Sending request for information for %s to %s' %
-                 (self.addon, emails))
-
-        # Create thread.
-        self.create_comm_thread(action='info')
-
-        subject = u'Submission Update: %s'  # notify_email will format this.
-        self.notify_email('info', subject)
-
-    def send_escalate_mail(self):
-        self.log_action(amo.LOG.ESCALATE_MANUAL)
-        log.info(u'Escalated review requested for %s' % self.addon)
-        data = self.get_context_data()
-
-        if not waffle.switch_is_active('comm-dashboard'):
-            send_mail(u'Escalated Review Requested: %s' % data['name'],
-                      'reviewers/emails/super_review.txt',
-                      data, [settings.MKT_SENIOR_EDITORS_EMAIL],
-                      attachments=self.get_attachments())
+            return 'Tested on ' + '; '.join(tested_on_text)
 
 
 class ReviewApp(ReviewBase):
@@ -216,164 +161,212 @@ class ReviewApp(ReviewBase):
         self.data = data
         self.files = self.version.files.all()
 
-    def create_comm_thread(self, **kwargs):
-        res = create_comm_thread(action=kwargs['action'], addon=self.addon,
-            comments=self.data['comments'],
-            perms=self.data['action_visibility'],
-            profile=self.request.amo_user,
-            version=self.version)
-        if res:
-            self.comm_thread, self.comm_note = res
-
-    def process_public(self):
-        if waffle.switch_is_active('iarc') and not self.addon.is_rated():
-            # Shouldn't be able to get here. Don't allow unrated apps to go
-            # live.
+    def process_approve(self):
+        """
+        Handle the approval of apps and/or files.
+        """
+        if self.addon.has_incomplete_status():
+            # Failsafe.
             return
 
         # Hold onto the status before we change it.
         status = self.addon.status
-        self.create_comm_thread(action='approve')
-        if self.addon.make_public == amo.PUBLIC_IMMEDIATELY:
-            self.process_public_immediately()
+        if self.addon.publish_type == mkt.PUBLISH_IMMEDIATE:
+            self._process_public(mkt.STATUS_PUBLIC)
+        elif self.addon.publish_type == mkt.PUBLISH_HIDDEN:
+            self._process_public(mkt.STATUS_UNLISTED)
         else:
-            self.process_public_waiting()
+            self._process_private()
+
+        # Note: Post save signals shouldn't happen here. All the set_*()
+        # methods pass _signal=False to prevent them from being sent. They are
+        # manually triggered in the view after the transaction is committed to
+        # avoid multiple indexing tasks getting fired with stale data.
+        #
+        # This does mean that we need to call update_version() manually to get
+        # the addon in the correct state before updating names. We do that,
+        # passing _signal=False again to prevent it from sending
+        # 'version_changed'. The post_save() that happen in the view will
+        # call it without that parameter, sending 'version_changed' normally.
+        self.addon.update_version(_signal=False)
+        if self.addon.is_packaged:
+            self.addon.update_name_from_package_manifest()
+        self.addon.update_supported_locales()
+        self.addon.resend_version_changed_signal = True
 
         if self.in_escalate:
             EscalationQueue.objects.filter(addon=self.addon).delete()
 
-        # Assign reviewer incentive scores.
-        return ReviewerScore.award_points(self.request.amo_user, self.addon, status)
+        # Clear priority_review flag on approval - its not persistant.
+        if self.addon.priority_review:
+            self.addon.update(priority_review=False)
 
-    def process_public_waiting(self):
-        """Make an app pending."""
-        if waffle.switch_is_active('iarc') and not self.addon.is_rated():
-            # Shouldn't be able to get here. Don't allow unrated apps to go
-            # live.
+        # Assign reviewer incentive scores.
+        return ReviewerScore.award_points(self.request.user, self.addon,
+                                          status)
+
+    def _process_private(self):
+        """Make an app private."""
+        if self.addon.has_incomplete_status():
+            # Failsafe.
             return
 
         self.addon.sign_if_packaged(self.version.pk)
-        self.set_files(amo.STATUS_PUBLIC_WAITING, self.version.files.all())
-        if self.addon.status != amo.STATUS_PUBLIC:
-            self.set_addon(status=amo.STATUS_PUBLIC_WAITING,
-                           highest_status=amo.STATUS_PUBLIC_WAITING)
 
-        self.log_action(amo.LOG.APPROVE_VERSION_WAITING)
-        self.notify_email('pending_to_public_waiting',
-                          u'App Approved but waiting: %s')
+        # If there are no prior PUBLIC versions we set the file status to
+        # PUBLIC no matter what ``publish_type`` was chosen since at least one
+        # version needs to be PUBLIC when an app is approved to set a
+        # ``current_version``.
+        if File.objects.filter(version__addon__pk=self.addon.pk,
+                               status=mkt.STATUS_PUBLIC).count() == 0:
+            self.set_files(mkt.STATUS_PUBLIC, self.version.files.all())
+        else:
+            self.set_files(mkt.STATUS_APPROVED, self.version.files.all())
 
-        log.info(u'Making %s public but pending' % self.addon)
-        log.info(u'Sending email for %s' % self.addon)
+        if self.addon.status not in (mkt.STATUS_PUBLIC, mkt.STATUS_UNLISTED):
+            self.set_addon(status=mkt.STATUS_APPROVED,
+                           highest_status=mkt.STATUS_APPROVED)
+        self.set_reviewed()
 
-    def process_public_immediately(self):
-        """Approve an app."""
-        if waffle.switch_is_active('iarc') and not self.addon.is_rated():
-            # Shouldn't be able to get here. Don't allow unrated apps to go
-            # live.
+        self.create_note(mkt.LOG.APPROVE_VERSION_PRIVATE)
+
+        log.info(u'Making %s approved' % self.addon)
+
+    def _process_public(self, status):
+        """Changes status to a publicly viewable status."""
+        if self.addon.has_incomplete_status():
+            # Failsafe.
             return
 
         self.addon.sign_if_packaged(self.version.pk)
         # Save files first, because set_addon checks to make sure there
         # is at least one public file or it won't make the addon public.
-        self.set_files(amo.STATUS_PUBLIC, self.version.files.all())
-        if self.addon.status != amo.STATUS_PUBLIC:
-            self.set_addon(status=amo.STATUS_PUBLIC,
-                           highest_status=amo.STATUS_PUBLIC)
+        self.set_files(mkt.STATUS_PUBLIC, self.version.files.all())
+        # If app is already an approved status, don't change it when approving
+        # a version.
+        if self.addon.status not in mkt.WEBAPPS_APPROVED_STATUSES:
+            self.set_addon(status=status, highest_status=status)
+        self.set_reviewed()
 
-        # Call update_version, so various other bits of data update.
-        self.addon.update_version(_signal=False)
-        self.addon.update_name_from_package_manifest()
-        self.addon.update_supported_locales()
+        set_storefront_data.delay(self.addon.pk)
 
-        # Note: Post save signal happens in the view after the transaction is
-        # committed to avoid multiple indexing tasks getting fired with stale
-        # data.
-
-        self.log_action(amo.LOG.APPROVE_VERSION)
-        self.notify_email('pending_to_public', u'App Approved: %s')
+        self.create_note(mkt.LOG.APPROVE_VERSION)
 
         log.info(u'Making %s public' % self.addon)
-        log.info(u'Sending email for %s' % self.addon)
 
-    def process_sandbox(self):
-        """Reject an app."""
+    def process_reject(self):
+        """
+        Reject an app.
+        Changes status to Rejected.
+        Creates Rejection note.
+        """
         # Hold onto the status before we change it.
         status = self.addon.status
 
-        self.set_files(amo.STATUS_DISABLED, self.version.files.all(),
+        self.set_files(mkt.STATUS_DISABLED, self.version.files.all(),
                        hide_disabled_file=True)
         # If this app is not packaged (packaged apps can have multiple
         # versions) or if there aren't other versions with already reviewed
         # files, reject the app also.
         if (not self.addon.is_packaged or
             not self.addon.versions.exclude(id=self.version.id)
-                .filter(files__status__in=amo.REVIEWED_STATUSES).exists()):
-            self.set_addon(status=amo.STATUS_REJECTED)
+                .filter(files__status__in=mkt.REVIEWED_STATUSES).exists()):
+            self.set_addon(status=mkt.STATUS_REJECTED)
 
         if self.in_escalate:
             EscalationQueue.objects.filter(addon=self.addon).delete()
         if self.in_rereview:
             RereviewQueue.objects.filter(addon=self.addon).delete()
 
-        self.log_action(amo.LOG.REJECT_VERSION)
-        self.create_comm_thread(action='reject')
-        self.notify_email('pending_to_sandbox', u'Submission Update: %s')
+        self.create_note(mkt.LOG.REJECT_VERSION)
 
         log.info(u'Making %s disabled' % self.addon)
-        log.info(u'Sending email for %s' % self.addon)
 
         # Assign reviewer incentive scores.
-        return ReviewerScore.award_points(self.request.amo_user, self.addon, status,
-                                          in_rereview=self.in_rereview)
+        return ReviewerScore.award_points(self.request.user, self.addon,
+                                          status, in_rereview=self.in_rereview)
+
+    def process_request_information(self):
+        """Send a message to the authors."""
+        self.create_note(mkt.LOG.REQUEST_INFORMATION)
+        self.version.update(has_info_request=True)
+        log.info(u'Sending reviewer message for %s to authors' % self.addon)
 
     def process_escalate(self):
-        """Ask for escalation for an app."""
-        self.create_comm_thread(action='escalate')
+        """
+        Ask for escalation for an app (EscalationQueue).
+        Doesn't change status.
+        Creates Escalation note.
+        """
         EscalationQueue.objects.get_or_create(addon=self.addon)
-        self.notify_email('author_super_review', u'Submission Update: %s')
-
-        self.send_escalate_mail()
+        self.create_note(mkt.LOG.ESCALATE_MANUAL)
+        log.info(u'Escalated review requested for %s' % self.addon)
 
     def process_comment(self):
+        """
+        Editor comment (not visible to developer).
+        Doesn't change status.
+        Creates Reviewer Comment note.
+        """
         self.version.update(has_editor_comment=True)
-        self.log_action(amo.LOG.COMMENT_VERSION)
-        self.create_comm_thread(action='comment')
+        self.create_note(mkt.LOG.COMMENT_VERSION)
+
+    def process_manual_rereview(self):
+        """
+        Adds the app to the rereview queue.
+        Doesn't change status.
+        Creates Reviewer Comment note.
+        """
+        RereviewQueue.objects.get_or_create(addon=self.addon)
+        self.create_note(mkt.LOG.REREVIEW_MANUAL)
+        log.info(u'Re-review manually requested for %s' % self.addon)
 
     def process_clear_escalation(self):
-        """Clear app from escalation queue."""
+        """
+        Clear app from escalation queue.
+        Doesn't change status.
+        Creates Reviewer-only note.
+        """
         EscalationQueue.objects.filter(addon=self.addon).delete()
-        self.log_action(amo.LOG.ESCALATION_CLEARED)
+        self.create_note(mkt.LOG.ESCALATION_CLEARED)
         log.info(u'Escalation cleared for app: %s' % self.addon)
 
     def process_clear_rereview(self):
-        """Clear app from re-review queue."""
+        """
+        Clear app from re-review queue.
+        Doesn't change status.
+        Creates Reviewer-only note.
+        """
         RereviewQueue.objects.filter(addon=self.addon).delete()
-        self.log_action(amo.LOG.REREVIEW_CLEARED)
+        self.create_note(mkt.LOG.REREVIEW_CLEARED)
         log.info(u'Re-review cleared for app: %s' % self.addon)
         # Assign reviewer incentive scores.
-        return ReviewerScore.award_points(self.request.amo_user, self.addon,
+        return ReviewerScore.award_points(self.request.user, self.addon,
                                           self.addon.status, in_rereview=True)
 
     def process_disable(self):
-        """Disables app."""
-        if not acl.action_allowed(self.request, 'Addons', 'Edit'):
+        """
+        Bans app from Marketplace, clears app from all queues.
+        Changes status to Disabled.
+        Creates Banned/Disabled note.
+        """
+        if not acl.action_allowed(self.request, 'Apps', 'Edit'):
             return
 
         # Disable disables all files, not just those in this version.
-        self.set_files(amo.STATUS_DISABLED,
+        self.set_files(mkt.STATUS_DISABLED,
                        File.objects.filter(version__addon=self.addon),
                        hide_disabled_file=True)
-        self.addon.update(status=amo.STATUS_DISABLED)
+        self.addon.update(status=mkt.STATUS_DISABLED)
         if self.in_escalate:
             EscalationQueue.objects.filter(addon=self.addon).delete()
         if self.in_rereview:
             RereviewQueue.objects.filter(addon=self.addon).delete()
-        self.create_comm_thread(action='disable')
-        subject = u'App disabled by reviewer: %s'
-        self.notify_email('disabled', subject)
 
-        self.log_action(amo.LOG.APP_DISABLED)
-        log.info(u'App %s has been disabled by a reviewer.' % self.addon)
+        set_storefront_data.delay(self.addon.pk, disable=True)
+
+        self.create_note(mkt.LOG.APP_DISABLED)
+        log.info(u'App %s has been banned by a reviewer.' % self.addon)
 
 
 class ReviewHelper(object):
@@ -383,105 +376,112 @@ class ReviewHelper(object):
     """
 
     def __init__(self, request=None, addon=None, version=None,
-                 attachment_formset=None):
+                 attachment_formset=None, testedon_formset=None):
         self.handler = None
         self.required = {}
         self.addon = addon
         self.version = version
         self.all_files = version and version.files.all()
         self.attachment_formset = attachment_formset
-        self.get_review_type(request, addon, version)
+        self.testedon_formset = testedon_formset
+        self.handler = ReviewApp(request, addon, version,
+                                 attachment_formset=self.attachment_formset,
+                                 testedon_formset=self.testedon_formset)
+        self.review_type = self.handler.review_type
         self.actions = self.get_actions()
 
     def set_data(self, data):
         self.handler.set_data(data)
 
-    def get_review_type(self, request, addon, version):
-        if EscalationQueue.objects.filter(addon=addon).exists():
-            queue = 'escalated'
-        elif RereviewQueue.objects.filter(addon=addon).exists():
-            queue = 'rereview'
-        else:
-            queue = 'pending'
-        self.review_type = queue
-        self.handler = ReviewApp(request, addon, version, queue,
-                                 attachment_formset=self.attachment_formset)
-
     def get_actions(self):
+        """Get the appropriate handler based on the action."""
         public = {
-            'method': self.handler.process_public,
+            'method': self.handler.process_approve,
             'minimal': False,
-            'label': _lazy(u'Push to public'),
-            'details': _lazy(u'This will approve the sandboxed app so it '
-                             u'appears on the public side.')}
+            'label': _lazy(u'Approve'),
+            'details': _lazy(u'This will approve the app and allow the '
+                             u'author(s) to publish it.')}
         reject = {
-            'method': self.handler.process_sandbox,
+            'method': self.handler.process_reject,
             'label': _lazy(u'Reject'),
             'minimal': False,
-            'details': _lazy(u'This will reject the app and remove it from '
-                             u'the review queue.')}
+            'details': _lazy(u'This will reject the app, remove it from '
+                             u'the review queue and un-publish it if already '
+                             u'published.')}
         info = {
-            'method': self.handler.request_information,
-            'label': _lazy(u'Request more information'),
+            'method': self.handler.process_request_information,
+            'label': _lazy(u'Message developer'),
             'minimal': True,
-            'details': _lazy(u'This will send the author(s) an email '
-                             u'requesting more information.')}
+            'details': _lazy(u'This will send the author(s) - and other '
+                             u'thread subscribers - a message. This will not '
+                             u'change the app\'s status.')}
         escalate = {
             'method': self.handler.process_escalate,
             'label': _lazy(u'Escalate'),
             'minimal': True,
-            'details': _lazy(u'Flag this app for an admin to review.')}
+            'details': _lazy(u'Flag this app for an admin to review. The '
+                             u'comments are sent to the admins, '
+                             u'not the author(s).')}
         comment = {
             'method': self.handler.process_comment,
-            'label': _lazy(u'Comment'),
+            'label': _lazy(u'Private comment'),
             'minimal': True,
-            'details': _lazy(u'Make a comment on this app.  The author won\'t '
-                             u'be able to see this.')}
+            'details': _lazy(u'Make a private reviewer comment on this app. '
+                             u'The message won\'t be visible to the '
+                             u'author(s), and no notification will be sent '
+                             u'them.')}
+        manual_rereview = {
+            'method': self.handler.process_manual_rereview,
+            'label': _lazy(u'Request Re-review'),
+            'minimal': True,
+            'details': _lazy(u'Add this app to the re-review queue. Any '
+                             u'comments here won\'t be visible to the '
+                             u'author(s), and no notification will be sent to '
+                             u'them.')}
         clear_escalation = {
             'method': self.handler.process_clear_escalation,
             'label': _lazy(u'Clear Escalation'),
             'minimal': True,
             'details': _lazy(u'Clear this app from the escalation queue. The '
-                             u'author will get no email or see comments '
+                             u'author(s) will get no email or see comments '
                              u'here.')}
         clear_rereview = {
             'method': self.handler.process_clear_rereview,
             'label': _lazy(u'Clear Re-review'),
             'minimal': True,
             'details': _lazy(u'Clear this app from the re-review queue. The '
-                             u'author will get no email or see comments '
+                             u'author(s) will get no email or see comments '
                              u'here.')}
         disable = {
             'method': self.handler.process_disable,
-            'label': _lazy(u'Disable app'),
+            'label': _lazy(u'Ban app'),
             'minimal': True,
-            'details': _lazy(u'Disable the app, removing it from public '
-                             u'results. Sends comments to author.')}
+            'details': _lazy(u'Ban the app from Marketplace. Similar to '
+                             u'Reject but the author(s) can\'t resubmit. To '
+                             u'only be used in extreme cases.')}
 
-        actions = SortedDict()
+        actions = OrderedDict()
 
         if not self.version:
             # Return early if there is no version, this app is incomplete.
-            actions['info'] = info
-            actions['comment'] = comment
             return actions
 
         file_status = self.version.files.values_list('status', flat=True)
         multiple_versions = (File.objects.exclude(version=self.version)
                                          .filter(
                                              version__addon=self.addon,
-                                             status__in=amo.REVIEWED_STATUSES)
+                                             status__in=mkt.REVIEWED_STATUSES)
                                          .exists())
 
-        show_privileged = (not self.version.is_privileged
-                           or acl.action_allowed(self.handler.request, 'Apps',
-                                                 'ReviewPrivileged'))
+        show_privileged = (not self.version.is_privileged or
+                           acl.action_allowed(self.handler.request, 'Apps',
+                                              'ReviewPrivileged'))
 
         # Public.
-        if ((self.addon.is_packaged and amo.STATUS_PUBLIC not in file_status
-             and show_privileged)
-            or (not self.addon.is_packaged and
-                self.addon.status != amo.STATUS_PUBLIC)):
+        if ((self.addon.is_packaged and
+             mkt.STATUS_PUBLIC not in file_status and show_privileged) or
+            (not self.addon.is_packaged and
+             self.addon.status != mkt.STATUS_PUBLIC)):
             actions['public'] = public
 
         # Reject.
@@ -489,33 +489,35 @@ class ReviewHelper(object):
             # Packaged apps reject the file only, or the app itself if there's
             # only a single version.
             if (not multiple_versions and
-                self.addon.status not in [amo.STATUS_REJECTED,
-                                          amo.STATUS_DISABLED]):
+                self.addon.status not in [mkt.STATUS_REJECTED,
+                                          mkt.STATUS_DISABLED]):
                 actions['reject'] = reject
-            elif multiple_versions and amo.STATUS_DISABLED not in file_status:
+            elif multiple_versions and mkt.STATUS_DISABLED not in file_status:
                 actions['reject'] = reject
         elif not self.addon.is_packaged:
             # Hosted apps reject the app itself.
-            if self.addon.status not in [amo.STATUS_REJECTED,
-                                         amo.STATUS_DISABLED]:
+            if self.addon.status not in [mkt.STATUS_REJECTED,
+                                         mkt.STATUS_DISABLED]:
                 actions['reject'] = reject
 
-        # Disable.
-        if (acl.action_allowed(self.handler.request, 'Addons', 'Edit') and (
-                self.addon.status != amo.STATUS_DISABLED or
-                amo.STATUS_DISABLED not in file_status)):
+        # Ban/Disable.
+        if (acl.action_allowed(self.handler.request, 'Apps', 'Edit') and (
+                self.addon.status != mkt.STATUS_DISABLED or
+                mkt.STATUS_DISABLED not in file_status)):
             actions['disable'] = disable
-
-        # Clear escalation.
-        if self.handler.in_escalate:
-            actions['clear_escalation'] = clear_escalation
 
         # Clear re-review.
         if self.handler.in_rereview:
             actions['clear_rereview'] = clear_rereview
+        else:
+            # Manual re-review.
+            actions['manual_rereview'] = manual_rereview
 
-        # Escalate.
-        if not self.handler.in_escalate:
+        # Clear escalation.
+        if self.handler.in_escalate:
+            actions['clear_escalation'] = clear_escalation
+        else:
+            # Escalate.
             actions['escalate'] = escalate
 
         # Request info and comment are always shown.
@@ -525,6 +527,7 @@ class ReviewHelper(object):
         return actions
 
     def process(self):
+        """Call handler."""
         action = self.handler.data.get('action', '')
         if not action:
             raise NotImplementedError
@@ -533,14 +536,34 @@ class ReviewHelper(object):
 
 def clean_sort_param(request, date_sort='created'):
     """
-    Handles empty and invalid values for sort and sort order
+    Handles empty and invalid values for sort and sort order.
     'created' by ascending is the default ordering.
     """
     sort = request.GET.get('sort', date_sort)
     order = request.GET.get('order', 'asc')
 
-    if sort not in ('name', 'created', 'nomination', 'num_abuse_reports'):
+    if sort not in ('name', 'created', 'nomination'):
         sort = date_sort
+    if order not in ('desc', 'asc'):
+        order = 'asc'
+    return sort, order
+
+
+def clean_sort_param_es(request, date_sort='created'):
+    """
+    Handles empty and invalid values for sort and sort order.
+    'created' by ascending is the default ordering.
+    """
+    sort_map = {
+        'name': 'name_sort',
+        'nomination': 'latest_version.nomination_date',
+    }
+    sort = request.GET.get('sort', date_sort)
+    order = request.GET.get('order', 'asc')
+
+    if sort not in ('name', 'created', 'nomination'):
+        sort = date_sort
+    sort = sort_map.get(sort, date_sort)
     if order not in ('desc', 'asc'):
         order = 'asc'
     return sort, order
@@ -582,7 +605,7 @@ class AppsReviewing(object):
 
     def __init__(self, request):
         self.request = request
-        self.user_id = request.amo_user.id
+        self.user_id = request.user.id
         self.key = '%s:myapps:%s' % (settings.CACHE_PREFIX, self.user_id)
 
     def get_apps(self):
@@ -613,24 +636,215 @@ class AppsReviewing(object):
             apps = []
         apps.append(addon_id)
         cache.set(self.key, ','.join(map(str, set(apps))),
-                  amo.EDITOR_VIEWING_INTERVAL * 2)
+                  mkt.EDITOR_VIEWING_INTERVAL * 2)
 
 
-def device_queue_search(request):
-    """
-    Returns a queryset that can be used as a base for searching the device
-    specific queue.
-    """
-    filters = {
-        'type': amo.ADDON_WEBAPP,
-        'status': amo.STATUS_PENDING,
-        'disabled_by_user': False,
-    }
-    sig = request.GET.get('pro')
-    if sig:
-        profile = FeatureProfile.from_signature(sig)
-        filters.update(dict(
-            **profile.to_kwargs(prefix='_current_version__features__has_')
-        ))
-    return Webapp.version_and_file_transformer(
-        Webapp.objects.filter(**filters))
+def log_reviewer_action(addon, user, msg, action, **kwargs):
+    create_comm_note(addon, addon.latest_version, user, msg,
+                     note_type=comm.ACTION_MAP(action.id))
+    mkt.log(action, addon, addon.latest_version, details={'comments': msg},
+            **kwargs)
+
+
+def search_webapps_and_homescreens():
+    return (Search(using=WebappIndexer.get_es(),
+                   index=[settings.ES_INDEXES['homescreen'],
+                          settings.ES_INDEXES['webapp']],
+                   doc_type=['homescreen', 'webapp'])
+            .extra(_source={'exclude': WebappIndexer.hidden_fields}))
+
+
+class ReviewersQueuesHelper(object):
+    def __init__(self, request=None, use_es=False):
+        self.request = request
+        self.use_es = use_es
+
+    @cached_property
+    def excluded_ids(self):
+        # We need to exclude Escalated Apps from almost all queries, so store
+        # the result once.
+        return self.get_escalated_queue().values_list('addon', flat=True)
+
+    def get_escalated_queue(self):
+        # Apps and homescreens flagged for escalation go in this queue.
+        if self.use_es:
+            must = [
+                es_filter.Term(is_disabled=False),
+                es_filter.Term(is_escalated=True),
+            ]
+            return search_webapps_and_homescreens().filter('bool', must=must)
+
+        return EscalationQueue.objects.filter(
+            addon__disabled_by_user=False)
+
+    def get_pending_queue(self):
+        # Unreviewed apps go in this queue.
+        if self.use_es:
+            must = [
+                es_filter.Term(status=mkt.STATUS_PENDING),
+                es_filter.Term(**{'latest_version.status':
+                                  mkt.STATUS_PENDING}),
+                es_filter.Term(is_escalated=False),
+                es_filter.Term(is_disabled=False),
+            ]
+            return WebappIndexer.search().filter('bool', must=must)
+
+        return (Version.objects.filter(
+            files__status=mkt.STATUS_PENDING,
+            addon__disabled_by_user=False,
+            addon__status=mkt.STATUS_PENDING)
+            .exclude(addon__id__in=self.excluded_ids)
+            .exclude(addon__tags__tag_text='homescreen')
+            .order_by('nomination', 'created')
+            .select_related('addon', 'files').no_transforms())
+
+    def get_homescreen_queue(self):
+        # Both unreviewed homescreens and published homescreens with new
+        # unreviewed versions go in this queue.
+        if self.use_es:
+            must = [
+                es_filter.Term(**{'latest_version.status':
+                                  mkt.STATUS_PENDING}),
+                es_filter.Term(is_escalated=False),
+                es_filter.Term(is_disabled=False),
+            ]
+            return HomescreenIndexer.search().filter('bool', must=must)
+
+        return (Version.objects.filter(
+            files__status=mkt.STATUS_PENDING,
+            addon__disabled_by_user=False,
+            addon__tags__tag_text='homescreen')
+            .exclude(addon__id__in=self.excluded_ids)
+            .order_by('nomination', 'created')
+            .select_related('addon', 'files').no_transforms())
+
+    def get_rereview_queue(self):
+        # Apps and homescreens flagged for re-review go in this queue.
+        if self.use_es:
+            must = [
+                es_filter.Term(is_rereviewed=True),
+                es_filter.Term(is_disabled=False),
+                es_filter.Term(is_escalated=False),
+            ]
+            return search_webapps_and_homescreens().filter('bool', must=must)
+
+        return (RereviewQueue.objects.
+                filter(addon__disabled_by_user=False).
+                exclude(addon__in=self.excluded_ids))
+
+    def get_updates_queue(self):
+        # Updated apps, i.e. apps that have been published but have new
+        # unreviewed versions, go in this queue.
+        if self.use_es:
+            must = [
+                es_filter.Terms(status=mkt.WEBAPPS_APPROVED_STATUSES),
+                es_filter.Term(**{'latest_version.status':
+                                  mkt.STATUS_PENDING}),
+                es_filter.Terms(app_type=[mkt.ADDON_WEBAPP_PACKAGED,
+                                          mkt.ADDON_WEBAPP_PRIVILEGED]),
+                es_filter.Term(is_disabled=False),
+                es_filter.Term(is_escalated=False),
+            ]
+            return WebappIndexer.search().filter('bool', must=must)
+
+        return (Version.objects.filter(
+            # Note: this will work as long as we disable files of existing
+            # unreviewed versions when a new version is uploaded.
+            files__status=mkt.STATUS_PENDING,
+            addon__disabled_by_user=False,
+            addon__is_packaged=True,
+            addon__status__in=mkt.WEBAPPS_APPROVED_STATUSES)
+            .exclude(addon__id__in=self.excluded_ids)
+            .exclude(addon__tags__tag_text='homescreen')
+            .order_by('nomination', 'created')
+            .select_related('addon', 'files').no_transforms())
+
+    def get_moderated_queue(self):
+        return (Review.objects
+                .exclude(Q(addon__isnull=True) | Q(reviewflag__isnull=True))
+                .exclude(addon__status=mkt.STATUS_DELETED)
+                .filter(editorreview=True)
+                .order_by('reviewflag__created'))
+
+    def get_abuse_queue(self):
+        report_ids = (AbuseReport.objects
+                      .exclude(addon__isnull=True)
+                      .exclude(addon__status=mkt.STATUS_DELETED)
+                      .filter(read=False)
+                      .select_related('addon')
+                      .values_list('addon', flat=True))
+
+        return Webapp.objects.filter(id__in=report_ids).order_by('created')
+
+    def get_abuse_queue_websites(self):
+        report_ids = (AbuseReport.objects
+                      .exclude(website__isnull=True)
+                      .exclude(website__status=mkt.STATUS_DELETED)
+                      .filter(read=False)
+                      .select_related('website')
+                      .values_list('website', flat=True))
+
+        return Website.objects.filter(id__in=report_ids).order_by('created')
+
+    def sort(self, qs, date_sort='created'):
+        """Given a queue queryset, return the sorted version."""
+        if self.use_es:
+            return self._do_sort_es(qs, date_sort)
+
+        if qs.model == Webapp:
+            return self._do_sort_webapp(qs, date_sort)
+
+        return self._do_sort_queue_obj(qs, date_sort)
+
+    def _do_sort_webapp(self, qs, date_sort):
+        """
+        Column sorting logic based on request GET parameters.
+        """
+        sort_type, order = clean_sort_param(self.request, date_sort=date_sort)
+        order_by = ('-' if order == 'desc' else '') + sort_type
+
+        # Sort.
+        if sort_type == 'name':
+            # Sorting by name translation.
+            return order_by_translation(qs, order_by)
+
+        else:
+            return qs.order_by('-priority_review', order_by)
+
+    def _do_sort_queue_obj(self, qs, date_sort):
+        """
+        Column sorting logic based on request GET parameters.
+        Deals with objects with joins on the Addon (e.g. RereviewQueue,
+        Version). Returns qs of apps.
+        """
+        sort_type, order = clean_sort_param(self.request, date_sort=date_sort)
+        sort_str = sort_type
+
+        if sort_type not in [date_sort, 'name']:
+            sort_str = 'addon__' + sort_type
+
+        # sort_str includes possible joins when ordering.
+        # sort_type is the name of the field to sort on without desc/asc
+        # markers. order_by is the name of the field to sort on with desc/asc
+        # markers.
+        order_by = ('-' if order == 'desc' else '') + sort_str
+
+        # Sort.
+        if sort_type == 'name':
+            # Sorting by name translation through an addon foreign key.
+            return order_by_translation(
+                Webapp.objects.filter(
+                    id__in=qs.values_list('addon', flat=True)), order_by)
+
+        # Convert sorted queue object queryset to sorted app queryset.
+        sorted_app_ids = (qs.order_by('-addon__priority_review', order_by)
+                            .values_list('addon', flat=True))
+        qs = Webapp.objects.filter(id__in=sorted_app_ids)
+        return manual_order(qs, sorted_app_ids, 'addons.id')
+
+    def _do_sort_es(self, qs, date_sort):
+        sort_type, order = clean_sort_param_es(self.request,
+                                               date_sort=date_sort)
+        order_by = ('-' if order == 'desc' else '') + sort_type
+
+        return qs.sort(order_by)

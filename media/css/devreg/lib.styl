@@ -23,6 +23,8 @@ $mobileborder = #d7d2c3;
 $note-gray = #999;
 $notice-yellow = #FAF2BD;
 $orange = #e60;
+$primary-blue = #4CB1FF;
+$primary-blue-highlight = #42CAFE;
 $reviewer-header-purple = #563C4B;
 $red = #C63717;
 $shadow-blue = #98B2C9;
@@ -59,7 +61,7 @@ $landscape-min = unquote('(min-width: 768px)');
 $landscape-max = unquote('(max-width: 767px)');
 $portrait-max = unquote('(max-width: 480px)');
 $mobile-portrait-overlay = unquote('(max-width: 480px) and (max-height: 460px)');
-$mobile-landscape = unquote('(min-width: 481px and max-width: 767px)');
+$mobile-landscape = unquote('(min-width: 481px) and (max-width: 767px)');
 // TODO: Figure out tablet sizes. These are messy (and desktop starts at 1024). Talk to Michael.
 $tablet-portrait = unquote('(min-width: 768px) and (max-width: 1024px)');
 
@@ -166,4 +168,36 @@ webkit-spin() {
     -webkit-animation-name: spin;
     -webkit-animation-iteration-count: infinite;
     -webkit-animation-timing-function: linear;
+}
+
+animation($animation) {
+    -webkit-animation: $animation;
+    -moz-animation: $animation;
+    animation: $animation;
+}
+
+@-webkit-keyframes spin {
+    from { -webkit-transform: rotate(0turn); }
+    to { -webkit-transform: rotate(1turn); }
+}
+@keyframes spin {
+    from { transform: rotate(0turn); }
+    to { transform: rotate(1turn); }
+}
+
+spinner-base-image(type = '') {
+    if (type == 'retina') {
+        background-image: url(../../img/mkt/btn_spinner_2x.png);
+        background-size: 30px auto;
+    } else {
+        background: url(../../img/mkt/btn_spinner.png) no-repeat center;
+    }
+}
+
+spinner-base() {
+    animation(unquote('0.9s spin infinite steps(30)'));
+    height: 30px;
+    margin: 0 auto;
+    spinner-base-image();
+    width: 30px;
 }

@@ -1,8 +1,12 @@
-{% extends 'developers/skeleton_impala.html' %}
+{% extends 'base.html' %}
 
 {% block title %}{{ _('Lookup Tool') }}{% endblock %}
 
 {% block bodyclass %}account-lookup{% endblock %}
+
+{% block bodyattrs %}
+  {% if website %}data-default-locale="{{ website.default_locale|lower }}"{% endif %}
+{% endblock %}
 
 {% block masthead %}
 <h1 id="masthead" class="site-title prominent">
@@ -15,7 +19,7 @@
 {% endblock %}
 
 {% block extrahead %}
-    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1">
+    <meta name="viewport" content="width=device-width">
     <meta name="apple-mobile-web-app-capable" content="yes">
   {{ css('mkt/lookup') }}
 {% endblock %}
@@ -26,10 +30,10 @@
 {% block js %}
   <span class="hidden lookup-meta"
         data-search-limit="{{ mkt.constants.lookup.SEARCH_LIMIT }}"
-        data-max-results="{{ mkt.constants.lookup.MAX_RESULTS }}">
+        data-max-results="{{ mkt.constants.lookup.MAX_RESULTS }}"></span>
   {{ js('mkt/lookup') }}
 {% endblock %}
 
 {# Hiding these for the Marketplace Editor Tools until consumer pages are done. #}
-{% block header_search %}{{ super() if not settings.MARKETPLACE }}{% endblock %}
-{% block footer %}{{ super() if not settings.MARKETPLACE }}{% endblock %}
+{% block header_search %}{% endblock %}
+{% block footer %}{% endblock %}

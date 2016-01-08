@@ -3,43 +3,65 @@
 Trouble-shooting the development installation
 =============================================
 
+M2Crypto installation
+---------------------
+
+If you are on a Linux box and get a compilation error while installing M2Crypto
+like the following::
+
+    SWIG/_m2crypto_wrap.c:6116:1: error: unknown type name ‘STACK’
+
+    ... snip a very long output of errors around STACK...
+
+    SWIG/_m2crypto_wrap.c:23497:20: error: expected expression before ‘)’ token
+
+       result = (STACK *)pkcs7_get0_signers(arg1,arg2,arg3);
+
+                        ^
+
+    error: command 'gcc' failed with exit status 1
+
+It may be because of a `few reasons`_:
+
+.. _few reasons:
+    http://blog.rectalogic.com/2013/11/installing-m2crypto-in-python.html
+
+* comment the line starting with ``M2Crypto`` in ``requirements/compiled.txt``
+* install the patched package from the Debian repositories (replace
+  ``x86_64-linux-gnu`` by ``i386-linux-gnu`` if you're on a 32bits platform)::
+
+    DEB_HOST_MULTIARCH=x86_64-linux-gnu pip install -I --exists-action=w "git+git://anonscm.debian.org/collab-maint/m2crypto.git@debian/0.21.1-3#egg=M2Crypto"
+    pip install --no-deps -r requirements/dev.txt
+
+* revert your changes to ``requirements/compiled.txt``::
+
+    git checkout requirements/compiled.txt
+
+Pillow
+------
+
+As of Mac OS X Mavericks, you might see this error when pip builds Pillow::
+
+    clang: error: unknown argument: '-mno-fused-madd' [-Wunused-command-line-argument-hard-error-in-future]
+
+    clang: note: this will be a hard error (cannot be downgraded to a warning) in the future
+
+    error: command 'cc' failed with exit status 1
+
+You can solve this by setting these environment variables in your shell
+before running ``pip install ...``::
+
+    export CFLAGS=-Qunused-arguments
+    export CPPFLAGS=-Qunused-arguments
+    pip install ...
+
+More info: http://stackoverflow.com/questions/22334776/installing-pillow-pil-on-mavericks/22365032
+
 Image processing isn't working
 ------------------------------
 
 If adding images to apps or extensions doesn't seem to work then there's a
 couple of settings you should check.
-
-Checking your image settings
-____________________________
-
-First look for the following image serving settings::
-
-    SERVE_TMP_PATH = True  # maps /tmp to zamboni/tmp
-    PREVIEW_THUMBNAIL_URL = '/tmp/uploads/previews/thumbs/%s/%d.png?modified=%d'
-    PREVIEW_FULL_URL = '/tmp/uploads/previews/full/%s/%d.png?modified=%d'
-    USERPICS_URL = '/tmp/uploads/userpics/%s/%s/%s.png?modified=%d'
-    ADDON_ICON_URL = '/tmp/uploads/addon_icons/%s/%s-%s.png?modified=%d'
-    PREVIEW_THUMBNAIL_URL = '/tmp/uploads/previews/thumbs/%s/%d.png?modified=%d'
-    NEW_PERSONAS_IMAGE_URL = '/tmp/uploads/personas/%(id)d/%(file)s'
-
-Check that ``CELERY_ALWAYS_EAGER`` is set to ``True`` in your settings file. This
-means it will process tasks without celeryd running::
-
-    CELERY_ALWAYS_EAGER = True
-
-If that yields no joy you can try running celeryd in the foreground,
-set ``CELERY_ALWAYS_EAGER = False`` and run::
-
-    ./manage.py celeryd $OPTIONS
-
-
-.. note::
-
-    This requires the rabbit setup as detailed in the
-    :doc:`./celery` instructions.
-
-This may help you to see where the image processing tasks are failing. For
-example it might show that PIL is failing due to missing dependencies.
 
 Checking your PIL installation (Ubuntu)
 _______________________________________

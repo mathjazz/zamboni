@@ -1,134 +1,290 @@
-import waffle
+from __future__ import absolute_import
 
-import amo
-from apps.search.views import _get_locale_analyzer
+import json
 
-from . import forms
+from django.db.transaction import non_atomic_requests
+from django.http import HttpResponse
+from django.utils.functional import lazy
+
+from elasticsearch_dsl import filter as es_filter
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+
+import mkt
+from mkt.api.authentication import (RestOAuthAuthentication,
+                                    RestSharedSecretAuthentication)
+from mkt.api.base import CORSMixin, MarketplaceView
+from mkt.api.permissions import AnyOf, GroupPermission
+from mkt.extensions import indexers as e_indexers
+from mkt.extensions.serializers import ESExtensionSerializer
+from mkt.operators.permissions import IsOperatorPermission
+from mkt.search.forms import ApiSearchForm, COLOMBIA_WEBSITE
+from mkt.search.indexers import BaseIndexer
+from mkt.search.filters import (DeviceTypeFilter, HomescreenFilter,
+                                OpenMobileACLFilter, ProfileFilter,
+                                PublicContentFilter, PublicSearchFormFilter,
+                                RegionFilter, SearchQueryFilter, SortingFilter,
+                                ValidAppsFilter)
+from mkt.search.serializers import DynamicSearchSerializer
+from mkt.search.utils import Search
+from mkt.translations.helpers import truncate
+from mkt.webapps import indexers
+from mkt.webapps.serializers import (ESAppSerializer, RocketbarESAppSerializer,
+                                     RocketbarESAppSerializerV2,
+                                     SuggestionsESAppSerializer)
+from mkt.websites import indexers as ws_indexers
+from mkt.websites.serializers import ESWebsiteSerializer
 
 
-DEFAULT_FILTERS = ['cat', 'device', 'premium_types', 'price', 'sort']
-DEFAULT_SORTING = {
-    'popularity': '-popularity',
-    # TODO: Should popularity replace downloads?
-    'downloads': '-weekly_downloads',
-    'rating': '-bayesian_rating',
-    'created': '-created',
-    'name': 'name_sort',
-    'hotness': '-hotness',
-    'price': 'price'
-}
-
-
-def name_only_query(q):
+class SearchView(CORSMixin, MarketplaceView, ListAPIView):
     """
-    Returns a dictionary with field/value mappings to pass to elasticsearch.
-
-    This sets up various queries with boosting against the name field in the
-    elasticsearch index.
-
+    Base app search view based on a single-string query.
     """
-    d = {}
+    cors_allowed_methods = ['get']
+    authentication_classes = [RestSharedSecretAuthentication,
+                              RestOAuthAuthentication]
+    permission_classes = [AllowAny]
+    filter_backends = [DeviceTypeFilter, HomescreenFilter, ProfileFilter,
+                       PublicContentFilter, PublicSearchFormFilter,
+                       RegionFilter, SearchQueryFilter, SortingFilter]
 
-    rules = {
-        'term': {'value': q, 'boost': 10},  # Exact match.
-        'text': {'query': q, 'boost': 3, 'analyzer': 'standard'},
-        'text': {'query': q, 'boost': 4, 'type': 'phrase'},
-        'fuzzy': {'value': q, 'boost': 2, 'prefix_length': 4},
-        'startswith': {'value': q, 'boost': 1.5}
+    serializer_class = ESAppSerializer
+    form_class = ApiSearchForm
+
+    def get_queryset(self):
+        return indexers.WebappIndexer.search()
+
+    @classmethod
+    def as_view(cls, **kwargs):
+        # Make all search views non_atomic: they should not need the db, or
+        # at least they should not need to make db writes, so they don't need
+        # to be wrapped in transactions.
+        view = super(SearchView, cls).as_view(**kwargs)
+        return non_atomic_requests(view)
+
+
+class MultiSearchView(SearchView):
+    """
+    Search View capable of returning multiple content types in the same
+    results list (e.g., apps + sites). Can take a `doc_type` param to filter by
+    `app`s only or `site`s only.
+    """
+    allow_colombia = False
+    serializer_class = DynamicSearchSerializer
+    # mapping_names_and_indices is lazy because our tests modify the indices
+    # to use test indices. So we want it to be instantiated only when we start
+    # using it in the code, not before.
+    mapping_names_and_indices = lazy(lambda: {
+        'extension': {
+            'doc_type': e_indexers.ExtensionIndexer.get_mapping_type_name(),
+            'index': e_indexers.ExtensionIndexer.get_index()
+        },
+        'webapp': {
+            'doc_type': indexers.WebappIndexer.get_mapping_type_name(),
+            'index': indexers.WebappIndexer.get_index(),
+        },
+        'homescreen': {
+            'doc_type': indexers.HomescreenIndexer.get_mapping_type_name(),
+            'index': indexers.HomescreenIndexer.get_index(),
+        },
+
+        'website': {
+            'doc_type': ws_indexers.WebsiteIndexer.get_mapping_type_name(),
+            'index': ws_indexers.WebsiteIndexer.get_index()
+        }
+    }, dict)()
+    serializer_classes = {
+        'extension': ESExtensionSerializer,
+        'webapp': ESAppSerializer,
+        'homescreen': ESAppSerializer,
+        'website': ESWebsiteSerializer
     }
-    for k, v in rules.iteritems():
-        for field in ('name', 'app_slug', 'author'):
-            d['%s__%s' % (field, k)] = v
 
-    analyzer = _get_locale_analyzer()
-    if analyzer:
-        d['name_%s__text' % analyzer] = {'query': q, 'boost': 2.5,
-                                         'analyzer': analyzer}
-    return d
+    def get_doc_types_and_indices(self):
+        """
+        Return a dict with the index and doc_type keys to use for this request,
+        using the 'doc_type' GET parameter.
+
+        Valid `doc_type` parameters: 'extension', 'webapp' and 'website'. If
+        no parameter is passed or the value is not recognized, default to
+        'webapp', 'website'."""
+        cls = self.__class__
+        requested_doc_types = self.request.GET.get('doc_type', '').split(',')
+        filtered_names_and_indices = [
+            cls.mapping_names_and_indices[key] for key
+            in cls.mapping_names_and_indices if key in requested_doc_types]
+        if not filtered_names_and_indices:
+            # Default is to include only webapp and website for now.
+            filtered_names_and_indices = [
+                cls.mapping_names_and_indices['webapp'],
+                cls.mapping_names_and_indices['website'],
+            ]
+        # Now regroup to produce a dict with doc_type: [...], index: [...].
+        return {key: [item[key] for item in filtered_names_and_indices]
+                for key in ['doc_type', 'index']}
+
+    def get_serializer_context(self):
+        # This context is then used by the DynamicSearchSerializer to switch
+        # serializer depending on the document being serialized.
+        cls = self.__class__
+        context = super(MultiSearchView, self).get_serializer_context()
+        context['serializer_classes'] = cls.serializer_classes
+        return context
+
+    def _get_colombia_filter(self):
+        if self.allow_colombia and self.request.REGION == mkt.regions.COL:
+            return None
+        co_filter = es_filter.Term(tags=COLOMBIA_WEBSITE)
+        return es_filter.F(es_filter.Bool(must_not=[co_filter]),)
+
+    def get_queryset(self):
+        excluded_fields = list(set(indexers.WebappIndexer.hidden_fields +
+                                   ws_indexers.WebsiteIndexer.hidden_fields +
+                                   e_indexers.ExtensionIndexer.hidden_fields))
+        co_filters = self._get_colombia_filter()
+        qs = (Search(using=BaseIndexer.get_es(),
+                     **self.get_doc_types_and_indices())
+              .extra(_source={'exclude': excluded_fields}))
+        if co_filters:
+            return qs.filter(co_filters)
+        return qs
 
 
-def name_query(q):
+class FeaturedSearchView(SearchView):
+
+    def list(self, request, *args, **kwargs):
+        response = super(FeaturedSearchView, self).list(request, *args,
+                                                        **kwargs)
+        data = self.add_featured_etc(request, response.data)
+        return Response(data)
+
+    def add_featured_etc(self, request, data):
+        # This endpoint used to return rocketfuel collections data but
+        # rocketfuel is not used anymore now that we have the feed. To keep
+        # backwards-compatibility we return empty arrays for the 3 keys that
+        # contained rocketfuel data.
+        data['collections'] = []
+        data['featured'] = []
+        data['operator'] = []
+        return data
+
+
+class SuggestionsView(SearchView):
+    authentication_classes = []
+    serializer_class = SuggestionsESAppSerializer
+
+    def list(self, request, *args, **kwargs):
+        query = request.GET.get('q', '')
+        response = super(SuggestionsView, self).list(request, *args, **kwargs)
+
+        names = []
+        descs = []
+        urls = []
+        icons = []
+
+        for base_data in response.data['objects']:
+            names.append(base_data['name'])
+            descs.append(truncate(base_data['description']))
+            urls.append(base_data['absolute_url'])
+            icons.append(base_data['icon'])
+        # This results a list. Usually this is a bad idea, but we don't return
+        # any user-specific data, it's fully anonymous, so we're fine.
+        return HttpResponse(json.dumps([query, names, descs, urls, icons]),
+                            content_type='application/x-suggestions+json')
+
+
+class NonPublicSearchView(SearchView):
     """
-    Returns a dictionary with field/value mappings to pass to elasticsearch.
-
-    Note: This is marketplace specific. See apps/search/views.py for AMO.
-
-    """
-    more = {
-        'description__text': {'query': q, 'boost': 0.8, 'type': 'phrase'},
-    }
-
-    analyzer = _get_locale_analyzer()
-    if analyzer:
-        more['description_%s__text' % analyzer] = {
-            'query': q, 'boost': 0.6, 'type': 'phrase', 'analyzer': analyzer}
-
-    more['tags__text'] = {'query': q}
-
-    return dict(more, **name_only_query(q))
-
-
-def _filter_search(request, qs, query, filters=None, sorting=None,
-                   sorting_default='-popularity', region=None, profile=None):
-    """
-    Filter an ES queryset based on a list of filters.
-
-    If `profile` (a FeatureProfile object) is provided we filter by the
-    profile. If you don't want to filter by these don't pass it. I.e. do the
-    device detection for when this happens elsewhere.
+    A search view that allows searching for apps with non-public statuses
+    protected behind a permission class. Region exclusions still affects
+    results.
 
     """
-    # Intersection of the form fields present and the filters we want to apply.
-    filters = filters or DEFAULT_FILTERS
-    sorting = sorting or DEFAULT_SORTING
-    show = filter(query.get, filters)
+    authentication_classes = [RestSharedSecretAuthentication,
+                              RestOAuthAuthentication]
+    permission_classes = [GroupPermission('Feed', 'Curate')]
+    filter_backends = [SearchQueryFilter, PublicSearchFormFilter,
+                       ValidAppsFilter, DeviceTypeFilter, RegionFilter,
+                       ProfileFilter, SortingFilter]
 
-    if query.get('q'):
-        qs = qs.query(should=True, **name_query(query['q'].lower()))
-    if 'cat' in show:
-        qs = qs.filter(category=query['cat'])
-    if 'price' in show:
-        if query['price'] == 'paid':
-            qs = qs.filter(premium_type__in=amo.ADDON_PREMIUMS)
-        elif query['price'] == 'free':
-            qs = qs.filter(premium_type__in=amo.ADDON_FREES, price=0)
-    if 'device' in show:
-        qs = qs.filter(device=forms.DEVICE_CHOICES_IDS[query['device']])
-    if 'premium_types' in show:
-        if query.get('premium_types'):
-            qs = qs.filter(premium_type__in=query['premium_types'])
-    if query.get('app_type'):
-        qs = qs.filter(app_type__in=query['app_type'])
-    if query.get('manifest_url'):
-        qs = qs.filter(manifest_url=query['manifest_url'])
-    if query.get('languages'):
-        langs = [x.strip() for x in query['languages'].split(',')]
-        qs = qs.filter(supported_locales__in=langs)
-    if 'sort' in show:
-        sort_by = [sorting[name] for name in query['sort'] if name in sorting]
 
-        # For "Adolescent" regions popularity is global installs + reviews.
+class NoRegionSearchView(SearchView):
+    """
+    A search view that allows searching for public apps regardless of region
+    exclusions, protected behind a permission class.
 
-        if query['sort'] == 'popularity' and region and not region.adolescent:
-            # For "Mature" regions popularity becomes installs + reviews
-            # from only that region.
-            sort_by = ['-popularity_%s' % region.id]
+    A special class is needed because when RegionFilter is included, as it is
+    in the default SearchView, it will always use whatever region was set on
+    the request, and we default to setting restofworld when no region is
+    passed.
 
-        if sort_by:
-            qs = qs.order_by(*sort_by)
-    elif not query.get('q'):
+    """
+    authentication_classes = [RestSharedSecretAuthentication,
+                              RestOAuthAuthentication]
+    permission_classes = [AnyOf(GroupPermission('Feed', 'Curate'),
+                                GroupPermission('OperatorDashboard', '*'),
+                                IsOperatorPermission)]
+    filter_backends = [SearchQueryFilter, PublicSearchFormFilter,
+                       PublicContentFilter, DeviceTypeFilter,
+                       ProfileFilter, SortingFilter]
 
-        if (sorting_default == 'popularity' and region and
-            not region.adolescent):
-            # For "Mature" regions popularity becomes installs + reviews
-            # from only that region.
-            sorting_default = '-popularity_%s' % region.id
 
-        # Sort by a default if there was no query so results are predictable.
-        qs = qs.order_by(sorting_default)
+class RocketbarView(SearchView):
+    cors_allowed_methods = ['get']
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    serializer_class = RocketbarESAppSerializer
 
-    if profile and waffle.switch_is_active('buchets'):
-        # Exclude apps that require any features we don't support.
-        qs = qs.filter(**profile.to_kwargs(prefix='features.has_'))
+    def get(self, request, *args, **kwargs):
+        limit = request.GET.get('limit', 5)
+        es_query = {
+            'apps': {
+                'completion': {'field': 'name_suggest', 'size': limit},
+                'text': request.GET.get('q', '').strip()
+            }
+        }
 
-    return qs
+        results = indexers.WebappIndexer.get_es().suggest(
+            body=es_query, index=indexers.WebappIndexer.get_index())
+
+        if 'apps' in results:
+            data = results['apps'][0]['options']
+        else:
+            data = []
+        serializer = self.get_serializer(data)
+        # This returns a JSON list. Usually this is a bad idea for security
+        # reasons, but we don't include any user-specific data, it's fully
+        # anonymous, so we're fine.
+        return HttpResponse(json.dumps(serializer.data),
+                            content_type='application/x-rocketbar+json')
+
+
+class RocketbarViewV2(RocketbarView):
+    serializer_class = RocketbarESAppSerializerV2
+
+
+class OpenMobileACLSearchView(SearchView):
+    """
+    A search view designed to find all valid apps using the Openmobile ACL
+    feature flag. Region exclusions are ignored. The consumer pages will use
+    that to verify the user has at least one app installed that belongs to that
+    list before trying to install an ACL.
+
+    It returns a list of manifest URLs directly, without pagination.
+    """
+    filter_backends = [ValidAppsFilter, OpenMobileACLFilter]
+
+    def get_queryset(self):
+        qs = super(OpenMobileACLSearchView, self).get_queryset()
+        return qs.extra(_source={'include': ['manifest_url']})
+
+    def get(self, request, *args, **kwargs):
+        hits = self.filter_queryset(self.get_queryset()).execute().hits
+        data = [obj['manifest_url'] for obj in hits]
+
+        # This returns a JSON list. Usually this is a bad idea for security
+        # reasons, but we don't include any user-specific data, it's fully
+        # anonymous, so we're fine.
+        return HttpResponse(json.dumps(data),
+                            content_type='application/json')

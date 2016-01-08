@@ -3,22 +3,23 @@ from django.shortcuts import redirect
 
 from lib.misc.urlconf_decorator import decorate
 
-import amo
-from amo.decorators import write
+import mkt
+from mkt.site.decorators import use_master
 from . import views
 
 
 # These URLs start with /developers/submit/app/<app_slug>/.
-submit_apps_patterns = patterns('',
-    url('^details/%s$' % amo.APP_SLUG, views.details,
+submit_apps_patterns = patterns(
+    '',
+    url('^details/%s$' % mkt.APP_SLUG, views.details,
         name='submit.app.details'),
-    url('^done/%s$' % amo.APP_SLUG, views.done, name='submit.app.done'),
-    url('^resume/%s$' % amo.APP_SLUG, views.resume, name='submit.app.resume'),
+    url('^done/%s$' % mkt.APP_SLUG, views.done, name='submit.app.done'),
+    url('^resume/%s$' % mkt.APP_SLUG, views.resume, name='submit.app.resume'),
 )
 
 
-# Decorate all the views as @write so as to bypass cache.
-urlpatterns = decorate(write, patterns('',
+urlpatterns = decorate(use_master, patterns(
+    '',
     # Legacy redirects for app submission.
     ('^app', lambda r: redirect('submit.app')),
     # ^ So we can avoid an additional redirect below.

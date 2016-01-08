@@ -1,41 +1,39 @@
+# -*- coding: utf-8 -*-
 import json
 import os
 import tempfile
 
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
+from django.core.urlresolvers import reverse
+from django.forms.fields import Field
 from django.utils.encoding import smart_unicode
 
 import mock
+from jinja2.utils import escape
 from nose import SkipTest
 from nose.tools import eq_, ok_
 from PIL import Image
 from pyquery import PyQuery as pq
-from tower import strip_whitespace
-from waffle.models import Switch
-
-import amo
-import amo.tests
-from access.models import GroupUser, Group
-from amo.helpers import absolutify
-from amo.tests import assert_required, formset, initial
-from amo.tests.test_helpers import get_image_path
-from amo.urlresolvers import reverse
-from addons.models import (Addon, AddonCategory, AddonDeviceType, AddonUser,
-                           Category)
-from comm.models import CommunicationNote
-from constants.applications import DEVICE_TYPES
-from devhub.models import ActivityLog
-from editors.models import RereviewQueue
-from lib.video.tests import files as video_files
-from users.models import UserProfile
-from versions.models import Version
 
 import mkt
-from mkt.constants import regions
-from mkt.constants.ratingsbodies import RATINGS_BODIES
+import mkt.site.tests
+from lib.video.tests import files as video_files
+from mkt.access.models import Group, GroupUser
+from mkt.comm.models import CommunicationNote
+from mkt.constants import comm
+from mkt.developers.models import ActivityLog, AppLog
+from mkt.reviewers.models import RereviewQueue
 from mkt.site.fixtures import fixture
-from mkt.webapps.models import AddonExcludedRegion as AER, ContentRating
+from mkt.site.helpers import absolutify
+from mkt.site.storage_utils import public_storage
+from mkt.site.tests import formset, initial
+from mkt.site.tests.test_utils_ import get_image_path
+from mkt.site.utils import app_factory, version_factory
+from mkt.translations.models import Translation
+from mkt.users.models import UserProfile
+from mkt.versions.models import Version
+from mkt.webapps.models import AddonExcludedRegion as AER
+from mkt.webapps.models import AddonDeviceType, AddonUser, Webapp
 
 
 response_mock = mock.Mock()
@@ -65,18 +63,18 @@ def get_section_url(addon, section, edit=False):
     return reverse('mkt.developers.apps.section', args=args)
 
 
-class TestEdit(amo.tests.TestCase):
+class TestEdit(mkt.site.tests.TestCase):
     fixtures = fixture('group_admin', 'user_999', 'user_admin',
                        'user_admin_group', 'webapp_337141')
 
     def setUp(self):
         self.webapp = self.get_webapp()
         self.url = self.webapp.get_dev_url()
-        self.user = UserProfile.objects.get(username='31337')
-        assert self.client.login(username=self.user.email, password='password')
+        self.user = UserProfile.objects.get(email='steamcube@mozilla.com')
+        self.login(self.user.email)
 
     def get_webapp(self):
-        return Addon.objects.no_cache().get(id=337141)
+        return Webapp.objects.get(id=337141)
 
     def get_url(self, section, edit=False):
         return get_section_url(self.webapp, section, edit)
@@ -89,16 +87,17 @@ class TestEdit(amo.tests.TestCase):
         result.update(fs)
         return result
 
-    def compare(self, data):
+    def compare(self, data, instance=None):
         """Compare an app against a `dict` of expected values."""
         mapping = {
             'regions': 'get_region_ids'
         }
 
-        webapp = self.get_webapp()
+        if instance is None:
+            instance = self.get_webapp()
         for k, v in data.iteritems():
             k = mapping.get(k, k)
-            val = getattr(webapp, k, '')
+            val = getattr(instance, k, '')
             if callable(val):
                 val = val()
             if val is None:
@@ -136,31 +135,32 @@ class TestEdit(amo.tests.TestCase):
 class TestEditListingWebapp(TestEdit):
     fixtures = fixture('webapp_337141')
 
-    @mock.patch.object(settings, 'APP_PREVIEW', False)
-    def test_apps_context(self):
-        r = self.client.get(self.url)
-        eq_(r.context['webapp'], True)
-        eq_(pq(r.content)('title').text(),
-            'Edit Listing | %s | Firefox Marketplace' % self.webapp.name)
+    def test_redirect(self):
+        r = self.client.get(self.url.replace('edit', ''))
+        self.assert3xx(r, self.url)
 
     def test_nav_links(self):
         r = self.client.get(self.url)
         doc = pq(r.content)('.edit-addon-nav')
-        # TODO: Update the count once Monolith stats are back.
-        eq_(doc.length, 1)
+        eq_(doc.length, 2)
         eq_(doc('.view-stats').length, 0)
 
     def test_edit_with_no_current_version(self):
-        self.create_switch('buchets')
-
         # Disable file for latest version, and then update app.current_version.
         app = self.get_webapp()
-        app.versions.latest().all_files[0].update(status=amo.STATUS_DISABLED)
+        app.versions.latest().all_files[0].update(status=mkt.STATUS_DISABLED)
         app.update_version()
 
         # Now try to display edit page.
         r = self.client.get(self.url)
         eq_(r.status_code, 200)
+
+    def test_edit_global_xss_name(self):
+        self.webapp.name = u'My app é <script>alert(5)</script>'
+        self.webapp.save()
+        content = smart_unicode(self.client.get(self.url).content)
+        ok_(not unicode(self.webapp.name) in content)
+        ok_(unicode(escape(self.webapp.name)) in content)
 
 
 @mock.patch.object(settings, 'TASK_USER_ID', 999)
@@ -169,30 +169,27 @@ class TestEditBasic(TestEdit):
 
     def setUp(self):
         super(TestEditBasic, self).setUp()
-        self.cat = Category.objects.create(name='Games', type=amo.ADDON_WEBAPP)
-        self.dtype = DEVICE_TYPES.keys()[0]
-        AddonCategory.objects.create(addon=self.webapp, category=self.cat)
+        self.cat = 'games'
+        self.dtype = mkt.DEVICE_TYPES.keys()[0]
+        self.webapp.update(categories=['games'])
         AddonDeviceType.objects.create(addon=self.webapp,
                                        device_type=self.dtype)
         self.url = self.get_url('basic')
         self.edit_url = self.get_url('basic', edit=True)
 
     def get_webapp(self):
-        return Addon.objects.get(id=337141)
+        return Webapp.objects.get(id=337141)
 
     def get_dict(self, **kw):
         result = {'device_types': self.dtype, 'slug': 'NeW_SluG',
                   'description': 'New description with <em>html</em>!',
-                  'manifest_url': self.get_webapp().manifest_url,
-                  'categories': [self.cat.id]}
+                  'manifest_url': self.webapp.manifest_url,
+                  'categories': [self.cat]}
         result.update(**kw)
         return result
 
     def test_form_url(self):
         self.check_form_url('basic')
-
-    def test_apps_context(self):
-        eq_(self.client.get(self.url).context['webapp'], True)
 
     def test_appslug_visible(self):
         r = self.client.get(self.url)
@@ -207,25 +204,24 @@ class TestEditBasic(TestEdit):
         eq_(r.status_code, 200)
         webapp = self.get_webapp()
         eq_(webapp.app_slug, data['slug'].lower())
-        # Make sure only the app_slug changed.
-        eq_(webapp.slug, self.webapp.slug)
 
     def test_edit_slug_max_length(self):
         r = self.client.post(self.edit_url, self.get_dict(slug='x' * 31))
-        self.assertFormError(r, 'form', 'slug',
+        self.assertFormError(
+            r, 'form', 'slug',
             'Ensure this value has at most 30 characters (it has 31).')
 
     def test_edit_slug_dupe(self):
-        Addon.objects.create(type=amo.ADDON_WEBAPP, app_slug='dupe')
+        Webapp.objects.create(app_slug='dupe')
         r = self.client.post(self.edit_url, self.get_dict(slug='dupe'))
-        self.assertFormError(r, 'form', 'slug',
+        self.assertFormError(
+            r, 'form', 'slug',
             'This slug is already in use. Please choose another.')
         webapp = self.get_webapp()
         # Nothing changed.
-        eq_(webapp.slug, self.webapp.slug)
         eq_(webapp.app_slug, self.webapp.app_slug)
 
-    def test_edit_xss(self):
+    def test_edit_xss_description(self):
         self.webapp.description = ("This\n<b>IS</b>"
                                    "<script>alert('awesome')</script>")
         self.webapp.save()
@@ -234,30 +230,12 @@ class TestEditBasic(TestEdit):
             "This<br/><b>IS</b>&lt;script&gt;alert('awesome')"
             '&lt;/script&gt;')
 
-    @mock.patch('devhub.tasks.urllib2.urlopen')
-    @mock.patch('devhub.tasks.validator')
-    def test_view_manifest_url_default(self, mock_urlopen, validator):
-        mock_urlopen.return_value = response_mock
-        validator.return_value = '{}'
-
-        # Should be able to see manifest URL listed.
-        r = self.client.get(self.url)
-        eq_(pq(r.content)('#manifest-url a').attr('href'),
-            self.webapp.manifest_url)
-
-        # There should be a readonly text field.
-        r = self.client.get(self.edit_url)
-        row = pq(r.content)('#manifest-url')
-        eq_(row.find('input[name=manifest_url][readonly]').length, 1)
-
-        # POST with the new manifest URL.
-        url = 'https://ballin.com/ballin4eva'
-        r = self.client.post(self.edit_url, self.get_dict(manifest_url=url))
-        self.assertNoFormErrors(r)
-
-        # The manifest should remain unchanged since this is disabled for
-        # non-admins.
-        eq_(self.get_webapp().manifest_url, self.webapp.manifest_url)
+    def test_edit_xss_name(self):
+        self.webapp.name = u'My app é <script>alert(5)</script>'
+        self.webapp.save()
+        content = smart_unicode(self.client.get(self.url).content)
+        ok_(not unicode(self.webapp.name) in content)
+        ok_(unicode(escape(self.webapp.name)) in content)
 
     def test_view_edit_manifest_url_empty(self):
         # Empty manifest should throw an error.
@@ -266,19 +244,17 @@ class TestEditBasic(TestEdit):
         assert 'manifest_url' in form.errors
         assert 'This field is required' in form.errors['manifest_url'][0]
 
-    @mock.patch('devhub.tasks.urllib2.urlopen')
-    @mock.patch('devhub.tasks.validator')
-    def test_view_admin_edit_manifest_url(self, mock_urlopen, validator):
-        mock_urlopen.return_value = response_mock
-        validator.return_value = '{}'
+    @mock.patch('mkt.developers.forms.update_manifests')
+    def test_view_edit_manifest_url(self, fetch):
+        assert not self.webapp.in_rereview_queue(), (
+            'App should not be in re-review queue')
 
-        self.client.login(username='admin@mozilla.com', password='password')
         # Should be able to see manifest URL listed.
         r = self.client.get(self.url)
         eq_(pq(r.content)('#manifest-url a').attr('href'),
             self.webapp.manifest_url)
 
-        # Admins can edit the manifest URL and should see a text field.
+        # Devs/admins can edit the manifest URL and should see a text field.
         r = self.client.get(self.edit_url)
         row = pq(r.content)('#manifest-url')
         eq_(row.find('input[name=manifest_url]').length, 1)
@@ -295,15 +271,20 @@ class TestEditBasic(TestEdit):
         eq_(self.webapp.current_version.version, '1.0')
         eq_(self.webapp.versions.count(), 1)
 
-    @mock.patch('devhub.tasks.urllib2.urlopen')
-    def test_view_manifest_changed_dupe_app_domain(self, mock_urlopen):
-        mock_urlopen.return_value = response_mock
-        Switch.objects.create(name='webapps-unique-by-domain', active=True)
-        amo.tests.app_factory(name='Super Duper',
-                              app_domain='https://ballin.com')
+        assert self.webapp.in_rereview_queue(), (
+            'App should be in re-review queue')
 
-        self.client.login(username='admin@mozilla.com', password='password')
-        # POST with the new manifest URL.
+        # Ensure that we're refreshing the manifest.
+        fetch.delay.assert_called_once_with([self.webapp.pk])
+
+    @mock.patch('mkt.developers.forms.update_manifests')
+    def test_view_manifest_changed_dupe_app_domain(self, fetch):
+        self.create_switch('webapps-unique-by-domain')
+        app_factory(name='Super Duper',
+                    app_domain='https://ballin.com')
+        self.login('admin')
+
+        # POST with new manifest URL.
         url = 'https://ballin.com/ballin4eva.webapp'
         r = self.client.post(self.edit_url, self.get_dict(manifest_url=url))
         form = r.context['form']
@@ -313,20 +294,27 @@ class TestEditBasic(TestEdit):
         eq_(self.get_webapp().manifest_url, self.webapp.manifest_url,
             'Manifest URL should not have been changed!')
 
-    @mock.patch('devhub.tasks.urllib2.urlopen')
-    @mock.patch('devhub.tasks.validator')
-    def test_view_manifest_changed_same_domain_diff_path(self, mock_urlopen,
-                                                         validator):
-        mock_urlopen.return_value = response_mock
-        validator.return_value = ''
-        Switch.objects.create(name='webapps-unique-by-domain', active=True)
-        self.client.login(username='admin@mozilla.com', password='password')
-        # POST with the new manifest URL for same domain but w/ different path.
+        assert not fetch.delay.called, (
+            'Manifest should not have been refreshed!')
+
+    @mock.patch('mkt.developers.forms.update_manifests')
+    def test_view_manifest_changed_same_domain_diff_path(self, fetch):
+        self.create_switch('webapps-unique-by-domain')
+        self.login('admin')
+
+        # POST with new manifest URL for same domain but w/ different path.
         data = self.get_dict(manifest_url=self.webapp.manifest_url + 'xxx')
         r = self.client.post(self.edit_url, data)
         self.assertNoFormErrors(r)
+
         eq_(self.get_webapp().manifest_url, self.webapp.manifest_url + 'xxx',
             'Manifest URL should have changed!')
+
+        assert not self.webapp.in_rereview_queue(), (
+            'App should be in re-review queue because an admin changed it')
+
+        # Ensure that we're refreshing the manifest.
+        fetch.delay.assert_called_once_with([self.webapp.pk])
 
     def test_view_manifest_url_changed(self):
         new_url = 'http://omg.org/yes'
@@ -339,37 +327,33 @@ class TestEditBasic(TestEdit):
 
     def test_categories_listed(self):
         r = self.client.get(self.url)
-        eq_(pq(r.content)('#addon-categories-edit').text(),
-            unicode(self.cat.name))
+        eq_(pq(r.content)('#addon-categories-edit').text(), unicode('Games'))
 
         r = self.client.post(self.url)
-        eq_(pq(r.content)('#addon-categories-edit').text(),
-            unicode(self.cat.name))
+        eq_(pq(r.content)('#addon-categories-edit').text(), unicode('Games'))
 
     def test_edit_categories_add(self):
-        new = Category.objects.create(name='Books', type=amo.ADDON_WEBAPP)
-        cats = [self.cat.id, new.id]
+        new = 'books-comics'
+        cats = [self.cat, new]
         self.client.post(self.edit_url, self.get_dict(categories=cats))
-        app_cats = self.get_webapp().categories.values_list('id', flat=True)
-        eq_(sorted(app_cats), cats)
+        eq_(sorted(self.get_webapp().categories), sorted(cats))
 
     def test_edit_categories_addandremove(self):
-        new = Category.objects.create(name='Books', type=amo.ADDON_WEBAPP)
-        cats = [new.id]
+        new = 'books-comics'
+        cats = [new]
         self.client.post(self.edit_url, self.get_dict(categories=cats))
-        app_cats = self.get_webapp().categories.values_list('id', flat=True)
-        eq_(sorted(app_cats), cats)
+        eq_(sorted(self.get_webapp().categories), sorted(cats))
 
     @mock.patch('mkt.webapps.models.Webapp.save')
     def test_edit_categories_required(self, save):
         r = self.client.post(self.edit_url, self.get_dict(categories=[]))
-        assert_required(r.context['cat_form'].errors['categories'][0])
+        eq_(r.context['cat_form'].errors['categories'][0],
+            unicode(Field.default_error_messages['required']))
         assert not save.called
 
     def test_edit_categories_xss(self):
-        new = Category.objects.create(name='<script>alert("xss");</script>',
-                                      type=amo.ADDON_WEBAPP)
-        cats = [self.cat.id, new.id]
+        new = '<script>alert("xss");</script>'
+        cats = [self.cat, new]
         r = self.client.post(self.edit_url, self.get_dict(categories=cats))
 
         assert '<script>alert' not in r.content
@@ -382,10 +366,7 @@ class TestEditBasic(TestEdit):
              'choices.'])
 
     def test_edit_categories_max(self):
-        new1 = Category.objects.create(name='Books', type=amo.ADDON_WEBAPP)
-        new2 = Category.objects.create(name='Lifestyle', type=amo.ADDON_WEBAPP)
-        cats = [self.cat.id, new1.id, new2.id]
-
+        cats = [self.cat, 'books-comics', 'social']
         r = self.client.post(self.edit_url, self.get_dict(categories=cats))
         eq_(r.context['cat_form'].errors['categories'],
             ['You can have only 2 categories.'])
@@ -404,14 +385,14 @@ class TestEditBasic(TestEdit):
         assert doc('form').attr('action') != old_edit
 
     def test_edit_as_developer(self):
-        self.client.login(username='regular@mozilla.com', password='password')
+        self.login('regular@mozilla.com')
         data = self.get_dict()
         r = self.client.post(self.edit_url, data)
         # Make sure we get errors when they are just regular users.
         eq_(r.status_code, 403)
 
         AddonUser.objects.create(addon=self.webapp, user_id=999,
-                                 role=amo.AUTHOR_ROLE_DEV)
+                                 role=mkt.AUTHOR_ROLE_DEV)
         r = self.client.post(self.edit_url, data)
         eq_(r.status_code, 200)
         webapp = self.get_webapp()
@@ -433,10 +414,36 @@ class TestEditBasic(TestEdit):
         eq_(pq(r.content)('#l10n-menu').attr('data-default'), 'fr',
             'l10n menu not visible for %s' % url)
 
+    def test_edit_l10n(self):
+        data = {
+            'slug': self.webapp.app_slug,
+            'manifest_url': self.webapp.manifest_url,
+            'categories': [self.cat],
+            'description_en-us': u'Nêw english description',
+            'description_fr': u'Nëw french description',
+            'releasenotes_en-us': u'Nëw english release notes',
+            'releasenotes_fr': u'Nêw french release notes'
+        }
+        res = self.client.post(self.edit_url, data)
+        eq_(res.status_code, 200)
+        self.webapp = self.get_webapp()
+        version = self.webapp.current_version.reload()
+        desc_id = self.webapp.description_id
+        notes_id = version.releasenotes_id
+        eq_(self.webapp.description, data['description_en-us'])
+        eq_(version.releasenotes, data['releasenotes_en-us'])
+        eq_(unicode(Translation.objects.get(id=desc_id, locale='fr')),
+            data['description_fr'])
+        eq_(unicode(Translation.objects.get(id=desc_id, locale='en-us')),
+            data['description_en-us'])
+        eq_(unicode(Translation.objects.get(id=notes_id, locale='fr')),
+            data['releasenotes_fr'])
+        eq_(unicode(Translation.objects.get(id=notes_id, locale='en-us')),
+            data['releasenotes_en-us'])
+
     @mock.patch('mkt.developers.views._update_manifest')
     def test_refresh(self, fetch):
-        self.client.login(username='steamcube@mozilla.com',
-                          password='password')
+        self.login('steamcube@mozilla.com')
         url = reverse('mkt.developers.apps.refresh_manifest',
                       args=[self.webapp.app_slug])
         r = self.client.post(url)
@@ -445,8 +452,7 @@ class TestEditBasic(TestEdit):
 
     @mock.patch('mkt.developers.views._update_manifest')
     def test_refresh_dev_only(self, fetch):
-        self.client.login(username='regular@mozilla.com',
-                          password='password')
+        self.login('regular@mozilla.com')
         url = reverse('mkt.developers.apps.refresh_manifest',
                       args=[self.webapp.app_slug])
         r = self.client.post(url)
@@ -479,41 +485,96 @@ class TestEditBasic(TestEdit):
         eq_(self.get_webapp().description, self.get_dict()['description'])
 
     def test_edit_basic_not_public(self):
-        self.create_switch('buchets')
-
         # Disable file for latest version, and then update app.current_version.
         app = self.get_webapp()
-        app.versions.latest().all_files[0].update(status=amo.STATUS_DISABLED)
+        app.versions.latest().all_files[0].update(status=mkt.STATUS_DISABLED)
         app.update_version()
 
         # Now try to display edit page.
         r = self.client.get(self.url)
         eq_(r.status_code, 200)
 
+    def test_view_release_notes(self):
+        version = self.webapp.current_version
+        version.releasenotes = u'Chëese !'
+        version.save()
+        res = self.client.get(self.url)
+        eq_(res.status_code, 200)
+        content = smart_unicode(res.content)
+        eq_(pq(content)('#releasenotes td span[lang]').html().strip(),
+            version.releasenotes)
+
+        self.webapp.update(is_packaged=True)
+        res = self.client.get(self.url)
+        eq_(res.status_code, 200)
+        content = smart_unicode(res.content)
+        eq_(pq(content)('#releasenotes').length, 0)
+
+    def test_edit_release_notes(self):
+        self.webapp.previews.create()
+        self.webapp.support_email = 'test@example.com'
+        self.webapp.save()
+        data = self.get_dict(releasenotes=u'I can hâz release notes')
+        res = self.client.post(self.edit_url, data)
+        releasenotes = self.webapp.reload().latest_version.releasenotes
+        eq_(res.status_code, 200)
+        eq_(releasenotes, data['releasenotes'])
+        # Make sure publish_type wasn't reset by accident.
+        eq_(self.webapp.reload().publish_type, mkt.PUBLISH_IMMEDIATE)
+
+    def test_edit_release_notes_pending(self):
+        # Like test_edit_release_notes, but with a pending app.
+        file_ = self.webapp.current_version.all_files[0]
+        file_.update(status=mkt.STATUS_PENDING)
+        self.webapp.update(status=mkt.STATUS_PENDING)
+        self.test_edit_release_notes()
+        eq_(self.webapp.reload().status, mkt.STATUS_PENDING)
+
+    def test_edit_release_notes_packaged(self):
+        # You are not supposed to edit release notes from the basic edit
+        # page if you app is packaged. Instead this is done from the version
+        # edit page.
+        self.webapp.update(is_packaged=True)
+        data = self.get_dict(releasenotes=u'I can not hâz release notes')
+        res = self.client.post(self.edit_url, data)
+        releasenotes = self.webapp.current_version.reload().releasenotes
+        eq_(res.status_code, 200)
+        eq_(releasenotes, None)
+
+    def test_view_releasenotes_xss(self):
+        version = self.webapp.current_version
+        version.releasenotes = '<script>alert("xss-devname")</script>'
+        version.save()
+        r = self.client.get(self.url)
+        assert '<script>alert' not in r.content
+        assert '&lt;script&gt;alert' in r.content
+
 
 class TestEditCountryLanguage(TestEdit):
+    # Note: those tests used to use pyquery, but it was unreliable because of
+    # unicode-related issues - travis expected a wrong result. To make sure
+    # they are not wrong, the assertion is done manually without pyquery.
 
     def get_webapp(self):
-        return Addon.objects.get(id=337141)
+        return Webapp.objects.get(id=337141)
 
-    def test_data_visible(self):
-        clean_countries = []
+    def test_languages(self):
+        self.get_webapp().current_version.update(supported_locales='de,es')
+        res = self.client.get(self.url)
+        eq_(res.status_code, 200)
+        ok_(u'English (US) (default), Deutsch, Español'
+            in smart_unicode(res.content))
+
+    def test_countries(self):
         self.get_webapp().current_version.update(supported_locales='de,es')
         res = self.client.get(self.url)
         eq_(res.status_code, 200)
 
-        countries = (pq(pq(res.content)('#edit-app-language tr').eq(0))
-                     .find('td').remove('small').text())
-        langs = (pq(pq(res.content)('#edit-app-language tr').eq(1)).find('td')
-                 .remove('small').text())
-
-        for c in countries.split(', '):
-            clean_countries.append(strip_whitespace(c))
-
-        eq_(langs, u'English (US) (default), Deutsch, Espa\xc3\xb1ol')
-        self.assertSetEqual(
-            sorted(clean_countries),
-            sorted([r.name.decode() for r in regions.ALL_REGIONS]))
+        # Reproduce the (weird) ordering we expect.
+        listed_countries = self.get_webapp().get_regions(sort_by='name')
+        countries = [unicode(country.name) for country in listed_countries]
+        # Escape like it should be.
+        ok_(escape(u', '.join(countries)) in smart_unicode(res.content))
 
 
 class TestEditMedia(TestEdit):
@@ -570,23 +631,8 @@ class TestEditMedia(TestEdit):
         self.assertNoFormErrors(r)
         webapp = self.get_webapp()
 
-        assert webapp.get_icon_url(128).endswith('icons/default-128.png')
-        assert webapp.get_icon_url(64).endswith('icons/default-64.png')
-
-        for k in data:
-            eq_(unicode(getattr(webapp, k)), data[k])
-
-    def test_edit_preuploadedicon(self):
-        data = dict(icon_type='icon/appearance')
-        data_formset = self.formset_media(prev_blank=self.new_preview_hash(),
-                                          **data)
-
-        r = self.client.post(self.edit_url, data_formset)
-        self.assertNoFormErrors(r)
-        webapp = self.get_webapp()
-
-        assert webapp.get_icon_url(64).endswith('icons/appearance-64.png')
-        assert webapp.get_icon_url(128).endswith('icons/appearance-128.png')
+        assert webapp.get_icon_url(128).endswith('default-128.png')
+        assert webapp.get_icon_url(64).endswith('default-64.png')
 
         for k in data:
             eq_(unicode(getattr(webapp, k)), data[k])
@@ -612,7 +658,7 @@ class TestEditMedia(TestEdit):
 
         # Unfortunate hardcoding of URL.
         url = webapp.get_icon_url(64)
-        assert ('addon_icons/%s/%s' % (webapp.id / 1000, webapp.id)) in url, (
+        assert ('/%s/%s' % (webapp.id / 1000, webapp.id)) in url, (
             'Unexpected path: %r' % url)
 
         eq_(data['icon_type'], 'image/png')
@@ -622,15 +668,15 @@ class TestEditMedia(TestEdit):
                                '%s' % (webapp.id / 1000))
         dest = os.path.join(dirname, '%s-32.png' % webapp.id)
 
-        eq_(storage.exists(dest), True)
+        eq_(public_storage.exists(dest), True)
 
-        eq_(Image.open(storage.open(dest)).size, (32, 32))
+        eq_(Image.open(public_storage.open(dest)).size, (32, 32))
 
     def test_edit_icon_log(self):
         self.test_edit_uploadedicon()
         log = ActivityLog.objects.all()
         eq_(log.count(), 1)
-        eq_(log[0].action, amo.LOG.CHANGE_ICON.id)
+        eq_(log[0].action, mkt.LOG.CHANGE_ICON.id)
 
     def test_edit_uploadedicon_noresize(self):
         img = '%s/img/mkt/logos/128.png' % settings.MEDIA_ROOT
@@ -654,7 +700,7 @@ class TestEditMedia(TestEdit):
 
         # Unfortunate hardcoding of URL.
         addon_url = webapp.get_icon_url(64).split('?')[0]
-        end = 'addon_icons/%s/%s-64.png' % (webapp.id / 1000, webapp.id)
+        end = '/%s/%s-64.png' % (webapp.id / 1000, webapp.id)
         assert addon_url.endswith(end), 'Unexpected path: %r' % addon_url
 
         eq_(data['icon_type'], 'image/png')
@@ -664,9 +710,9 @@ class TestEditMedia(TestEdit):
                                '%s' % (webapp.id / 1000))
         dest = os.path.join(dirname, '%s-64.png' % webapp.id)
 
-        assert storage.exists(dest), dest
+        assert public_storage.exists(dest), dest
 
-        eq_(Image.open(storage.open(dest)).size, (64, 64))
+        eq_(Image.open(public_storage.open(dest)).size, (64, 64))
 
     def test_media_types(self):
         res = self.client.get(self.get_url('media', edit=True))
@@ -677,7 +723,7 @@ class TestEditMedia(TestEdit):
             'image/jpeg|image/png|video/webm')
 
     def check_image_type(self, url, msg):
-        img = '%s/js/zamboni/devhub.js' % settings.MEDIA_ROOT
+        img = '%s/js/devreg/devhub.js' % settings.MEDIA_ROOT
         self.check_image_type_path(img, url, msg)
 
     def check_image_type_path(self, img, url, msg):
@@ -690,7 +736,7 @@ class TestEditMedia(TestEdit):
 
     # The check_image_type method uploads js, so let's try sending that
     # to ffmpeg to see what it thinks.
-    @mock.patch.object(amo, 'VIDEO_TYPES', ['application/javascript'])
+    @mock.patch.object(mkt, 'VIDEO_TYPES', ['application/javascript'])
     def test_edit_video_wrong_type(self):
         raise SkipTest
         self.check_image_type(self.preview_upload, 'Videos must be in WebM.')
@@ -706,13 +752,13 @@ class TestEditMedia(TestEdit):
     def setup_image_status(self):
         self.icon_dest = os.path.join(self.webapp.get_icon_dir(),
                                       '%s-64.png' % self.webapp.id)
-        os.makedirs(os.path.dirname(self.icon_dest))
-        open(self.icon_dest, 'w')
+        with public_storage.open(self.icon_dest, 'w') as f:
+            f.write('.')
 
         self.preview = self.webapp.previews.create()
         self.preview.save()
-        os.makedirs(os.path.dirname(self.preview.thumbnail_path))
-        open(self.preview.thumbnail_path, 'w')
+        with public_storage.open(self.preview.thumbnail_path, 'w') as f:
+            f.write('.')
 
         self.url = self.webapp.get_dev_url('ajax.image.status')
 
@@ -734,7 +780,7 @@ class TestEditMedia(TestEdit):
 
     def test_icon_status_fails(self):
         self.setup_image_status()
-        os.remove(self.icon_dest)
+        public_storage.delete(self.icon_dest)
         result = json.loads(self.client.get(self.url).content)
         assert not result['icons']
 
@@ -750,26 +796,19 @@ class TestEditMedia(TestEdit):
 
     def test_preview_status_fails(self):
         self.setup_image_status()
-        os.remove(self.preview.thumbnail_path)
+        public_storage.delete(self.preview.thumbnail_path)
         result = json.loads(self.client.get(self.url).content)
         assert not result['previews']
 
-    def test_image_status_persona(self):
-        self.setup_image_status()
-        os.remove(self.icon_dest)
-        self.webapp.update(type=amo.ADDON_PERSONA)
-        result = json.loads(self.client.get(self.url).content)
-        assert result['icons']
-
     def test_image_status_default(self):
         self.setup_image_status()
-        os.remove(self.icon_dest)
+        public_storage.delete(self.icon_dest)
         self.webapp.update(icon_type='icon/photos')
         result = json.loads(self.client.get(self.url).content)
         assert result['icons']
 
     def test_icon_size_req(self):
-        filehandle = open(get_image_path('sunbird-small.png'), 'rb')
+        filehandle = open(get_image_path('mkt_icon_72.png'), 'rb')
 
         res = self.client.post(self.icon_upload, {'upload_image': filehandle})
         response_json = json.loads(res.content)
@@ -992,6 +1031,10 @@ class TestEditDetails(TestEdit):
 
     def test_edit_default_locale_required_trans(self):
         # name and description are required in the new locale.
+
+        def missing(f):
+            return error % ', '.join(map(repr, f))
+
         data = self.get_dict()
         data.update(description='bullocks',
                     homepage='http://omg.org/yes',
@@ -999,7 +1042,6 @@ class TestEditDetails(TestEdit):
         fields = ['name', 'description']
         error = ('Before changing your default locale you must have a name '
                  'and description in that locale. You are missing %s.')
-        missing = lambda f: error % ', '.join(map(repr, f))
 
         data.update(default_locale='pt-BR')
         r = self.client.post(self.edit_url, data)
@@ -1018,7 +1060,7 @@ class TestEditDetails(TestEdit):
                     default_locale='pt-BR', privacy_policy='pp')
         rp = self.client.post(self.edit_url, data)
         self.assertContains(rp,
-            'Before changing your default locale you must')
+                            'Before changing your default locale you must')
 
     def test_edit_locale(self):
         self.webapp.update(default_locale='en-US')
@@ -1036,15 +1078,15 @@ class TestEditDetails(TestEdit):
         self.assertFormError(r, 'form', 'homepage', 'Enter a valid URL.')
 
     def test_games_already_excluded_in_brazil(self):
-        AER.objects.create(addon=self.webapp, region=mkt.regions.BR.id)
-        games = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
+        AER.objects.create(addon=self.webapp, region=mkt.regions.BRA.id)
+        games = 'games'
 
         r = self.client.post(
-            self.edit_url, self.get_dict(categories=[games.id]))
+            self.edit_url, self.get_dict(categories=[games]))
         self.assertNoFormErrors(r)
         eq_(list(AER.objects.filter(addon=self.webapp)
                             .values_list('region', flat=True)),
-            [mkt.regions.BR.id])
+            [mkt.regions.BRA.id])
 
 
 class TestEditSupport(TestEdit):
@@ -1062,34 +1104,41 @@ class TestEditSupport(TestEdit):
         data = dict(support_email='sjobs@apple.com',
                     support_url='http://apple.com/')
 
-        r = self.client.post(self.edit_url, data)
-        self.assertNoFormErrors(r)
+        res = self.client.post(self.edit_url, data)
+        self.assertNoFormErrors(res)
         self.compare(data)
 
-    def test_edit_support_free_required(self):
-        r = self.client.post(self.edit_url, dict(support_url=''))
-        self.assertFormError(r, 'form', 'support_email',
-                             'This field is required.')
+    def test_edit_support_required(self):
+        res = self.client.post(self.edit_url, {})
+        self.assertFormError(
+            res, 'form', 'support',
+            'You must provide either a website, an email, or both.')
 
-    def test_edit_support_premium_required(self):
-        self.get_webapp().update(premium_type=amo.ADDON_PREMIUM)
-        r = self.client.post(self.edit_url, dict(support_url=''))
-        self.assertFormError(r, 'form', 'support_email',
-                             'This field is required.')
-
-    def test_edit_support_premium(self):
-        self.get_webapp().update(premium_type=amo.ADDON_PREMIUM)
-        data = dict(support_email='sjobs@apple.com',
-                    support_url='')
-        r = self.client.post(self.edit_url, data)
-        self.assertNoFormErrors(r)
-        eq_(self.get_webapp().support_email, data['support_email'])
-
-    def test_edit_support_url_optional(self):
+    def test_edit_support_only_one_is_required(self):
         data = dict(support_email='sjobs@apple.com', support_url='')
-        r = self.client.post(self.edit_url, data)
-        self.assertNoFormErrors(r)
+        res = self.client.post(self.edit_url, data)
+        self.assertNoFormErrors(res)
         self.compare(data)
+
+        data = dict(support_email='', support_url='http://my.support.us')
+        res = self.client.post(self.edit_url, data)
+        self.assertNoFormErrors(res)
+        self.compare(data)
+
+    def test_edit_support_errors(self):
+        data = dict(support_email='', support_url='http://my')
+        res = self.client.post(self.edit_url, data)
+        self.assertFormError(res, 'form', 'support_url',
+                             'Enter a valid URL.')
+        ok_(not pq(res.content)('#trans-support_email+.errorlist'))
+        ok_(pq(res.content)('#trans-support_url+.errorlist'))
+
+        data = dict(support_email='test', support_url='')
+        res = self.client.post(self.edit_url, data)
+        self.assertFormError(res, 'form', 'support_email',
+                             'Enter a valid email address.')
+        ok_(pq(res.content)('#trans-support_email+.errorlist'))
+        ok_(not pq(res.content)('#trans-support_url+.errorlist'))
 
 
 class TestEditTechnical(TestEdit):
@@ -1099,20 +1148,10 @@ class TestEditTechnical(TestEdit):
         super(TestEditTechnical, self).setUp()
         self.url = self.get_url('technical')
         self.edit_url = self.get_url('technical', edit=True)
-        self.create_switch('buchets')
+        self.latest_file = self.get_webapp().latest_version.all_files[0]
 
     def test_form_url(self):
         self.check_form_url('technical')
-
-    def test_toggles(self):
-        # Turn everything on.
-        r = self.client.post(self.edit_url, formset(**{'flash': 'on'}))
-        self.assertNoFormErrors(r)
-        self.compare({'uses_flash': True})
-
-        # And off.
-        r = self.client.post(self.edit_url, formset(**{'flash': ''}))
-        self.compare({'uses_flash': False})
 
     def test_public_stats(self):
         o = ActivityLog.objects
@@ -1126,7 +1165,7 @@ class TestEditTechnical(TestEdit):
         self.assertNoFormErrors(r)
 
         self.compare({'public_stats': True})
-        eq_(o.filter(action=amo.LOG.EDIT_PROPERTIES.id).count(), 1)
+        eq_(o.filter(action=mkt.LOG.EDIT_PROPERTIES.id).count(), 1)
 
     def test_features_hosted(self):
         data_on = {'has_contacts': True}
@@ -1147,11 +1186,11 @@ class TestEditTechnical(TestEdit):
         # Changing features must trigger re-review.
         assert RereviewQueue.objects.filter(addon=self.webapp).exists()
 
-    def test_features_hosted_app_disabled(self):
+    def test_features_hosted_app_rejected(self):
         # Reject the app.
         app = self.get_webapp()
-        app.update(status=amo.STATUS_REJECTED)
-        app.versions.latest().all_files[0].update(status=amo.STATUS_DISABLED)
+        app.update(status=mkt.STATUS_REJECTED)
+        app.versions.latest().all_files[0].update(status=mkt.STATUS_DISABLED)
         app.update_version()
 
         assert not RereviewQueue.objects.filter(addon=self.webapp).exists()
@@ -1191,17 +1230,17 @@ class TestAdmin(TestEdit):
         super(TestAdmin, self).setUp()
         self.url = self.get_url('admin')
         self.edit_url = self.get_url('admin', edit=True)
-        assert self.client.login(username='admin@mozilla.com',
-                                 password='password')
+        self.webapp = self.get_webapp()
+        self.login('admin@mozilla.com')
 
     def log_in_user(self):
-        assert self.client.login(username=self.user.email, password='password')
+        self.login(self.user.email)
 
     def log_in_with(self, rules):
         user = UserProfile.objects.get(email='regular@mozilla.com')
         group = Group.objects.create(name='Whatever', rules=rules)
         GroupUser.objects.create(group=group, user=user)
-        assert self.client.login(username=user.email, password='password')
+        self.login(user.email)
 
 
 class TestAdminSettings(TestAdmin):
@@ -1251,13 +1290,53 @@ class TestAdminSettings(TestAdmin):
         webapp = self.get_webapp()
         eq_(webapp.mozilla_contact, 'a@mozilla.com')
 
+    def test_mozilla_contact_cleared(self):
+        self.post_contact(mozilla_contact='')
+        webapp = self.get_webapp()
+        eq_(webapp.mozilla_contact, '')
+
     def test_mozilla_contact_invalid(self):
         r = self.post_contact(
             mozilla_contact='<script>alert("xss")</script>@mozilla.com')
         webapp = self.get_webapp()
         self.assertFormError(r, 'form', 'mozilla_contact',
-                             'Enter a valid e-mail address.')
+                             'Enter a valid email address.')
         eq_(webapp.mozilla_contact, '')
+
+    def test_vip_app_toggle(self):
+        # Turn on.
+        data = {
+            'position': 1,  # Required, useless in this test.
+            'vip_app': 'on'
+        }
+        r = self.client.post(self.edit_url, data)
+        self.assertNoFormErrors(r)
+        self.compare({'vip_app': True})
+
+        # And off.
+        data.update({'vip_app': ''})
+        r = self.client.post(self.edit_url, data)
+        self.compare({'vip_app': False})
+
+    def test_priority_review_toggle(self):
+        # Turn on.
+        data = {
+            'position': 1,  # Required, useless in this test.
+            'priority_review': 'on'
+        }
+        r = self.client.post(self.edit_url, data)
+        self.assertNoFormErrors(r)
+        self.compare({'priority_review': True})
+        log_action = mkt.LOG.PRIORITY_REVIEW_REQUESTED
+        assert AppLog.objects.filter(
+            addon=self.get_webapp(),
+            activity_log__action=log_action.id).exists(), (
+                "Didn't find `%s` action in logs." % log_action.short)
+
+        # And off.
+        data = {'position': 1}
+        r = self.client.post(self.edit_url, data)
+        self.compare({'priority_review': False})
 
     def test_staff(self):
         # Staff and Support Staff should have Apps:Configure.
@@ -1284,66 +1363,6 @@ class TestAdminSettings(TestAdmin):
 
         # Test POST. Ignore errors.
         eq_(self.client.post(self.edit_url).status_code, 403)
-
-    def test_ratings_edit_add(self):
-        # TODO: Test AdminSettingsForm in test_forms.py.
-        self.log_in_with('Apps:Configure')
-
-        data = {'position': '1',
-                'upload_hash': 'abcdef',
-                'app_ratings': '2'
-                }
-        r = self.client.post(self.edit_url, data)
-        eq_(r.status_code, 200)
-        webapp = self.get_webapp()
-        eq_(list(webapp.content_ratings.values_list('ratings_body', 'rating')),
-            [(0, 2)])
-
-    def test_ratings_edit_add_dupe(self):
-        self.log_in_with('Apps:Configure')
-
-        data = {'position': '1',
-                'upload_hash': 'abcdef',
-                'app_ratings': ('1', '2')
-                }
-        r = self.client.post(self.edit_url, data)
-        self.assertFormError(r, 'form', 'app_ratings',
-                             'Only one rating from each ratings body '
-                             'may be selected.')
-
-    def test_ratings_edit_update(self):
-        self.log_in_with('Apps:Configure')
-        webapp = self.get_webapp()
-        ContentRating.objects.create(addon=webapp, ratings_body=0, rating=2)
-        data = {'position': '1',
-                'upload_hash': 'abcdef',
-                'app_ratings': '3',
-                }
-        r = self.client.post(self.edit_url, data)
-        eq_(r.status_code, 200)
-        eq_(list(webapp.content_ratings.all().values_list('ratings_body',
-                                                          'rating')),
-            [(0, 3)])
-        #a second update doesn't duplicate existing ratings
-        r = self.client.post(self.edit_url, data)
-        eq_(list(webapp.content_ratings.all().values_list('ratings_body',
-                                                          'rating')),
-            [(0, 3)])
-        del data['app_ratings']
-
-        r = self.client.post(self.edit_url, data)
-        assert not webapp.content_ratings.exists()
-
-    def test_ratings_view(self):
-        self.log_in_with('Apps:ViewConfiguration')
-        webapp = self.get_webapp()
-        ContentRating.objects.create(addon=webapp, ratings_body=0, rating=2)
-        r = self.client.get(self.url)
-        txt = pq(r.content)[0].xpath(
-            "//label[@for='app_ratings']/../../td/div/text()")[0]
-        eq_(txt,
-            '%s - %s' % (RATINGS_BODIES[0].name,
-                         RATINGS_BODIES[0].ratings[2].name))
 
 
 class TestPromoUpload(TestAdmin):
@@ -1379,7 +1398,6 @@ class TestEditVersion(TestEdit):
                        'user_admin_group', 'webapp_337141')
 
     def setUp(self):
-        self.create_switch('buchets')
         self.webapp = self.get_webapp()
         self.webapp.update(is_packaged=True)
         self.version_pk = self.webapp.latest_version.pk
@@ -1387,7 +1405,7 @@ class TestEditVersion(TestEdit):
             'version_id': self.version_pk,
             'app_slug': self.webapp.app_slug
         })
-        self.user = UserProfile.objects.get(username='31337')
+        self.user = UserProfile.objects.get(email='steamcube@mozilla.com')
         self.login(self.user)
 
     def test_post(self, **kwargs):
@@ -1399,32 +1417,63 @@ class TestEditVersion(TestEdit):
         data.update(kwargs)
         req = self.client.post(self.url, data)
         eq_(req.status_code, 302)
-        version = Version.objects.no_cache().get(pk=self.version_pk)
+        version = Version.objects.get(pk=self.version_pk)
         eq_(version.releasenotes, data['releasenotes_en-us'])
         eq_(version.approvalnotes, data['approvalnotes'])
         return version
 
-    def test_comm_thread(self):
-        self.create_switch('comm-dashboard')
+    def test_approval_notes_comm_thread(self):
+        # With empty note.
+        self.test_post(approvalnotes='')
+        eq_(CommunicationNote.objects.count(), 0)
+
         self.test_post(approvalnotes='abc')
         notes = CommunicationNote.objects.all()
         eq_(notes.count(), 1)
         eq_(notes[0].body, 'abc')
+        eq_(notes[0].note_type, comm.DEVELOPER_VERSION_NOTE_FOR_REVIEWER)
 
     def test_existing_features_initial_form_data(self):
         features = self.webapp.current_version.features
         features.update(has_audio=True, has_apps=True)
-        r = self.client.get(self.url)
-        eq_(r.context['appfeatures_form'].initial,
+        response = self.client.get(self.url)
+        eq_(response.context['appfeatures_form'].initial,
             dict(id=features.id, **features.to_dict()))
+        doc = pq(response.content)
+        ok_(doc.find('#id_has_apps[type=checkbox]'))
 
-    def test_new_features(self):
+    def test_openmobileacl_feature(self):
+        features = self.webapp.current_version.features
+        features.update(has_openmobileacl=True)
+        response = self.client.get(self.url)
+        eq_(response.context['appfeatures_form'].initial,
+            dict(id=features.id, **features.to_dict()))
+        doc = pq(response.content)
+        field = doc.find('#id_has_openmobileacl')
+        eq_(field.attr('type'), 'hidden')
+        eq_(field.attr('value'), 'True')
+        version = self.test_post(has_openmobileacl=field.attr('value'))
+        # We should still have the feature.
+        ok_(version.features.has_openmobileacl)
+
+    @mock.patch.object(Webapp, 'get_cached_manifest')
+    @mock.patch('mkt.webapps.tasks.index_webapps.delay')
+    def test_new_features(self, index_webapps, get_cached_manifest):
         assert not RereviewQueue.objects.filter(addon=self.webapp).exists()
+        index_webapps.reset_mock()
+        old_modified = self.webapp.modified
 
         # Turn a feature on.
         version = self.test_post(has_audio=True)
         ok_(version.features.has_audio)
         ok_(not version.features.has_apps)
+
+        # Addon modified date must have changed.
+        addon = self.get_webapp()
+        ok_(addon.modified > old_modified)
+        old_modified = self.webapp.modified
+
+        index_webapps.reset_mock()
 
         # Then turn the feature off.
         version = self.test_post(has_audio=False)
@@ -1434,15 +1483,30 @@ class TestEditVersion(TestEdit):
         # Changing features must trigger re-review.
         assert RereviewQueue.objects.filter(addon=self.webapp).exists()
 
+        # Addon modified date must have changed.
+        addon = self.get_webapp()
+        ok_(addon.modified > old_modified)
+
+        # Changing features must trigger a reindex.
+        eq_(index_webapps.call_count, 1)
+
+    def test_features_uncheck_all(self):
+        version = self.test_post(has_audio=True)
+        ok_(version.features.has_audio)
+        req = self.client.post(self.url, {})  # Empty POST should uncheck all.
+        eq_(req.status_code, 302)
+        version.features.reload()
+        ok_(not version.features.has_audio)
+
     def test_correct_version_features(self):
-        new_version = self.webapp.latest_version.update(id=self.version_pk + 1)
-        self.webapp.update(_latest_version=new_version)
+        version_factory(addon=self.webapp)
+        self.webapp.reload()
         self.test_new_features()
 
     def test_publish_checkbox_presence(self):
         res = self.client.get(self.url)
         ok_(not pq(res.content)('#id_publish_immediately'))
 
-        self.webapp.latest_version.files.update(status=amo.STATUS_PENDING)
+        self.webapp.latest_version.files.update(status=mkt.STATUS_PENDING)
         res = self.client.get(self.url)
         ok_(pq(res.content)('#id_publish_immediately'))

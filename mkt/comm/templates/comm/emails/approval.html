@@ -1,0 +1,14 @@
+{% extends 'comm/emails/base.html' %}
+
+{% block content %}
+Congratulations! {{ obj.name }} has been approved and is now published on the Firefox Marketplace.
+
+{% if obj.status == mkt.STATUS_UNLISTED %}
+Your {{ obj_type }} is approved but not published on category listing pages nor in search results. Only those with the URL can find and install your {{ obj_type }}.
+
+If you would like your {{ obj_type }} included in search results and listing pages visit its Manage Status page: {{ obj.get_dev_url('versions')|absolutify }}
+
+{% endif %}
+{% include 'comm/emails/includes/details.html' %}
+{% include 'comm/emails/includes/questions.html' %}
+{% endblock %}

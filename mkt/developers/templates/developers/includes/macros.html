@@ -61,21 +61,15 @@
   </tr>
 {% endmacro %}
 
-{% macro select_cats(max, form, webapp=False, req=False) %}
+{% macro select_cats(max, form, req=False) %}
   <div class="addon-app-cats">
     <label>
-      {% if webapp %}
-        <span class="hint-inline">{{ _('Pick one or two categories.') }}</span>
-      {% else %}
-        {# L10n: {0} is the maximum number of add-on categories allowed.
-                 {1} is the application name. #}
-        {{ ngettext('Select <b>up to {0}</b> {1} category for this add-on:',
-                    'Select <b>up to {0}</b> {1} categories for this add-on:',
-                    max)|f(max, form.app.pretty if form.app else '')|safe }}
-      {% endif %}
+      <span class="hint-inline">{{ _('Pick one or two categories.') }}</span>
     </label>
     {{ form.application }}
-    {{ form.categories }}
+    <div class="checkbox-choices addon-categories">
+      {{ form.categories }}
+    </div>
     {{ form.categories.errors }}
   </div>
 {% endmacro %}
@@ -87,7 +81,9 @@
       <span class="hint-inline">{{ _('Pick one or two categories.') }}</span>
     </label>
     {{ form.application }}
-    {{ form.categories }}
+    <div class="checkbox-choices addon-categories">
+      {{ form.categories }}
+    </div>
     {{ form.categories.errors }}
   </div>
 {% endmacro %}
@@ -110,8 +106,8 @@
           <b>Estimated waiting time:</b> {{ num }} working days
         {% endtrans %}
       {% elif tag == 'p' %}
-        {% trans email=emaillink(settings.MKT_REVIEWERS_EMAIL) %}
-          Most apps are reviewed in about a week. If your review has taken longer than this, you can send an email to {{ email }} to check the status.
+        {% trans support_url=settings.SUPPORT_GROUP %}
+          Most apps are reviewed in about a week. If your review has taken longer than this, you can <a href="{{ support_url }}">contact us</a> to check the status.
         {% endtrans %}
       {% endif %}
     </{{ tag }}>
@@ -129,33 +125,28 @@
   <a href="#" class="button toggle view-all">{{ _('View all') }}</a>
   <a href="#" class="button toggle hide-all hidden">{{ _('Hide all') }}</a>
   <ul class="feature-choices">
+    {% set has_configure_permission =  action_allowed('Apps', 'Configure') %}
     {% for field in form.required_api_fields() %}
       {% set key = field.name|replace('has_', '')|upper %}
       {% set tooltip = form.get_tooltip(field) %}
-      <li>
-        <label for="{{ field.auto_id }}">
-          {{ field }}
-          <span class="label">{{ field.help_text }}</span>
-          <div class="apis">
-            {% for api in mkt.constants.APP_FEATURES[key].apis %}
-              <code class="api">{{ api }}</code>
-            {% endfor %}
-          </div>
-          {% if tooltip %}<span class="hint">{{ tooltip }}</span>{% endif %}
-        </label>
-      </li>
+      {% if mkt.constants.APP_FEATURES[key]['hidden'] and not has_configure_permission %}
+        {# Hide special features from regular developers. There is no additional security,
+           they can still find out about it in the HTML, but it would be of no use to them. #}
+        <li style="display: none">{{ field.as_hidden() }}</li>
+      {% else %}
+        <li>
+          <label for="{{ field.auto_id }}">
+            {{ field }}
+            <span class="label">{{ field.help_text }}</span>
+            <div class="apis">
+              {% for api in mkt.constants.APP_FEATURES[key].apis %}
+                <code class="api">{{ api }}</code>
+              {% endfor %}
+            </div>
+            {% if tooltip %}<span class="hint">{{ tooltip }}</span>{% endif %}
+          </label>
+        </li>
+      {% endif %}
     {% endfor %}
   </ul>
-{% endmacro %}
-
-{% macro iarc_rating_icon(rating) %}
-   <div class="content-rating c">
-     {# rating.body (e.g. CLASSIND, GENERIC, ESRB, PEGI, USK #}
-     {# rating.name (e.g. 0+, 3+, 7+, 13+, 18+) #}
-     <div class="icon icon-body-{{ rating.get_body().name|lower }}
-                 icon-age-{{ rating.get_rating().name|replace('+', '') }}"
-          title="{{ rating.get_rating().name }}">
-       <span class="icon-content hidden">{{ rating.get_rating().name }}</span>
-     </div>
-   </div>
 {% endmacro %}

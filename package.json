@@ -1,16 +1,38 @@
 {
   "name": "zamboni",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "engines": {
-    "node": ">= 0.6.15",
+    "node": ">= 0.10.x",
     "npm": ">= 1.1.x"
   },
   "dependencies": {
     "acorn": "0.4.0",
-    "clean-css": "0.10.x",
-    "less": "1.3.x",
+    "clean-css": "2.0.x",
+    "commonplace": "0.2.4",
     "stylus": "0.32.x",
-    "uglify-js": "2.2.x"
+    "uglify-js": "2.4.x"
+  },
+  "commonplaceDependencies": {
+    "git://github.com/mozilla/fireplace.git": {
+      "symlinks": {"src/media": "media/fireplace"},
+      "name": "fireplace"
+    },
+    "git://github.com/mozilla/rocketfuel.git": {
+      "symlinks": {"src/media": "media/rocketfuel"},
+      "name": "rocketfuel"
+    },
+    "git://github.com/mozilla/commbadge.git": {
+      "symlinks": {"src/media": "media/commbadge"},
+      "name": "commbadge"
+    },
+    "git://github.com/mozilla/marketplace-stats.git": {
+      "symlinks": {"src/media": "media/marketplace-stats"},
+      "name": "marketplace-stats"
+    },
+    "git://github.com/mozilla/transonic.git": {
+      "symlinks": {"src/media": "media/transonic"},
+      "name": "transonic"
+    }
   }
 }

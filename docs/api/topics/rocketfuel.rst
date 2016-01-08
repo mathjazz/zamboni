@@ -15,16 +15,28 @@ under active development.
     change over time.
 
 
+.. _collections:
+
 Collections
 ===========
 
+.. deprecated:: 2
+    The collection endpoints were moved to the :ref:`feed <feed-collections>`.
+
 A collection is a group of applications
+
+
+.. note::
+
+    The `name` and `description` fields are user-translated fields and have
+    a dynamic type depending on the query.
+    See :ref:`translations <overview-translations>`.
 
 
 Listing
 -------
 
-.. http:get:: /api/v1/rocketfuel/collections/
+.. http:get:: /api/v2/rocketfuel/collections/
 
     A listing of all collections.
 
@@ -34,8 +46,8 @@ Listing
 
     The following query string parameters can be used to filter the results:
 
-    :param cat: a category ID/slug.
-    :type cat: int|string
+    :param cat: a category slug.
+    :type cat: string
     :param region: a region ID/slug.
     :type region: int|string
     :param carrier: a carrier ID/slug.
@@ -64,7 +76,7 @@ Listing
 Create
 ------
 
-.. http:post:: /api/v1/rocketfuel/collections/
+.. http:post:: /api/v2/rocketfuel/collections/
 
     Create a collection.
 
@@ -86,22 +98,18 @@ Create
     :param carrier: the ID of the carrier to attach this collection to. Defaults
         to ``null``.
     :type carrier: int|null
-    :param category: the ID of the category to attach this collection to.
+    :param category: the slug of the category to attach this collection to.
         Defaults to ``null``.
-    :type category: int|null
+    :type category: slug|null
     :param collection_type: the type of collection to create.
     :type collection_type: int
-    :param description: a description of the collection. Can be a dict, in which
-        case keys are languages and values are each a translation for the
-        corresponding language.
-    :type description: string|dict
+    :param description: a description of the collection.
+    :type description: string|object
     :param is_public: an indication of whether the collection should be
         displayed in consumer-facing pages. Defaults to ``false``.
     :type is_public: boolean
-    :param name: the name of the collection. Can be a dict, in which case keys
-        are languages and values are each a translation for the corresponding
-        language.
-    :type name: string|dict
+    :param name: the name of the collection.
+    :type name: string|object
     :param region: the ID of the region to attach this collection to. Defaults
         to ``null``.
     :type region: int|null
@@ -117,7 +125,7 @@ Create
 Detail
 ------
 
-.. http:get:: /api/v1/rocketfuel/collections/(int:id|string:slug)/
+.. http:get:: /api/v2/rocketfuel/collections/(int:id|string:slug)/
 
     Get a single collection.
 
@@ -127,7 +135,7 @@ Detail
 Update
 ------
 
-.. http:patch:: /api/v1/rocketfuel/collections/(int:id|string:slug)/
+.. http:patch:: /api/v2/rocketfuel/collections/(int:id|string:slug)/
 
     Update a collection.
 
@@ -148,18 +156,14 @@ Update
     :type can_be_hero: boolean
     :param carrier: the ID of the carrier to attach this collection to.
     :type carrier: int|null
-    :param category: the ID of the category to attach this collection to.
-    :type category: int|null
+    :param category: the slug of the category to attach this collection to.
+    :type category: string|null
     :param collection_type: the type of the collection.
     :type collection_type: int
-    :param description: a description of the collection. Can be a dict, in which
-        case keys are languages and values are each a translation for the
-        corresponding language.
-    :type description: string|dict
-    :param name: the name of the collection. Can be a dict, in which case keys
-        are languages and values are each a translation for the corresponding
-        language.
-    :type name: string|dict
+    :param description: a description of the collection.
+    :type description: string|object
+    :param name: the name of the collection.
+    :type name: string|object
     :param region: the ID of the region to attach this collection to.
     :type region: int|null
     :param slug: a slug to use in URLs for the collection.
@@ -178,7 +182,7 @@ Update
 Duplicate
 ---------
 
-.. http:post:: /api/v1/rocketfuel/collections/(int:id)/duplicate/
+.. http:post:: /api/v2/rocketfuel/collections/(int:id)/duplicate/
 
     Duplicate a collection, creating and returning a new one with the same
     properties and the same apps.
@@ -203,18 +207,14 @@ Duplicate
     :type can_be_hero: boolean
     :param carrier: the ID of the carrier to attach this collection to.
     :type carrier: int|null
-    :param category: the ID of the category to attach this collection to.
-    :type category: int|null
+    :param category: the slug of the category to attach this collection to.
+    :type category: string|null
     :param collection_type: the type of the collection.
     :type collection_type: int
-    :param description: a description of the collection. Can be a dict, in which
-        case keys are languages and values are each a translation for the
-        corresponding language.
-    :type description: string|dict
-    :param name: the name of the collection. Can be a dict, in which case keys
-        are languages and values are each a translation for the corresponding
-        language.
-    :type name: string|dict
+    :param description: a description of the collection.
+    :type description: string|object
+    :param name: the name of the collection.
+    :type name: string|object
     :param region: the ID of the region to attach this collection to.
     :type region: int|null
     :param slug: a slug to use in URLs for the collection.
@@ -232,7 +232,7 @@ Duplicate
 Delete
 ------
 
-.. http:delete:: /api/v1/rocketfuel/collections/(int:id|string:slug)/
+.. http:delete:: /api/v2/rocketfuel/collections/(int:id|string:slug)/
 
     Delete a single collection.
 
@@ -250,7 +250,7 @@ Delete
 Add Apps
 --------
 
-.. http:post:: /api/v1/rocketfuel/collections/(int:id|string:slug)/add_app/
+.. http:post:: /api/v2/rocketfuel/collections/(int:id|string:slug)/add_app/
 
     Add an application to a single collection.
 
@@ -274,7 +274,7 @@ Add Apps
 Remove Apps
 -----------
 
-.. http:post:: /api/v1/rocketfuel/collections/(int:id|string:slug)/remove_app/
+.. http:post:: /api/v2/rocketfuel/collections/(int:id|string:slug)/remove_app/
 
     Remove an application from a single collection.
 
@@ -299,7 +299,7 @@ Remove Apps
 Reorder Apps
 ------------
 
-.. http:post:: /api/v1/rocketfuel/collections/(int:id|string:slug)/reorder/
+.. http:post:: /api/v2/rocketfuel/collections/(int:id|string:slug)/reorder/
 
     Reorder applications in a collection.
 
@@ -329,14 +329,14 @@ Reorder Apps
 Image
 -----
 
-.. http:get:: /api/v1/rocketfuel/collections/(int:id|string:slug)/image/
+.. http:get:: /api/v2/rocketfuel/collections/(int:id|string:slug)/image/
 
     Get the image for a collection.
 
     .. note:: Authentication is optional.
 
 
-.. http:put:: /api/v1/rocketfuel/collections/(int:id|string:slug)/image/
+.. http:put:: /api/v2/rocketfuel/collections/(int:id|string:slug)/image/
 
     Set the image for a collection. Accepts a data URI as the request
     body containing the image, rather than a JSON object.
@@ -345,7 +345,7 @@ Image
         curator-level access to the collection are required.
 
 
-.. http:delete:: /api/v1/rocketfuel/collections/(int:id|string:slug)/image/
+.. http:delete:: /api/v2/rocketfuel/collections/(int:id|string:slug)/image/
 
     Delete the image for a collection.
 
@@ -363,7 +363,7 @@ curators:
 Listing
 -------
 
-.. http:get:: /api/v1/rocketfuel/collections/(int:id|string:slug)/curators/
+.. http:get:: /api/v2/rocketfuel/collections/(int:id|string:slug)/curators/
 
     Get a list of curators for a collection.
 
@@ -393,7 +393,7 @@ Listing
 Add Curator
 -----------
 
-.. http:post:: /api/v1/rocketfuel/collections/(int:id|string:slug)/add_curator/
+.. http:post:: /api/v2/rocketfuel/collections/(int:id|string:slug)/add_curator/
 
     Add a curator to this collection.
 
@@ -420,7 +420,7 @@ Add Curator
 Remove Curator
 --------------
 
-.. http:post:: /api/v1/rocketfuel/collections/(int:id|string:slug)/remove_curator/
+.. http:post:: /api/v2/rocketfuel/collections/(int:id|string:slug)/remove_curator/
 
     Remove a curator from this collection.
 

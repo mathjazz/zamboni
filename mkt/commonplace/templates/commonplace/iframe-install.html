@@ -1,0 +1,268 @@
+<html><body>
+<script type="text/javascript">
+(function() {
+    if (!navigator.mozApps) {
+        // Only browsers that support installs.
+        console.log('[iframe-install] Browser does not support mozApps');
+        return;
+    }
+
+    window.top.postMessage({
+        'name': 'loaded'
+    }, '*');
+
+    // Initialize.
+    var installed = {};
+    function getInstallers(callback) {
+        var r = navigator.mozApps.getInstalled();
+        r.onsuccess = function() {
+            var _installed = {};
+            for (var i = 0; i < r.result.length; i++) {
+                _installed[r.result[i].manifestURL] = r.result[i];
+            }
+            installed = _installed;
+
+            if (callback) {
+                callback();
+            }
+        };
+    }
+    getInstallers();
+
+    function postErrorMessage(consoleMessage, manifestURL, functionName, errorName) {
+        console.log('[iframe-install] ' + consoleMessage + ' for ' + manifestURL);
+        window.top.postMessage({
+            'manifestURL': manifestURL,
+            'error': {error: errorName},
+            'name': functionName
+        }, '*');
+    }
+
+    // Message handler.
+    {# Allowed origin is generated in the view and already a json array #}
+    var allowed_origins = {{ allowed_origins|safe }};
+
+    window.addEventListener('message', function(e) {
+        console.log('[iframe-install] Received message: ' + JSON.stringify(e.data));
+
+        if (allowed_origins.indexOf(e.origin) === -1) {
+            console.log('[iframe-install] message from ' + e.origin + ' not allowed');
+            return;
+        }
+
+        if (!e.data) {
+            console.log('[iframe-install] no data');
+            return;
+        }
+
+        switch (e.data.name) {
+            case 'apply-update':
+                applyUpdate(e);
+                break;
+            case 'check-for-update':
+                checkForUpdate(e);
+                break;
+            case 'getInstalled':
+                getInstalled(e);
+                break;
+            case 'install-package':
+                installPackage(e);
+                break;
+            case 'launch-app':
+                launchApp(e);
+                break;
+        }
+    });
+
+
+    // MozApp stuff.
+    function getInstalled(e) {
+        /* navigator.mozApps.getInstalled for parent to keep track of installed apps.
+           {
+               name: 'getInstalled';
+           }
+        */
+        console.log('[iframe-install] Received post message to getInstalled from ' + e.origin);
+
+        var r = navigator.mozApps.getInstalled();
+        r.onsuccess = function() {
+            var installed = [];
+            for (var i = 0; i < r.result.length; i++) {
+                installed.push(r.result[i].manifestURL);
+            }
+            window.top.postMessage({
+                'name': 'getInstalled',
+                'result': installed
+            }, '*');
+        };
+    }
+
+
+    function installPackage(e) {
+        /* Receive postMessage from the packaged app and do something with it.
+           {
+               name: 'install-package',
+               data: {
+                   product: <APP_INFO>,
+                   opt: <OPTIONS>
+               }
+           }
+        */
+        console.log('[iframe-install] Received post message to install-package from ' + e.origin);
+
+        var product = e.data.data.product;
+        var opt = e.data.data.opt || {};
+        opt.data = opt.data || {};
+
+        var manifestURL;
+        if (product.manifest_url) {
+            manifestURL = product.manifest_url;
+        }
+
+        var mozApps = (opt.navigator || window.navigator).mozApps;
+        var installer = product.is_packaged ? 'installPackage' : 'install';
+        var installRequest = mozApps[installer](manifestURL, opt.data);
+
+        installRequest.onsuccess = function() {
+            console.log('[iframe-install] App install request for ' + product.name);
+            var status;
+            var isInstalled = setInterval(function() {
+                status = installRequest.result.installState;
+                if (status == 'installed') {
+                    console.log('[iframe-install] App reported as installed for ' + product.name);
+                    clearInterval(isInstalled);
+                    window.top.postMessage({
+                        'appId': product.id,
+                        'product': product,
+                        'name': 'install-package'
+                    }, '*');
+                }
+            }, 250);
+
+            installRequest.result.ondownloaderror = function(e) {
+                console.log('[iframe-install] App download error: ' + e.application.downloadError.name);
+                window.top.postMessage({
+                    'appId': product.id,
+                    'product': product,
+                    'error': {error: e.application.downloadError.name},
+                    'name': 'install-package'
+                }, '*');
+                clearInterval(isInstalled);
+            };
+        };
+        installRequest.onerror = function() {
+            console.log('[iframe-install] App installation failed for ' + product.name);
+            var error = this.error.name || this.error;
+            window.top.postMessage({
+                'appId': product.id,
+                'product': product,
+                'error': {error: error},
+                'name': 'install-package'
+            }, '*');
+        };
+    }
+
+    function applyUpdate(e) {
+        /* Download app update (app need to be installed first), send a message
+           back to the caller then it's done.
+           {
+               name: 'apply-update',
+               manifestURL: <MANIFEST_URL>
+           }
+        */
+        getInstallers(function() {
+            var manifestURL = e.data.manifestURL;
+            var app = installed[manifestURL];
+            if (app === undefined) {
+                postErrorMessage('Applying app update failed', manifestURL, 'apply-update', 'NOT_INSTALLED');
+                return;
+            }
+            app.ondownloadsuccess = function(e) {
+                console.log('[iframe-install] Applying app update succeeded (downloadsuccess) for ' + manifestURL);
+                window.top.postMessage({
+                    'manifestURL': manifestURL,
+                    'name': 'apply-update'
+                }, '*');
+            };
+            if (app.downloadAvailable) {
+                app.download();
+            }
+        });
+
+    }
+
+    function checkForUpdate(e) {
+        /* Check for an app update (app need to be installed first) and send a
+           message back to the caller with the result (boolean indicating
+           whether an app is available or not).
+           {
+               name: 'check-for-update',
+               manifestURL: <MANIFEST_URL>
+           }
+        */
+
+        getInstallers(function() {
+            var manifestURL = e.data.manifestURL;
+            var app = installed[manifestURL];
+            if (app === undefined) {
+                postErrorMessage('Checking for app update failed', manifestURL, 'check-for-update', 'NOT_INSTALLED');
+                return;
+            }
+            if (app.downloading) {
+                postErrorMessage('Checking for app update failed', manifestURL, 'check-for-update', 'APP_IS_DOWNLOADING');
+                return;
+            }
+            if (app.downloadAvailable) {
+                // If we already know an app has a download available, we can
+                // return right away.
+                console.log('[iframe-install] Checking for app update succeeded immediately (downloadavailable) for ' + manifestURL);
+                window.top.postMessage({
+                    'manifestURL': manifestURL,
+                    'result': app.downloadAvailable,
+                    'type': 'downloadavailable',
+                    'name': 'check-for-update'
+                }, '*');
+                return;
+            }
+            // app.checkForUpdate() appears not to be sending success event,
+            // only errors. It does fire 'downloadavailable'/'downloadapplied'
+            // events and update the corresponding app instance, though.
+            app.ondownloadavailable = function(e) {
+                console.log('[iframe-install] Checking for app update succeeded (downloadavailable) for ' + manifestURL);
+                window.top.postMessage({
+                    'manifestURL': manifestURL,
+                    'result': app.downloadAvailable,
+                    'type': e.type,
+                    'name': 'check-for-update'
+                }, '*');
+            };
+            app.ondownloadapplied = function(e) {
+                console.log('[iframe-install] Checking for app update succeeded (downloadapplied) for ' + manifestURL);
+                window.top.postMessage({
+                    'manifestURL': manifestURL,
+                    'result': app.downloadAvailable,
+                    'type': e.type,
+                    'name': 'check-for-update'
+                }, '*');
+            };
+            var request = installed[manifestURL].checkForUpdate();
+            request.onerror = function() {
+                postErrorMessage('Checking for app update failed', manifestURL, 'check-for-update', this.error.name || this.error);
+            };
+        });
+    }
+
+    function launchApp(e) {
+        /* Find installer from getInstalled and launch an app.
+           {
+               name: 'launch-app',
+               manifestURL: <MANIFEST_URL>
+           }
+        */
+        getInstallers(function() {
+            installed[e.data.manifestURL].launch();
+        });
+    }
+})();
+</script>
+</body></html>

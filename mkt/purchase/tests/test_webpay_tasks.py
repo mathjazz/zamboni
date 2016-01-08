@@ -5,12 +5,11 @@ from django.core import mail
 from mock import patch
 from nose.tools import eq_, ok_
 
-import amo
-from stats.models import Contribution
+import mkt
 
-from mkt.purchase import webpay_tasks as tasks
-
-from utils import PurchaseTest
+from mkt.purchase import tasks as tasks
+from mkt.purchase.models import Contribution
+from mkt.purchase.tests.utils import PurchaseTest
 
 
 class TestReceiptEmail(PurchaseTest):
@@ -20,7 +19,7 @@ class TestReceiptEmail(PurchaseTest):
         self.contrib = Contribution.objects.create(addon_id=self.addon.id,
                                                    amount=self.price.price,
                                                    uuid=str(uuid.uuid4()),
-                                                   type=amo.CONTRIB_PURCHASE,
+                                                   type=mkt.CONTRIB_PURCHASE,
                                                    user=self.user,
                                                    source_locale='en-us')
 
@@ -35,7 +34,7 @@ class TestReceiptEmail(PurchaseTest):
         assert 'Precio' in mail.outbox[0].body
         assert 'Algo Algo' in mail.outbox[0].body
 
-    @patch('mkt.purchase.webpay_tasks.send_html_mail_jinja')
+    @patch('mkt.purchase.tasks.send_html_mail_jinja')
     def test_data(self, send_mail_jinja):
         with self.settings(SITE_URL='http://f.com'):
             tasks.send_purchase_receipt(self.contrib.pk)

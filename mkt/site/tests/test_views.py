@@ -2,28 +2,24 @@ import json
 from urlparse import urljoin
 
 from django.conf import settings
-from django.core.cache import cache
+from django.core.urlresolvers import reverse
 from django.test.utils import override_settings
 
 import mock
 from lxml import etree
-from nose import SkipTest
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
-import amo
-import amo.tests
-from amo.urlresolvers import reverse
-
+import mkt.site.tests
+from mkt.site.fixtures import fixture
 from mkt.webapps.models import Webapp
 
 
-class Test403(amo.tests.TestCase):
-    fixtures = ['base/users', 'webapps/337141-steamcube']
+class Test403(mkt.site.tests.TestCase):
+    fixtures = fixture('webapp_337141', 'users')
 
     def setUp(self):
-        assert self.client.login(username='steamcube@mozilla.com',
-                                 password='password')
+        self.login('steamcube@mozilla.com')
 
     def _test_403(self, url):
         res = self.client.get(url, follow=True)
@@ -34,8 +30,7 @@ class Test403(amo.tests.TestCase):
         self._test_403('/admin')
 
     def test_403_devhub(self):
-        assert self.client.login(username='regular@mozilla.com',
-                                 password='password')
+        self.login('regular@mozilla.com')
         app = Webapp.objects.get(pk=337141)
         self._test_403(app.get_dev_url('edit'))
 
@@ -43,8 +38,8 @@ class Test403(amo.tests.TestCase):
         self._test_403('/reviewers')
 
 
-class Test404(amo.tests.TestCase):
-    fixtures = ['webapps/337141-steamcube']
+class Test404(mkt.site.tests.TestCase):
+    fixtures = fixture('webapp_337141')
 
     def _test_404(self, url):
         r = self.client.get(url, follow=True)
@@ -68,9 +63,16 @@ class Test404(amo.tests.TestCase):
         res = self.client.get('/api/this-should-never-work/')
         eq_(res.status_code, 404)
         eq_(res.content, '')
+        self.assertCORS(res, 'get')
+
+    def test_404_api_debug(self):
+        with self.settings(DEBUG=True):
+            res = self.client.options('/api/this-should-never-work/')
+            eq_(res.status_code, 404)
+            self.assertCORS(res)
 
 
-class TestManifest(amo.tests.TestCase):
+class TestManifest(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.url = reverse('manifest.webapp')
@@ -103,12 +105,6 @@ class TestManifest(amo.tests.TestCase):
         content = json.loads(response.content)
         eq_(content['name'], 'Mozilla Fruitstand')
 
-    def test_manifest_orientation(self):
-        response = self.client.get(self.url)
-        eq_(response.status_code, 200)
-        content = json.loads(response.content)
-        eq_(content['orientation'], ['portrait-primary'])
-
     def test_manifest_etag(self):
         resp = self.client.get(self.url)
         etag = resp.get('Etag')
@@ -129,47 +125,7 @@ class TestManifest(amo.tests.TestCase):
         eq_(resp.status_code, 304)
 
 
-class TestMozmarketJS(amo.tests.TestCase):
-
-    def setUp(self):
-        cache.clear()
-
-    def render(self):
-        return self.client.get(reverse('site.mozmarket_js'))
-
-    @mock.patch.object(settings, 'SITE_URL', 'https://secure-mkt.com/')
-    @mock.patch.object(settings, 'MINIFY_MOZMARKET', False)
-    def test_render(self):
-        resp = self.render()
-        self.assertContains(resp, "var server = 'https://secure-mkt.com/'")
-        eq_(resp['Content-Type'], 'text/javascript')
-
-    @mock.patch.object(settings, 'SITE_URL', 'https://secure-mkt.com/')
-    @mock.patch.object(settings, 'MINIFY_MOZMARKET', True)
-    def test_minify(self):
-        resp = self.render()
-        # Check for no space after equal sign.
-        self.assertContains(resp, '="https://secure-mkt.com/"')
-
-    @mock.patch.object(settings, 'MINIFY_MOZMARKET', True)
-    @mock.patch.object(settings, 'UGLIFY_BIN', None)
-    def test_minify_with_yui(self):
-        self.render()  # no errors
-
-    @mock.patch.object(settings, 'MINIFY_MOZMARKET', False)
-    def test_receiptverifier(self):
-        resp = self.render()
-        self.assertContains(resp, 'exports.receipts.Verifier')
-
-    @mock.patch.object(settings, 'MOZMARKET_VENDOR_EXCLUDE',
-                       ['receiptverifier'])
-    @mock.patch.object(settings, 'MINIFY_MOZMARKET', False)
-    def test_exclude(self):
-        resp = self.render()
-        self.assertNotContains(resp, 'exports.receipts.Verifier')
-
-
-class TestRobots(amo.tests.TestCase):
+class TestRobots(mkt.site.tests.TestCase):
 
     @override_settings(CARRIER_URLS=['seavanworld'])
     @override_settings(ENGAGE_ROBOTS=True)
@@ -184,7 +140,18 @@ class TestRobots(amo.tests.TestCase):
         self.assertContains(rs, 'Disallow: /')
 
 
-class TestOpensearch(amo.tests.TestCase):
+class TestContribute(mkt.site.tests.TestCase):
+
+    def test_contribute(self):
+        response = self.client.get('/contribute.json')
+        eq_(response.status_code, 200)
+        eq_(response['Content-Type'], 'application/json')
+        eq_(json.loads(''.join(response.content)).keys(),
+            ['name', 'repository', 'bugs', 'urls', 'participate', 'keywords',
+             'description'])
+
+
+class TestOpensearch(mkt.site.tests.TestCase):
 
     def test_opensearch_declaration(self):
         """Look for opensearch declaration in templates."""
@@ -193,7 +160,7 @@ class TestOpensearch(amo.tests.TestCase):
         elm = pq(response.content)(
             'link[rel=search][type="application/opensearchdescription+xml"]')
         eq_(elm.attr('href'), reverse('opensearch'))
-        eq_(elm.attr('title'), 'Firefox Marketplace')
+        eq_(elm.attr('title'), 'Firefox Apps')
 
     def test_opensearch(self):
         response = self.client.get(reverse('opensearch'))
@@ -201,7 +168,42 @@ class TestOpensearch(amo.tests.TestCase):
         eq_(response.status_code, 200)
         doc = etree.fromstring(response.content)
         e = doc.find('{http://a9.com/-/spec/opensearch/1.1/}ShortName')
-        eq_(e.text, 'Firefox Marketplace')
+        eq_(e.text, 'Firefox Apps')
         e = doc.find('{http://a9.com/-/spec/opensearch/1.1/}Url')
         wanted = '%s?q={searchTerms}' % urljoin(settings.SITE_URL, '/search')
         eq_(e.attrib['template'], wanted)
+
+
+class TestSecure(mkt.site.tests.TestCase):
+    def test_content_nosniff(self):
+        # Test that django-secure is properly installed and configured
+        # according to our needs.
+        response = self.client.get('/')
+        eq_(response['x-content-type-options'], 'nosniff')
+
+
+@mock.patch('mkt.site.views.log_cef')
+class TestCSP(mkt.site.tests.TestCase):
+
+    def setUp(self):
+        self.url = reverse('mkt.csp.report')
+        self.create_sample(name='csp-store-reports')
+
+    def test_get_document(self, log_cef):
+        eq_(self.client.get(self.url).status_code, 405)
+
+    def test_malformed(self, log_cef):
+        res = self.client.post(self.url, 'f', content_type='application/json')
+        eq_(res.status_code, 400)
+
+    def test_document_uri(self, log_cef):
+        url = 'http://foo.com'
+        self.client.post(self.url,
+                         json.dumps({'csp-report': {'document-uri': url}}),
+                         content_type='application/json')
+        eq_(log_cef.call_args[0][2]['PATH_INFO'], url)
+
+    def test_no_document_uri(self, log_cef):
+        self.client.post(self.url, json.dumps({'csp-report': {}}),
+                         content_type='application/json')
+        eq_(log_cef.call_args[0][2]['PATH_INFO'], '/services/csp/report')

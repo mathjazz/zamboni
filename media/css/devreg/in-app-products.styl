@@ -1,0 +1,44 @@
+#in-app-products.empty {
+    .listing-footer {
+        background: #FFFFFF;
+        text-align: center;
+        border-top: none;
+        margin: 0px;
+    }
+
+    table {
+        display: none;
+    }
+}
+
+.in-app-product-guid .guid {
+    width: 125px;
+}
+
+.inline-editing {
+    .inline-edit {
+        display: none;
+    }
+
+    &.editing {
+        .inline-view {
+            display: none;
+        }
+
+        .inline-edit {
+            display: inline;
+
+        }
+        label {
+            width: 5em;
+        }
+    }
+
+    .error {
+        padding: 5px 0;
+
+        &:empty {
+            padding: 0;
+        }
+    }
+}

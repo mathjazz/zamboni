@@ -70,8 +70,9 @@
             <label for="id_mozilla_contact">
               {{ _('Mozilla Contact') }}
               {{ tip(None,
-                _("An e-mail address (or addresses separated by commas) of this
-                   app's Mozilla contact that will be CC'd on any reviewer emails.")) }}
+                _("An e-mail address (or addresses separated by commas) of "
+                  "this app's Mozilla contact that will be CC'd on any "
+                  "reviewer emails.")) }}
                    <span class="hint">{{ _('Enter email addresses, separated by commas') }}</span>
             </label>
           </th>
@@ -86,53 +87,39 @@
         </tr>
         <tr>
           <th>
-            <label for="app_tags">
-              {{ _('Tags') }}
+            <label for="id_vip_app">
+              {{ _('Mozilla VIP App') }}
               {{ tip(None,
-                _('Tags help users find your app and should be short '
-                  'descriptors such as tabs, toolbar, or twitter. You '
-                  'may have a maximum of {0} tags.').format(amo.MAX_TAGS)) }}
+                _("Is this a very important app that should always be handled "
+                  "by Mozilla Staff or Senior App Reviewers?")) }}
+                   <span class="hint">{{ _('Use sparingly') }}</span>
             </label>
           </th>
           <td>
             {% if editable and form %}
-              {{ form.tags }}
-              {{ form.tags.errors }}
-              <div>
-                {{ ngettext('Comma-separated, minimum of {0} character.',
-                            'Comma-separated, minimum of {0} characters.',
-                            amo.MIN_TAG_LENGTH)|f(amo.MIN_TAG_LENGTH) }}
-                {{ _('Example: dark, cinema, noir. Limit 20.') }}
-              </div>
-              {% if restricted_tags %}
-                <div>
-                  {{ ngettext('Reserved tag:', 'Reserved tags:', restricted_tags|length) }}
-                  {{ restricted_tags|join(', ') }}
-                </div>
-              {% endif %}
+              {{ form.vip_app }}
+              {{ form.vip_app.errors }}
             {% else %}
-              {% call empty_unless(tags) %}
-                {{ tags|join(', ') }}
-              {% endcall %}
+              <input type="checkbox" disabled{{ ' checked' if addon.vip_app }}>
             {% endif %}
           </td>
         </tr>
         <tr>
           <th>
-            <label for="app_ratings">
-              {{ _('Content Ratings') }}
+            <label for="id_priority_review">
+              {{ _('Priority review needed') }}
               {{ tip(None,
-                     _('Ratings from official ratings bodies for this app.')) }}
+                _("The app will be treated as a priority and placed the top "
+                  "of the review queue")) }}
+                   <span class="hint">{{ _('This will persist until first approval') }}</span>
             </label>
           </th>
           <td>
             {% if editable and form %}
-              {{ form.app_ratings }}
-              {{ form.app_ratings.errors }}
+              {{ form.priority_review }}
+              {{ form.priority_review.errors }}
             {% else %}
-              {%  for r in addon.content_ratings.all() %}
-                <div>{{ r.get_label() }}</div>
-              {% endfor %}
+              <input type="checkbox" disabled{{ ' checked' if addon.priority_review }}>
             {% endif %}
           </td>
         </tr>

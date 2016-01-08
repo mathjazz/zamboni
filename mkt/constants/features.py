@@ -1,8 +1,11 @@
-from ordereddict import OrderedDict
+import base64
+import itertools
+import math
+from collections import OrderedDict
 
 from django.conf import settings
 
-from tower import ugettext_lazy as _lazy
+from django.utils.translation import ugettext_lazy as _lazy
 
 
 # WARNING: When adding a new app feature here also include a migration.
@@ -45,8 +48,8 @@ APP_FEATURES = OrderedDict([
     }),
     ('ARCHIVE', {
         'name': _lazy(u'Archive'),
-        'description': u'',
-        'apis': (),
+        'description': _lazy(u'The app requires the `ArchiveReader` API.'),
+        'apis': ('ArchiveReader',),
     }),
     ('BATTERY', {
         'name': _lazy(u'Battery'),
@@ -85,7 +88,8 @@ APP_FEATURES = OrderedDict([
     }),
     ('IDLE', {
         'name': _lazy(u'Idle'),
-        'description': u'',
+        'description': _lazy(u'The app requires the platform to support the '
+                             u'`addIdleObserver` API.'),
         'apis': ('addIdleObserver', 'removeIdleObserver'),
     }),
     ('NETWORK_INFO', {
@@ -295,8 +299,7 @@ APP_FEATURES = OrderedDict([
         'name': _lazy(u'TCP Sockets'),
         'description': _lazy(u'The app requires the platform to allow opening '
                              u'raw TCP sockets.'),
-        'apis': ('TCPSocket', 'navigator.mozTCPSocket',
-                 'navigator.mozTCPServerSocket')
+        'apis': ('TCPSocket', 'navigator.mozTCPSocket')
     }),
     ('THIRDPARTY_KEYBOARD_SUPPORT', {
         'name': _lazy(u'Third-Party Keyboard Support'),
@@ -304,7 +307,109 @@ APP_FEATURES = OrderedDict([
                              u'third-party keyboards.'),
         'apis': ('navigator.mozInputMethod',),
     }),
+    ('NETWORK_INFO_MULTIPLE', {
+        'name': _lazy(u'Multiple Network Information'),
+        'description': _lazy(u'The app requires the ability to get '
+                             u'information about multiple network '
+                             u'connections.'),
+        'apis': ('navigator.mozMobileConnections',),
+    }),
+    ('MOBILEID', {
+        'name': _lazy(u'Mobile ID'),
+        'description': _lazy(u'The app requires access to the '
+                             u'`navigator.getMobileIdAssertion` API.'),
+        'apis': ('navigator.getMobileIdAssertion',),
+    }),
+    ('PRECOMPILE_ASMJS', {
+        'name': _lazy(u'Asm.js Precompilation'),
+        'description': _lazy(u'The app requires the device to support '
+                             u'precompilation of asm.js code.'),
+        'apis': (),
+    }),
+    ('HARDWARE_512MB_RAM', {
+        'name': _lazy(u'512MB RAM Device'),
+        'description': _lazy(u'The app requires the device to have at least '
+                             u'512MB RAM.'),
+        'apis': (),
+    }),
+    ('HARDWARE_1GB_RAM', {
+        'name': _lazy(u'1GB RAM Device'),
+        'description': _lazy(u'The app requires the device to have at least '
+                             u'1GB RAM.'),
+        'apis': (),
+    }),
+    ('NFC', {
+        'name': _lazy(u'NFC'),
+        'description': _lazy(u'The app requires access to the Near Field '
+                             u'Communication (NFC) API.'),
+        'apis': ('navigator.mozNfc',),
+    }),
+    ('OPENMOBILEACL', {
+        # This feature requirement is limited to partners for now, and
+        # therefore has no description, no translation, and will not be shown
+        # to regular developers.
+        'name': u'OpenMobile ACL',
+        'description': '',
+        'apis': (),
+        'hidden': True,
+    }),
+    ('UDPSOCKET', {
+        'name': _lazy(u'UDP Sockets'),
+        'description': _lazy(u'The app requires the platform to allow opening '
+                             u'raw UDP sockets.'),
+        'apis': ('UDPSocket',)
+    }),
 ])
+
+
+class FeaturesBitField(object):
+    """
+    BitField class that stores the bits into several integers, and can
+    import/export from/to base64. Designed that way to be compatible with the
+    way we export the features signature in JavaScript.
+    """
+
+    def __init__(self, size, values=None):
+        """
+        Instantiate a FeaturesBitField of size `size`. Optional parameter
+        `values` allows you to override the initial list of integers used to
+        store the values.
+        """
+        self.size = size
+        if values is not None:
+            self.values = values
+        else:
+            self.values = [0] * int(math.ceil(self.size / 8.0))
+
+    def get(self, i):
+        index = int(math.floor(i / 8.0))
+        bit = i % 8
+        return (self.values[index] & (1 << bit)) != 0
+
+    def set(self, i, value):
+        index = int(math.floor(i / 8.0))
+        bit = i % 8
+        if value:
+            self.values[index] |= 1 << bit
+        else:
+            self.values[index] &= ~(1 << bit)
+
+    def to_base64(self):
+        return base64.b64encode(''.join([chr(i) for i in self.values]))
+
+    def to_list(self):
+        return [self.get(i) for i in range(0, self.size)]
+
+    @classmethod
+    def from_list(cls, data):
+        instance = cls(len(data))
+        for i, v in enumerate(data):
+            instance.set(i, v)
+        return instance
+
+    @classmethod
+    def from_base64(cls, string, size):
+        return cls(size, values=[ord(c) for c in base64.b64decode(string)])
 
 
 class FeatureProfile(OrderedDict):
@@ -313,7 +418,7 @@ class FeatureProfile(OrderedDict):
     representations.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, _default=False, **kwargs):
         """
         Creates a FeatureProfile object.
 
@@ -329,31 +434,89 @@ class FeatureProfile(OrderedDict):
         super(FeatureProfile, self).__init__()
         for af in APP_FEATURES:
             key = af.lower()
-            self[key] = kwargs.get(key, False)
+            self[key] = kwargs.get(key, _default)
 
     @classmethod
-    def from_int(cls, features):
+    def from_int(cls, features, limit=None):
         """
         Construct a FeatureProfile object from a integer bitfield.
 
         >>> FeatureProfile.from_int(0x42)
         FeatureProfile([('apps', False), ('packaged_apps', True), ...)
         """
-        instance = cls()
-        for i, k in enumerate(reversed(APP_FEATURES)):
+        instance = cls()  # Defaults to everything set to False.
+        if limit is None:
+            limit = len(APP_FEATURES)
+        app_features_to_consider = OrderedDict(
+            itertools.islice(APP_FEATURES.iteritems(), limit))
+        for i, k in enumerate(reversed(app_features_to_consider)):
             instance[k.lower()] = bool(features & 1 << i)
         return instance
 
     @classmethod
-    def from_signature(cls, signature):
+    def from_list(cls, features, limit=None):
+        """
+        Construct a FeatureProfile object from a list of boolean values.
+
+        >>> FeatureProfile.from_list([True, False, ...])
+        FeatureProfile([('apps', True), ('packaged_apps', False), ...)
+        """
+        instance = cls()  # Defaults to everything set to False.
+        if limit is None:
+            limit = len(APP_FEATURES)
+        app_features_to_consider = OrderedDict(
+            itertools.islice(APP_FEATURES.iteritems(), limit))
+        for i, k in enumerate(app_features_to_consider):
+            instance[k.lower()] = bool(features[i])
+        return instance
+
+    @classmethod
+    def from_decimal_signature(cls, signature):
         """
         Construct a FeatureProfile object from a decimal signature.
 
         >>> FeatureProfile.from_signature('40000000.32.1')
         FeatureProfile([('apps', False), ('packaged_apps', True), ...)
         """
-        dehexed = int(signature.split('.')[0], 16)
-        return cls.from_int(dehexed)
+        # If the signature is invalid, let the ValueError be raised, it's up to
+        # the caller to decide what to do with it.
+        number, limit, version = signature.split('.')
+        return cls.from_int(int(number, 16), limit=int(limit))
+
+    @classmethod
+    def from_base64_signature(cls, signature):
+        """
+        Construct a FeatureProfile object from a base64 signature.
+
+        >>> FeatureProfile.from_signature('=////////Hw==.53.9')
+        FeatureProfile([('apps', True), ('packaged_apps', True), ...)
+        """
+        # If the signature is invalid, let the ValueError be raised, it's up to
+        # the caller to decide what to do with it.
+        string, limit, version = signature.split('.')
+        limit = int(limit)
+
+        # Decode base64 string (ignoring the leading '=' that is used to
+        # indicate we are dealing with a base64 signature) using our bit field.
+        bitfield = FeaturesBitField.from_base64(string[1:], limit)
+        # Build the FeatureProfile from our list of boolean values.
+        return cls.from_list(bitfield.to_list(), limit=limit)
+
+    @classmethod
+    def from_signature(cls, signature):
+        """
+        Construct a FeatureProfile object from a signature, base64
+        (starting with '=') or decimal (everything else).
+
+        >>> FeatureProfile.from_signature('40000000.32.1')
+        FeatureProfile([('apps', False), ('packaged_apps', True), ...)
+
+        >>> FeatureProfile.from_signature('=////////Hw==.53.9')
+        FeatureProfile([('apps', True), ('packaged_apps', True), ...)
+        """
+        if signature.startswith('='):
+            return cls.from_base64_signature(signature)
+        return cls.from_decimal_signature(signature)
 
     def to_int(self):
         """
@@ -376,6 +539,17 @@ class FeatureProfile(OrderedDict):
         """
         return '%x.%s.%s' % (self.to_int(), len(self),
                              settings.APP_FEATURES_VERSION)
+
+    def to_base64_signature(self):
+        """
+        Convert a FeatureProfile object to its base64 signature.
+
+        >>> profile.to_signature()
+        '=////////Hw==.53.9'
+        """
+        self.bitfield = FeaturesBitField.from_list(self.values())
+        return '=%s.%s.%s' % (self.bitfield.to_base64(), len(self),
+                              settings.APP_FEATURES_VERSION)
 
     def to_list(self):
         """
@@ -400,3 +574,12 @@ class FeatureProfile(OrderedDict):
 
         """
         return dict((prefix + k, False) for k, v in self.iteritems() if not v)
+
+    def has_features(self, required_features):
+        """Returns whether this profile has all the features listed in the
+        `required_features` parameter.
+
+        `required_features` is expected to be a simple list of feature keys,
+        like so: ['packaged_apps', 'alarm'].
+        """
+        return set(required_features).issubset(self.to_list())

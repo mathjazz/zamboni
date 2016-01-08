@@ -5,7 +5,7 @@ import os
 
 import dj_database_url
 
-from lib.settings_base import CACHE_PREFIX, ES_INDEXES, KNOWN_PROXIES, LOGGING, CSP_SCRIPT_SRC, CSP_FRAME_SRC
+from mkt.settings import (CACHE_PREFIX, ES_INDEXES, KNOWN_PROXIES, LOGGING)
 
 from .. import splitstrip
 import private_base as private
@@ -19,34 +19,29 @@ DEBUG = False
 TEMPLATE_DEBUG = DEBUG
 DEBUG_PROPAGATE_EXCEPTIONS = False
 SESSION_COOKIE_SECURE = True
-REDIRECT_SECRET_KEY = private.REDIRECT_SECRET_KEY
 
 ADMINS = ()
 
 DATABASES = {}
 DATABASES['default'] = dj_database_url.parse(private.DATABASES_DEFAULT_URL)
-DATABASES['default']['ENGINE'] = 'mysql_pool'
+DATABASES['default']['ENGINE'] = 'django.db.backends.mysql'
 DATABASES['default']['OPTIONS'] = {'init_command': 'SET storage_engine=InnoDB'}
+DATABASES['default']['ATOMIC_REQUESTS'] = True
+DATABASES['default']['CONN_MAX_AGE'] = 5 * 60  # 5m for persistent connections.
 
 DATABASES['slave'] = dj_database_url.parse(private.DATABASES_SLAVE_URL)
-DATABASES['slave']['ENGINE'] = 'mysql_pool'
+DATABASES['slave']['ENGINE'] = 'django.db.backends.mysql'
 DATABASES['slave']['OPTIONS'] = {'init_command': 'SET storage_engine=InnoDB'}
+DATABASES['slave']['ATOMIC_REQUESTS'] = True
+DATABASES['slave']['CONN_MAX_AGE'] = 5 * 60  # 5m for persistent connections.
 
 SERVICES_DATABASE = dj_database_url.parse(private.SERVICES_DATABASE_URL)
-
-DATABASE_POOL_ARGS = {
-    'max_overflow': 10,
-    'pool_size': 5,
-    'recycle': 30
-}
 
 SLAVE_DATABASES = ['slave']
 
 CACHES = {
     'default': {
-        'BACKEND': 'caching.backends.memcached.CacheClass',
-#        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
-#        'BACKEND': 'memcachepool.cache.UMemcacheCache',
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
         'LOCATION': splitstrip(private.CACHES_DEFAULT_LOCATION),
         'TIMEOUT': 500,
         'KEY_PREFIX': CACHE_PREFIX,
@@ -57,7 +52,7 @@ SECRET_KEY = private.SECRET_KEY
 
 LOG_LEVEL = logging.DEBUG
 
-## Celery
+# Celery
 BROKER_URL = private.BROKER_URL
 
 CELERY_IGNORE_RESULT = True
@@ -65,12 +60,11 @@ CELERY_DISABLE_RATE_LIMITS = True
 CELERYD_PREFETCH_MULTIPLIER = 1
 
 NETAPP_STORAGE = private.NETAPP_STORAGE_ROOT + '/shared_storage'
-MIRROR_STAGE_PATH = private.NETAPP_STORAGE_ROOT + '/public-staging'
 GUARDED_ADDONS_PATH = private.NETAPP_STORAGE_ROOT + '/guarded-addons'
 UPLOADS_PATH = NETAPP_STORAGE + '/uploads'
-USERPICS_PATH = UPLOADS_PATH + '/userpics'
 ADDON_ICONS_PATH = UPLOADS_PATH + '/addon_icons'
-COLLECTIONS_ICON_PATH = UPLOADS_PATH + '/collection_icons'
+EXTENSION_ICONS_PATH = UPLOADS_PATH + '/extension_icons'
+WEBSITE_ICONS_PATH = UPLOADS_PATH + '/website_icons'
 IMAGEASSETS_PATH = UPLOADS_PATH + '/imageassets'
 REVIEWER_ATTACHMENTS_PATH = UPLOADS_PATH + '/reviewer_attachment'
 PREVIEWS_PATH = UPLOADS_PATH + '/previews'
@@ -78,39 +72,20 @@ SIGNED_APPS_PATH = NETAPP_STORAGE + '/signed_apps'
 SIGNED_APPS_REVIEWER_PATH = NETAPP_STORAGE + '/signed_apps_reviewer'
 PREVIEW_THUMBNAIL_PATH = PREVIEWS_PATH + '/thumbs/%s/%d.png'
 PREVIEW_FULL_PATH = PREVIEWS_PATH + '/full/%s/%d.%s'
+EXTENSIONS_PATH = NETAPP_STORAGE + '/extensions'
+SIGNED_EXTENSIONS_PATH = NETAPP_STORAGE + '/signed-extensions'
 
-HERA = []
 LOGGING['loggers'].update({
-    'z.task': { 'level': logging.DEBUG },
-    'z.hera': { 'level': logging.INFO },
-    'z.redis': { 'level': logging.DEBUG },
-    'z.pool': { 'level': logging.ERROR },
+    'z.task': {'level': logging.DEBUG},
+    'z.pool': {'level': logging.ERROR},
 })
 
-REDIS_BACKEND = private.REDIS_BACKENDS_CACHE
-REDIS_BACKENDS = {
-    'cache': private.REDIS_BACKENDS_CACHE,
-    'cache_slave': private.REDIS_BACKENDS_CACHE_SLAVE,
-    'master': private.REDIS_BACKENDS_MASTER,
-    'slave': private.REDIS_BACKENDS_SLAVE,
-}
-CACHE_MACHINE_USE_REDIS = True
-
-RECAPTCHA_PUBLIC_KEY = private.RECAPTCHA_PUBLIC_KEY
-RECAPTCHA_PRIVATE_KEY = private.RECAPTCHA_PRIVATE_KEY
-RECAPTCHA_URL = ('https://www.google.com/recaptcha/api/challenge?k=%s' % RECAPTCHA_PUBLIC_KEY)
-
 TMP_PATH = os.path.join(NETAPP_STORAGE, 'tmp')
-PACKAGER_PATH = os.path.join(TMP_PATH, 'packager')
 
 ADDONS_PATH = private.NETAPP_STORAGE_ROOT + '/files'
 
-PERF_THRESHOLD = 20
-
 SPIDERMONKEY = '/usr/bin/tracemonkey'
 
-# Remove DetectMobileMiddleware from middleware in production.
-detect = 'mobility.middleware.DetectMobileMiddleware'
 csp = 'csp.middleware.CSPMiddleware'
 
 
@@ -118,29 +93,19 @@ RESPONSYS_ID = private.RESPONSYS_ID
 
 CRONJOB_LOCK_PREFIX = 'marketplace-identity-stage'
 
-BUILDER_SECRET_KEY = private.BUILDER_SECRET_KEY
-BUILDER_VERSIONS_URL = "https://builder-addons.allizom.org/repackage/sdk-versions/"
-
-
 ES_HOSTS = splitstrip(private.ES_HOSTS)
 ES_URLS = ['http://%s' % h for h in ES_HOSTS]
 ES_INDEXES = dict((k, '%s_identity_stage' % v) for k, v in ES_INDEXES.items())
-
-BUILDER_UPGRADE_URL = "https://builder-addons.allizom.org/repackage/rebuild/"
 
 STATSD_HOST = private.STATSD_HOST
 STATSD_PORT = private.STATSD_PORT
 STATSD_PREFIX = private.STATSD_PREFIX
 
-GRAPHITE_HOST = private.GRAPHITE_HOST
-GRAPHITE_PORT = private.GRAPHITE_PORT
-GRAPHITE_PREFIX = private.GRAPHITE_PREFIX
-
 CEF_PRODUCT = STATSD_PREFIX
 
 ES_TIMEOUT = 60
 
-EXPOSE_VALIDATOR_TRACEBACKS = True
+EXPOSE_VALIDATOR_TRACEBACKS = False
 
 KNOWN_PROXIES += ['10.2.83.105',
                   '10.2.83.106',
@@ -163,18 +128,16 @@ KNOWN_PROXIES += ['10.2.83.105',
 
 NEW_FEATURES = True
 
-PERF_TEST_URL = 'http://talos-addon-master1.amotest.scl1.mozilla.com/trigger/trigger.cgi'
-
-REDIRECT_URL = 'https://outgoing.allizom.org/v1/'
-
 CLEANCSS_BIN = 'cleancss'
+LESS_BIN = 'lessc'
+STYLUS_BIN = 'stylus'
 UGLIFY_BIN = 'uglifyjs'
 
 CELERYD_TASK_SOFT_TIME_LIMIT = 240
 
 LESS_PREPROCESS = True
 
-XSENDFILE_HEADER  = 'X-Accel-Redirect'
+XSENDFILE = True
 
 ALLOW_SELF_REVIEWS = True
 
@@ -184,7 +147,7 @@ GEOIP_URL = 'http://geo.marketplace.allizom.org'
 
 API_THROTTLE = False
 
-CSP_SCRIPT_SRC = CSP_SCRIPT_SRC + ("https://firefoxos.anosrep.org",)
-CSP_FRAME_SRC = CSP_FRAME_SRC + ("https://firefoxos.anosrep.org",)
-
 AES_KEYS = private.AES_KEYS
+
+TASK_USER_ID = 4757633
+SERVE_TMP_PATH = False

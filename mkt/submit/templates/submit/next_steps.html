@@ -4,11 +4,6 @@
 
 {% block title %}{{ hub_page_title(title) }}{% endblock %}
 
-{% set payments = waffle.flag('allow-b2g-paid-submission') and addon.is_premium() %}
-{% set has_payments = hasOneToOne(addon, 'app_payment_account') %}
-{% set rated = addon.is_rated() %}
-{% set pending = addon.is_pending() %}
-{% set public_waiting = addon.status == amo.STATUS_PUBLIC_WAITING %}
 {% set public = addon.is_public() %}
 
 {% block content %}
@@ -31,35 +26,21 @@
         </h2>
         <li class="done"><span>{{ _('Submit App Manifest') }}</span></li>
         <li class="done"><span>{{ _('Enter App Details') }}</span></li>
-        <li{% if rated %} class="done"{% endif %}>
-          {%- trans url=addon.get_dev_url('ratings') %}
-            <span>Set up <a href="{{ url }}">Content Ratings</a></span>
+        <li{% if addon.is_rated() %} class="done"{% endif %}>
+          {%- trans rating_url=addon.get_dev_url('ratings') %}
+            <span>Set up <a href="{{ rating_url }}">Content Ratings</a></span>
           {% endtrans -%}
         </li>
         {% if addon.is_premium() %}
-          <li{% if has_payments %} class="done"{% endif %}>
-            {% trans url=addon.get_dev_url('payments') %}
-              Set up <a href="{{ url }}">Payments & Countries</a>
+          <li{% if addon.payments_complete() %} class="done"{% endif %}>
+            {%- trans pay_url=addon.get_dev_url('payments') %}
+              <span>Set up <a href="{{ pay_url }}">Payments</a></span>
             {% endtrans %}
           </li>
         {% endif %}
-        <li{% if not pending %} class="done"{% endif %}><span>{{ _('Wait for Review') }}</span></li>
+        <li{% if public or addon.is_approved() %} class="done"{% endif %}><span>{{ _('Wait for Review') }}</span></li>
         <li{% if public %} class="done"{% endif %}><span>{{ _('Publish') }}</span></li>
       </ol>
-
-     {# Tell the developer what's next to do. #}
-      <p>
-        {% if payments %}
-          {% trans url=addon.get_dev_url('ratings'), payment_url=addon.get_dev_url('payments') %}
-            You must now set up <a href="{{ url }}">Content Ratings</a> and
-            <a href="{{ payment_url }}">Payments & Countries</a> before we can review your app.
-          {% endtrans %}
-        {% elif not rated %}
-          {% trans url=addon.get_dev_url('ratings') %}
-            You must now set up <a href="{{ url }}">Content Ratings</a> before we can review your app.
-          {% endtrans %}
-        {% endif %}
-      </p>
 
       <h2>{{ _('At any point, you can') }}</h2>
       <ul class="other-options">
@@ -73,11 +54,23 @@
             View a list of all of your submissions on <a href="{{ url }}">My Submissions</a>
           {% endtrans %}
         </li>
+        <li>
+          {% set status_url = addon.get_dev_url('versions') + '#low-memory-devices' %}
+          {% if addon.is_packaged %}
+            {% trans %}
+              Request that your app be shown on low-memory devices on <a href="{{ status_url }}">Status &amp; Versions</a>
+            {% endtrans %}
+          {% else %}
+            {% trans %}
+              Request that your app be shown on low-memory devices on <a href="{{ status_url }}">Status</a>
+            {% endtrans %}
+          {% endif %}
+        </li>
       </ul>
 
       <p>
-        {# Tell the developer what's happens after review based on public-waiting. #}
-        {% if addon.make_public == amo.PUBLIC_WAIT %}
+        {# Tell the developer what happens after review based on publish_type. #}
+        {% if addon.publish_type != mkt.PUBLISH_IMMEDIATE %}
           {% trans url=addon.get_dev_url('versions') %}
             Once your app is reviewed, you will have to manually
             publish your app from <a href="{{ url }}">Manage Status</a>.
@@ -97,29 +90,26 @@
         {% endif %}
       </p>
 
-      <footer class="listing-footer">
-        {% if not rated %}
+      <div class="listing-footer footer">
+        {% set continue_url = addon.get_dev_url('versions') %}
+        {% if next_step %}
+          {% set continue_url = next_step['url'] %}
           <span>
-            {% trans %}
-              <strong>What's next:</strong> Set up Content Ratings
+            {# L10n: `next_step_name` is a plural noun, the title of the page of the next step of the submission process (e.g. 'Payments' or 'Content Ratings'). #}
+            {%- trans next_step_name=next_step['name'] %}
+              <strong>What's next:</strong> Set up {{ next_step_name }}
             {% endtrans %}
           </span>
-        {% elif payments and not has_payments %}
-          <span>
-            {% trans %}
-              <strong>What's next:</strong> Set up Payments & Countries
-            {% endtrans %}
-          </span>
-        {% elif public_waiting %}
+        {% elif addon.is_approved() %}
           <span>
             {% trans %}
               <strong>What's next:</strong> Publish Your App
             {% endtrans %}
           </span>
         {% endif %}
-        <a href="{{ addon.get_dev_url('ratings') }}" class="button prominent">
-          {{- _('Continue') }}</a>
-      </footer>
+        <a href="{{ continue_url }}" class="button prominent">{{- _('Continue') }}</a>
+      </div>
+
     </div>
   </section>
 {% endblock %}

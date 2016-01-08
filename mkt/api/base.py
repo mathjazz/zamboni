@@ -1,39 +1,20 @@
-import json
-import logging
-import sys
-import traceback
-from collections import defaultdict
+import functools
 
-from django.conf import settings
-from django.core.urlresolvers import reverse
-from django.conf.urls.defaults import url
-from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db.models.sql import EmptyResultSet
-from django.http import HttpResponseNotFound
 
 import commonware.log
+from rest_framework.decorators import api_view
+from rest_framework.exceptions import ParseError
 from rest_framework.mixins import ListModelMixin
 from rest_framework.routers import Route, SimpleRouter
-from rest_framework.relations import HyperlinkedRelatedField
 from rest_framework.response import Response
-from rest_framework.viewsets import GenericViewSet
-from tastypie import fields, http
-from tastypie.bundle import Bundle
-from tastypie.exceptions import (ImmediateHttpResponse, NotFound,
-                                 UnsupportedFormat)
-from tastypie.fields import ToOneField
-from tastypie.http import HttpConflict
-from tastypie.resources import ModelResource, Resource
+from rest_framework.urlpatterns import format_suffix_patterns
 
-from access import acl
-from translations.fields import PurifiedField, TranslatedField
+import mkt
+from mkt.api.paginator import CustomPagination, PageNumberPagination
 
-from .exceptions import AlreadyPurchased, DeserializationError
-from .http import HttpTooManyRequests
-from .serializers import Serializer
 
 log = commonware.log.getLogger('z.api')
-tasty_log = logging.getLogger('django.request.tastypie')
 
 
 def list_url(name, **kw):
@@ -46,423 +27,48 @@ def get_url(name, pk, **kw):
     return ('api_dispatch_detail', kw)
 
 
-def http_error(errorclass, reason, extra_data=None):
-    response = errorclass()
-    data = {'reason': reason}
-    if extra_data:
-        data.update(extra_data)
-    response.content = json.dumps(data)
-    return ImmediateHttpResponse(response)
+def _collect_form_errors(forms):
+    errors = {}
+    if not isinstance(forms, list):
+        forms = [forms]
+    for f in forms:
+        # If we've got form objects, get the error object off it.
+        # Otherwise assume we've just been passed a form object.
+        form_errors = getattr(f, 'errors', f)
+        if isinstance(form_errors, list):  # Cope with formsets.
+            for e in form_errors:
+                errors.update(e)
+            continue
+        errors.update(dict(form_errors.items()))
+    return errors
 
 
-def handle_500(resource, request, exception):
-    response_class = http.HttpApplicationError
-    if isinstance(exception, (NotFound, ObjectDoesNotExist)):
-        response_class = HttpResponseNotFound
-
-    # Print some nice 500 errors back to the clients if not in debug mode.
-    exc_info = sys.exc_info()
-    tasty_log.error('%s: %s %s\n%s' % (request.path,
-                                       exception.__class__.__name__,
-                                       exception,
-                                       traceback.format_tb(exc_info[2])),
-                    extra={'status_code': 500, 'request': request},
-                    exc_info=exc_info)
-    data = {
-        'error_message': str(exception),
-        'error_code': getattr(exception, 'id',
-                              exception.__class__.__name__),
-        'error_data': getattr(exception, 'data', {})
-    }
-    serialized = resource.serialize(request, data, 'application/json')
-    return response_class(content=serialized,
-                          content_type='application/json; charset=utf-8')
+def form_errors(forms):
+    errors = _collect_form_errors(forms)
+    exc = ParseError()
+    exc.detail = {'detail': errors}
+    raise exc
 
 
-class Marketplace(object):
+def get_region_from_request(request):
+    region = request.GET.get('region')
+    if region and region == 'None':
+        return None
+    return getattr(request, 'REGION', mkt.regions.RESTOFWORLD)
+
+
+class SubRouter(SimpleRouter):
     """
-    A mixin with some general Marketplace stuff.
+    Like SimpleRouter, but with the lookup before the prefix, so that it can be
+    easily used for sub-actions that are children of a main router.
+
+    This is a convenient way of linking one or more viewsets to a parent one
+    without having to set multiple @action and @link manually.
     """
-
-    class Meta(object):
-        serializer = Serializer()
-
-    def _handle_500(self, request, exception):
-        return handle_500(self, request, exception)
-
-    def dispatch(self, request_type, request, **kwargs):
-        # OAuth authentication uses the method in the signature. So we need
-        # to store the original method used to sign the request.
-        request.signed_method = request.method
-        if 'HTTP_X_HTTP_METHOD_OVERRIDE' in request.META:
-            request.method = request.META['HTTP_X_HTTP_METHOD_OVERRIDE']
-
-        log.info('Request: %s' % request.META.get('PATH_INFO'))
-        ct = request.META.get('CONTENT_TYPE')
-        try:
-            return (super(Marketplace, self)
-                    .dispatch(request_type, request, **kwargs))
-
-        except DeserializationError:
-            if ct:
-                error = "Unable to deserialize request body as '%s'" % ct
-            else:
-                error = 'Content-Type header required'
-            raise self.non_form_errors((('__all__', error),),)
-
-        except UnsupportedFormat:
-            msgs = []
-            if ct not in self._meta.serializer.supported_formats:
-                msgs.append(('__all__',
-                             "Unsupported Content-Type header '%s'" % ct))
-
-            accept = request.META.get('HTTP_ACCEPT')
-            if accept and accept != 'application/json':
-                msgs.append(('__all__',
-                             "Unsupported Accept header '%s'" % accept))
-
-            raise self.non_form_errors(msgs)
-
-        except PermissionDenied:
-            # Reraise PermissionDenied as 403, otherwise you get 500.
-            raise http_error(http.HttpForbidden, 'Permission denied.')
-
-        except AlreadyPurchased:
-            raise http_error(HttpConflict, 'Already purchased app.')
-
-    def non_form_errors(self, error_list):
-        """
-        Raises passed field errors as an immediate HttpBadRequest response.
-        Similar to Marketplace.form_errors, except that it allows you to raise
-        form field errors outside of form validation.
-
-        Accepts a list of two-tuples, consisting of a field name and error
-        message.
-
-        Example usage:
-
-        errors = []
-
-        if 'app' in bundle.data:
-            errors.append(('app', 'Cannot update the app of a rating.'))
-
-        if 'user' in bundle.data:
-            errors.append(('user', 'Cannot update the author of a rating.'))
-
-        if errors:
-            raise self.non_form_errors(errors)
-        """
-        errors = defaultdict(list)
-        for e in error_list:
-            errors[e[0]].append(e[1])
-        response = http.HttpBadRequest(json.dumps({'error_message': errors}),
-                                       content_type='application/json')
-        return ImmediateHttpResponse(response=response)
-
-    def form_errors(self, forms):
-        errors = {}
-        if not isinstance(forms, list):
-            forms = [forms]
-        for f in forms:
-            # If we've got form objects, get the error object off it.
-            # Otherwise assume we've just been passed a form object.
-            form_errors = getattr(f, 'errors', f)
-            if isinstance(form_errors, list):  # Cope with formsets.
-                for e in form_errors:
-                    errors.update(e)
-                continue
-            errors.update(dict(form_errors.items()))
-
-        response = http.HttpBadRequest(json.dumps({'error_message': errors}),
-                                       content_type='application/json')
-        return ImmediateHttpResponse(response=response)
-
-    def _auths(self):
-        auths = self._meta.authentication
-        if not isinstance(auths, (list, tuple)):
-            auths = [self._meta.authentication]
-        return auths
-
-    def is_authenticated(self, request):
-        """
-        An override of the tastypie Authentication to accept an iterator
-        of Authentication methods. If so it will go through in order, when one
-        passes, it will use that.
-
-        Any authentication method can still return a HttpResponse to break out
-        of the loop if they desire.
-        """
-        for auth in self._auths():
-            log.info('Trying authentication with %s' % auth.__class__.__name__)
-            auth_result = auth.is_authenticated(request)
-
-            if isinstance(auth_result, http.HttpResponse):
-                raise ImmediateHttpResponse(response=auth_result)
-
-            if auth_result:
-                log.info('Logged in using %s' % auth.__class__.__name__)
-                return
-
-        raise http_error(http.HttpUnauthorized, 'Authentication required.')
-
-    def throttle_check(self, request):
-        """
-        Handles checking if the user should be throttled.
-
-        Mostly a hook, this uses class assigned to ``throttle`` from
-        ``Resource._meta``.
-        """
-        # Never throttle users with Apps:APIUnthrottled.
-        if (settings.API_THROTTLE and
-            not acl.action_allowed(request, 'Apps', 'APIUnthrottled')):
-            identifiers = [a.get_identifier(request) for a in self._auths()]
-
-            # Check to see if they should be throttled.
-            if any(self._meta.throttle.should_be_throttled(identifier)
-                   for identifier in identifiers):
-                # Throttle limit exceeded.
-                raise http_error(HttpTooManyRequests,
-                                 'Throttle limit exceeded.')
-
-    def log_throttled_access(self, request):
-        """
-        Handles the recording of the user's access for throttling purposes.
-
-        Mostly a hook, this uses class assigned to ``throttle`` from
-        ``Resource._meta``.
-        """
-        request_method = request.method.lower()
-        identifiers = [a.get_identifier(request) for a in self._auths()]
-        for identifier in identifiers:
-            self._meta.throttle.accessed(identifier,
-                                         url=request.get_full_path(),
-                                         request_method=request_method)
-
-    def cached_obj_get_list(self, request=None, **kwargs):
-        """Do not interfere with cache machine caching."""
-        return self.obj_get_list(request=request, **kwargs)
-
-    def cached_obj_get(self, request=None, **kwargs):
-        """Do not interfere with cache machine caching."""
-        return self.obj_get(request, **kwargs)
-
-    def is_valid(self, bundle, request=None):
-        """A simple wrapper to return form errors in the format we want."""
-        errors = self._meta.validation.is_valid(bundle, request)
-        if errors:
-            raise self.form_errors(errors)
-
-    def dehydrate_objects(self, objects, request=None):
-        """
-        Dehydrates each object using the full_dehydrate and then
-        returns the data for each object. This is useful for compound
-        results that return sub objects data. If you need request in the
-        dehydration, pass that through (eg: accessing region)
-        """
-        return [self.full_dehydrate(Bundle(obj=o, request=request)).data
-                for o in objects]
-
-
-class MarketplaceResource(Marketplace, Resource):
-    """
-    Use this if you would like to expose something that is *not* a Django
-    model as an API.
-    """
-
-    def get_resource_uri(self, *args, **kw):
-        return ''
-
-
-class MarketplaceModelResource(Marketplace, ModelResource):
-    """Use this if you would like to expose a Django model as an API."""
-
-    def get_resource_uri(self, bundle_or_obj):
-        # Fix until my pull request gets pulled into tastypie.
-        # https://github.com/toastdriven/django-tastypie/pull/490
-        kwargs = {
-            'resource_name': self._meta.resource_name,
-        }
-
-        if isinstance(bundle_or_obj, Bundle):
-            kwargs['pk'] = bundle_or_obj.obj.pk
-        else:
-            kwargs['pk'] = bundle_or_obj.pk
-
-        if self._meta.api_name is not None:
-            kwargs['api_name'] = self._meta.api_name
-
-        return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
-
-    @classmethod
-    def should_skip_field(cls, field):
-        # We don't want to skip translated fields.
-        if isinstance(field, (PurifiedField, TranslatedField)):
-            return False
-
-        return True if getattr(field, 'rel') else False
-
-    def get_object_or_404(self, cls, **filters):
-        """
-        A wrapper around our more familiar get_object_or_404, for when we need
-        to get access to an object that isn't covered by get_obj.
-        """
-        if not filters:
-            raise http_error(http.HttpNotFound, 'Not found.')
-        try:
-            return cls.objects.get(**filters)
-        except (cls.DoesNotExist, cls.MultipleObjectsReturned):
-            raise http_error(http.HttpNotFound, 'Not found.')
-
-    def get_by_resource_or_404(self, request, **kwargs):
-        """
-        A wrapper around the obj_get to just get the object.
-        """
-        try:
-            obj = self.obj_get(request, **kwargs)
-        except ObjectDoesNotExist:
-            raise http_error(http.HttpNotFound, 'Not found.')
-        return obj
-
-    def base_urls(self):
-        """
-        If `slug_lookup` is specified on the Meta of a resource, add
-        in an extra resource that allows lookup by that slug field. This
-        assumes that the slug won't be all numbers. If the slug is numeric, it
-        will hit the pk URL pattern and chaos will ensue.
-        """
-        if not getattr(self._meta, 'slug_lookup', None):
-            return super(MarketplaceModelResource, self).base_urls()
-
-        return super(MarketplaceModelResource, self).base_urls()[:3] + [
-            url(r'^(?P<resource_name>%s)/(?P<pk>\d+)/$' %
-                    self._meta.resource_name,
-                self.wrap_view('dispatch_detail'),
-                name='api_dispatch_detail'),
-            url(r"^(?P<resource_name>%s)/(?P<%s>[^/<>\"']+)/$" %
-                    (self._meta.resource_name, self._meta.slug_lookup),
-                self.wrap_view('dispatch_detail'),
-                name='api_dispatch_detail')
-        ]
-
-
-class GenericObject(dict):
-    """
-    tastypie-friendly subclass of dict that allows direct attribute assignment
-    of dict items. Best used as `object_class` when not using a `ModelResource`
-    subclass.
-    """
-    def __getattr__(self, name):
-        try:
-            return self.__getitem__(name)
-        except KeyError:
-            return None
-
-    def __setattr__(self, name, value):
-        self.__setitem__(name, value)
-
-
-class CORSResource(object):
-    """
-    A mixin to provide CORS support to your API.
-    """
-
-    def method_check(self, request, allowed=None):
-        """
-        This is the first entry point from dispatch and a place to check CORS.
-
-        It will set a value on the request for the middleware to pick up on
-        the response and add in the headers, so that any immediate http
-        responses (which are usually errors) get the headers.
-
-        Optionally, you can specify the methods that will be specifying the
-        `cors_allowed` attribute on the resource meta. Otherwise, it will use
-        the combination of allowed_methods specified on the resource.
-        """
-        request.CORS = getattr(self._meta, 'cors_allowed', None) or allowed
-        return super(CORSResource, self).method_check(request, allowed=allowed)
-
-
-class PotatoCaptchaResource(object):
-    """
-    A mixin adding the fields required by PotatoCaptcha to the resource.
-    """
-    tuber = fields.CharField(attribute='tuber')
-    sprout = fields.CharField(attribute='sprout')
-
-    def remove_potato(self, bundle):
-        for field in ['tuber', 'sprout']:
-            if field in bundle.data:
-                del bundle.data[field]
-        return bundle
-
-    def alter_detail_data_to_serialize(self, request, data):
-        """
-        Remove `sprout` from bundle data before returning serialized object to
-        the consumer.
-        """
-        sup = super(PotatoCaptchaResource, self)
-        bundle = sup.alter_detail_data_to_serialize(request, data)
-        return self.remove_potato(bundle)
-
-
-def check_potatocaptcha(data):
-        if data.get('tuber', False):
-            return Response(json.dumps({'tuber': 'Invalid value'}), 400)
-        if data.get('sprout', None) != 'potato':
-            return Response(json.dumps({'sprout': 'Invalid value'}), 400)
-
-
-class CompatRelatedField(HyperlinkedRelatedField):
-    """
-    Upsell field for connecting Tastypie resources to
-    django-rest-framework instances, this got complicated.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.tastypie = kwargs.pop('tastypie')
-        return super(CompatRelatedField, self).__init__(*args, **kwargs)
-
-    def to_native(self, obj):
-        if getattr(obj, 'pk', None) is None:
-            return
-
-        self.tastypie['pk'] = obj.pk
-        return reverse('api_dispatch_detail', kwargs=self.tastypie)
-
-    def get_object(self, queryset, view_name, view_args, view_kwargs):
-        return queryset.get(pk=view_kwargs['pk'])
-
-
-class CompatToOneField(ToOneField):
-    """
-    Tastypie field to relate a resource to a django-rest-framework view.
-    """
-    def __init__(self, *args, **kwargs):
-        self.rest = kwargs.pop('rest', None)
-        self.extra_fields = kwargs.pop('extra_fields', None)
-        return super(CompatToOneField, self).__init__(*args, **kwargs)
-
-    def dehydrate_related(self, bundle, related_resource):
-        uri = reverse(self.rest + '-detail', kwargs={'pk': bundle.obj.pk})
-        if self.full:
-            raise NotImplementedError
-        elif self.extra_fields:
-            result = {'resource_uri': uri}
-            for field in self.extra_fields:
-                result[field] = getattr(bundle.obj, field)
-            return result
-        else:
-            return uri
-
-    def get_related_resource(self, related_instance):
-        return
-
-
-class AppRouter(SimpleRouter):
     routes = [
         # List route.
         Route(
-            url=r'^{lookup}/{prefix}/$',
+            url=r'^{lookup}/{prefix}{trailing_slash}$',
             mapping={
                 'get': 'list',
                 'post': 'create'
@@ -472,7 +78,7 @@ class AppRouter(SimpleRouter):
         ),
         # Detail route.
         Route(
-            url=r'^{lookup}/{prefix}/$',
+            url=r'^{lookup}/{prefix}{trailing_slash}$',
             mapping={
                 'get': 'retrieve',
                 'put': 'update',
@@ -486,49 +92,105 @@ class AppRouter(SimpleRouter):
     ]
 
 
-class SlugRouter(SimpleRouter):
+class SubRouterWithFormat(SubRouter):
+    """
+    SubRouter that also adds the optional format to generated URL patterns.
 
+    This is similar to DRF's DefaultRouter, except it's a SubRouter and we
+    don't respect the trailing_slash parameter with the URLs containing the
+    format parameter, because that'd make ugly, weird URLs.
+    """
     def get_urls(self):
+        # Keep trailing slash value...
+        trailing_slash = self.trailing_slash
+
+        # Generate base URLs without format.
+        base_urls = super(SubRouterWithFormat, self).get_urls()
+
+        # Generate the same URLs, but forcing to omit the trailing_slash.
+        self.trailing_slash = ''
+        extra_urls = super(SubRouterWithFormat, self).get_urls()
+
+        # Reset trailing slash and add format to our extra URLs.
+        self.trailing_slash = trailing_slash
+        extra_urls = format_suffix_patterns(extra_urls, suffix_required=True)
+
+        # Return the addition of both lists of URLs.
+        return base_urls + extra_urls
+
+
+class MarketplaceView(object):
+    """
+    Base view for DRF views.
+
+    It includes:
+    - An implementation of handle_exception() that goes with our custom
+      exception handler. It stores the request and originating class in the
+      exception before it's handed over the the handler, so that the handler
+      can in turn properly propagate the got_request_exception signal if
+      necessary.
+
+    - A implementation of paginate_queryset() that goes with our custom
+      pagination handler. It does tastypie-like offset pagination instead of
+      the default page mechanism.
+    """
+    pagination_class = CustomPagination
+
+    def handle_exception(self, exc):
+        exc._request = self.request._request
+        exc._klass = self.__class__
+        return super(MarketplaceView, self).handle_exception(exc)
+
+    def paginate_queryset(self, queryset):
+        page = self.request.query_params.get('page')
+        offset = self.request.query_params.get('offset')
+
+        # If 'offset' (tastypie-style pagination) parameter isn't present and
+        # 'page' is, use page numbers instead.
+        if page is not None and offset is None:
+            self._paginator = PageNumberPagination()
+
+        return self.paginator.paginate_queryset(
+            queryset, self.request, view=self)
+
+    def get_region_from_request(self, request):
         """
-        Use the registered viewsets to generate a list of URL patterns.
-
-        We can't use the superclass' implementation of get_urls since
-        we want slug and pk urls for some resources, and it assumes
-        one url per resource.
+        Returns the REGION object for the passed request. If the GET param
+        `region` is `'None'`, return `None`. Otherwise, return `request.REGION`
+        which will have been set by the RegionMiddleware. If somehow we didn't
+        go through the middleware and request.REGION is absent, we fall back to
+        RESTOFWORLD.
         """
-        ret = []
+        return get_region_from_request(request)
 
-        for prefix, viewset, basename in self.registry:
-            routes = self.get_routes(viewset)
 
-            for route in routes:
-                # Only actions which actually exist on the viewset will be
-                # bound.
-                mapping = self.get_method_map(viewset, route.mapping)
-                if not mapping:
-                    continue
+class MultiSerializerViewSetMixin(object):
+    """
+    Allows attaching multiple serializers to a single viewset. A serializer
+    is chosen based on request.GET['serializer'] which is used to look up the
+    appropriate serializer in a serializers_classes map. Useful to not have to
+    create separate endpoints just to use different serializers (e.g.,
+    product-specific serializers, slimmed serializers).
+    """
+    def get_serializer_class(self):
+        """
+        Look for serializer class in self.serializer_classes. It will be looked
+        up using request.GET.serializer, i.e.:
 
-                # Build the url pattern
-                if route.name.endswith('detail'):
-                    slug_field = getattr(viewset, 'slug_lookup', None)
-                    ret.append(self.create_url(prefix, viewset, basename,
-                                               route, mapping, '(?P<pk>\d+)'))
-                    if slug_field:
-                        ret.append(self.create_url(
-                            prefix, viewset, basename, route, mapping,
-                            '(?P<%s>[^/<>"\']+)' % (slug_field,)))
+        class MyViewSet(ViewSet):
+            serializer_class = MySerializer
+            serializer_classes = {
+               'mini': MyMiniSerializer,
+            }
 
-                else:
-                    ret.append(self.create_url(prefix, viewset, basename,
-                                               route, mapping))
-        return ret
-
-    def create_url(self, prefix, viewset, basename, route, mapping, lookup=''):
-        regex = route.url.format(prefix=prefix, lookup=lookup,
-                                 trailing_slash=self.trailing_slash)
-        view = viewset.as_view(mapping, **route.initkwargs)
-        name = route.name.format(basename=basename)
-        return url(regex, view, name=name)
+        If there's no entry for that param then just fallback to the regular
+        get_serializer_class lookup: self.serializer_class.
+        """
+        try:
+            return self.serializer_classes[self.request.GET.get('serializer')]
+        except KeyError:
+            return super(MultiSerializerViewSetMixin,
+                         self).get_serializer_class()
 
 
 class CORSMixin(object):
@@ -536,22 +198,54 @@ class CORSMixin(object):
     Mixin to enable CORS for DRF API.
     """
     def finalize_response(self, request, response, *args, **kwargs):
-        request._request.CORS = self.cors_allowed_methods
+        if not hasattr(request._request, 'CORS'):
+            request._request.CORS = self.cors_allowed_methods
+        if hasattr(self, 'cors_allowed_headers'):
+            request._request.CORS_HEADERS = self.cors_allowed_headers
         return super(CORSMixin, self).finalize_response(
             request, response, *args, **kwargs)
 
 
+def cors_api_view(methods, headers=None):
+    def decorator(view):
+
+        def add_cors(handler):
+            @functools.wraps(handler)
+            def view_with_cors(request, *args, **kw):
+                request.CORS = methods
+                if headers:
+                    request.CORS_HEADERS = headers
+                return handler(request, *args, **kw)
+            return view_with_cors
+
+        # The request.CORS attributes need to be added to the view before
+        # the DRF @api_view handler executes.
+
+        return add_cors(api_view(methods)(view))
+
+    return decorator
+
+
 class SlugOrIdMixin(object):
     """
-    Because the `SlugRouter` is overkill. If the name of your
-    `slug` is called something else, override `self.slug_field`.
+    Mixin that allows you to pass slugs instead of pk in your URLs. Use with
+    any router or urlpattern that relies on a relaxed regexp for pks, like
+    (?P<pk>[^/]+) (DRF does this by default).
+
+    If the name of your `slug` is called something else, override
+    `self.slug_field`.
     """
 
-    def get_object(self, queryset=None):
-        if 'pk' in self.kwargs and not self.kwargs['pk'].isdigit():
+    def get_object(self):
+        pk = self.kwargs.get('pk')
+        if pk and not pk.isdigit():
             # If the `pk` contains anything other than a digit, it's a `slug`.
-            self.kwargs.update(pk=None, slug=self.kwargs['pk'])
-        return super(SlugOrIdMixin, self).get_object(queryset=queryset)
+            self.lookup_field = getattr(self, 'slug_field', 'slug')
+            self.kwargs.update({
+                'pk': None,
+                self.lookup_field: self.kwargs['pk']
+            })
+        return super(SlugOrIdMixin, self).get_object()
 
 
 class SilentListModelMixin(ListModelMixin):
@@ -568,21 +262,3 @@ class SilentListModelMixin(ListModelMixin):
         if res.status_code == 404:
             return Response([])
         return res
-
-
-class AppViewSet(GenericViewSet):
-
-    def initialize_request(self, request, *args, **kwargs):
-        """
-        Pass the value in the URL through to the form defined on the
-        ViewSet, which will populate the app property with the app object.
-
-        You must define a form which will take an app object.
-        """
-        request = (super(AppViewSet, self)
-                   .initialize_request(request, *args, **kwargs))
-        self.app = None
-        form = self.form({'app': kwargs.get('pk')})
-        if form.is_valid():
-            self.app = form.cleaned_data['app']
-        return request

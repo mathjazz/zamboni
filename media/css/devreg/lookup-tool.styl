@@ -102,7 +102,34 @@ h1 {
                 font-size: 11px;
                 border-radius: 5px;
                 border: 1px solid $light-gray;
+
+                &.status-public,
+                &.status-private,
+                &.status-unlisted {
+                    background-color: $green;
+                    color: $white;
+                }
+                &.status-rejected,
+                &.status-banned,
+                &.status-blocked {
+                    background-color: $red;
+                    color: $white;
+                }
+                &.status-incomplete {
+                    background-color: $gray;
+                    color: $white;
+                }
+                &.status-pending {
+                    background-color: $notice-yellow;
+                    color: $black;
+                }
+                &.status-deleted,
+                &.status-disabled {
+                    background-color: $black;
+                    color: $white;
+                }
             }
+
             .email {
                 float: right;
             }
@@ -225,6 +252,14 @@ h1 {
     }
     .column-c {
         width: 315px;
+    }
+    .column-form {
+        width: 500px;
+
+        input[type="text"],
+        input[type="url"] {
+            width: 400px;
+        }
     }
     .pretty-list div {
         margin: 2px 0;
@@ -365,6 +400,9 @@ h1 {
     label {
         display: block;
     }
+    label.inline {
+        display: inline;
+    }
     button {
         float: right;
     }
@@ -381,7 +419,7 @@ dd {
     li + li {
         margin-top: 10px;
     }
-    b {
+    b.dotted {
         &:after {
             color: #aaa;
             content: "\00a0\00a0•\00a0";
@@ -418,4 +456,52 @@ dd {
 
 a:not([href]) {
     cursor: pointer;
+}
+
+#transaction-lookup {
+    dt {
+        margin: 10px 0px 5px;
+    }
+}
+
+.promo-img-form {
+    .helptext {
+        margin-right: 5px;
+    }
+}
+
+#promo-img-preview {
+    display: block;
+    margin-top: 6px;
+    max-width: 320px;
+}
+
+#id_promo_img {
+    background: $blue;
+    border-radius: 5px;
+    color: $white;
+    cursor: pointer;
+    display: block;
+    margin: 3px 0 5px;
+    padding: 10px;
+
+    &:hover {
+        background: lighten($blue, 10%);
+    }
+    + br {
+        display: none;
+    }
+}
+
+.group-memberships {
+    tr {
+        border-top: 1px dotted $border-taupe;
+        margin-top: 1.5em;
+    }
+    button {
+        display: inline-block;
+        margin: 6px 2px 2px;
+        max-width: 2em;
+        min-height: 2em;
+    }
 }

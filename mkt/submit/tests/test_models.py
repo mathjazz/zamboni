@@ -1,13 +1,13 @@
 from nose.tools import eq_
 
-import amo
-import amo.tests
+from mkt.site.fixtures import fixture
+from mkt.site.tests import TestCase
 from mkt.submit.models import AppSubmissionChecklist
 from mkt.webapps.models import Webapp
 
 
-class TestAppSubmissionChecklist(amo.tests.TestCase):
-    fixtures = ['webapps/337141-steamcube']
+class TestAppSubmissionChecklist(TestCase):
+    fixtures = fixture('webapp_337141')
 
     def setUp(self):
         self.webapp = Webapp.objects.get(id=337141)

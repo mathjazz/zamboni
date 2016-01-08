@@ -6,12 +6,15 @@ Site
 
 Configuration about the site.
 
+
+.. _categories:
+
 Categories
 ==========
 
 .. note:: The URL for this API will be moving.
 
-.. http:get:: /api/v1/apps/category/
+.. http:get:: /api/v2/apps/category/
 
     Returns a list of categories available on the marketplace.
 
@@ -30,7 +33,7 @@ Categories
 
 .. _category-response-label:
 
-.. http:get:: /api/v1/apps/category/(int:id)/
+.. http:get:: /api/v2/apps/category/(string:slug)/
 
     Returns a category.
 
@@ -39,16 +42,17 @@ Categories
     .. code-block:: json
 
         {
-            "id": 1,
             "name": "Games",
-            "resource_uri": "/api/v1/apps/category/1/",
             "slug": "games"
         }
+
+
+.. _carriers:
 
 Carriers
 ========
 
-.. http:get:: /api/v1/services/carrier/
+.. http:get:: /api/v2/services/carrier/
 
     Returns a list of possible carriers for apps.
 
@@ -63,7 +67,7 @@ Carriers
 
 .. _carrier-response-label:
 
-.. http:get:: /api/v1/services/carrier/<slug>/
+.. http:get:: /api/v2/services/carrier/<slug>/
 
     Returns a carrier.
 
@@ -78,7 +82,7 @@ Carriers
         {
             "id": "1",
             "name": "PhoneORama",
-            "resource_uri": "/api/v1/services/carrier/phoneorama/",
+            "resource_uri": "/api/v2/services/carrier/phoneorama/",
             "slug": "phoneorama"
         }
 
@@ -87,7 +91,7 @@ Carriers
 Regions
 =======
 
-.. http:get:: /api/v1/services/region/
+.. http:get:: /api/v2/services/region/
 
     Returns a list of possible regions for apps.
 
@@ -102,7 +106,7 @@ Regions
 
 .. _region-response-label:
 
-.. http:get:: /api/v1/services/region/<slug>/
+.. http:get:: /api/v2/services/region/<slug>/
 
     Returns a region.
 
@@ -117,16 +121,13 @@ Regions
         {
             "id": "1",
             "name": "Appistan",
-            "resource_uri": "/api/v1/services/region/ap/",
             "slug": "ap",
-            "default_currency": "USD",
-            "default_language": "en-AP",
         }
 
 Configuration
 =============
 
-.. http:get:: /api/v1/services/config/site/
+.. http:get:: /api/v2/services/config/site/
 
     Returns information about how the marketplace is configured. Not all
     settings and configuration options are returned - only a subset. This
@@ -135,35 +136,92 @@ Configuration
 
     **Response**
 
+    :param fxa: an object containing Firefox Accounts auth information if the
+                Firefox Accounts waffle switch is active.
+    :type fxa: object
     :param version: the git commit number of the deployment.
     :type version: string|null
     :param settings: a subset of useful site settings.
     :type settings: object
-    :param flags: a subset of useful runtime configuration settings.
-    :type flags: object
+    :param waffle: an object containing a list waffle flags and switches.
+    :type waffle: object
 
     Example:
 
     .. code-block:: json
 
         {
-            "flags": {
-                "allow-b2g-paid-submission": true,
-                "allow-refund": true,
-                "in-app-sandbox": false
+            "fxa": {
+                "fxa_auth_state": "aaabbbccctoken",
+                "fxa_auth_url": "https://somelongauthurl.com?stuff=stuff"
             },
-            "resource_uri": "",
+            "waffle": {
+                "switches": {
+                    "some-switch": {
+                        "name": "some-switch",
+                        "created": "2013-12-17T15:38:10",
+                        "modified": "2013-12-17T15:38:10",
+                        "note": "",
+                        "active": true,
+                        "id": 17
+                    }
+                },
+                "flags": {
+                    "some-flag": {
+                        "note": "",
+                        "users": [],
+                        "testing": false,
+                        "everyone": true,
+                        "groups": [],
+                        "rollout": false,
+                        "id": 1,
+                        "staff": false,
+                        "superusers": true,
+                        "authenticated": false,
+                        "name": "a-flag",
+                        "created": "2013-12-19T10:21:56",
+                        "percent": null,
+                        "modified": "2013-12-19T10:21:56",
+                        "languages": ""
+                   }
+                }
+            }
             "settings": {
                 "SITE_URL": "http://z.mozilla.dev"
             },
             "version": null
         }
 
+    **?serializer=commonplace**
+
+    If you pass *commonplace* as a GET parameter for *serializer*, the switches
+    response will be simply a list of names of the active switches.
+
+    :param switches: a list of waffle switches
+    :type switches: array
+
+    Example:
+
+    .. code-block:: json
+
+        {
+            ...
+
+            "waffle": {
+                "switches": ["user-curation", "feed"]
+            },
+
+            ...
+        }
+
+    For full information about waffle flags and switches, please see the waffle
+    documentation: http://waffle.readthedocs.org/en/latest/types.html
+
 
 Price tiers
 ===========
 
-.. http:get:: /api/v1/services/price-tier/
+.. http:get:: /api/v2/services/price-tier/
 
     Lists price tiers.
 
@@ -174,11 +232,12 @@ Price tiers
 
 .. _tier-response-label:
 
-.. http:get:: /api/v1/services/price-tier/(int:id)/
+.. http:get:: /api/v2/services/price-tier/(int:id)/
 
     Returns a price tier.
 
     **Response**
+
     :param resource_uri: The URI for this tier.
     :type resource_uri: string
     :param active: Whether the price tier is active.
@@ -189,13 +248,14 @@ Price tiers
     :type method: string; one of "operator", "card", or "operator+card".
 
 
-.. http:post:: /api/v1/services/price-tier/
+.. http:post:: /api/v2/services/price-tier/
 
     Create a price tier.
 
     .. note:: Requires admin account.
 
     **Request**
+
     :param active: Whether the price tier is active.
     :type active: boolean
     :param name: The price tier name.
@@ -206,13 +266,14 @@ Price tiers
     :type price: decimal string
 
 
-.. http:put:: /api/v1/services/price-tier/(int:id)/
+.. http:put:: /api/v2/services/price-tier/(int:id)/
 
     Update a price tier.
 
     .. note:: Requires admin account.
 
     **Request**
+
     :param active: Whether the price tier is active.
     :type active: boolean
     :param name: The price tier name.
@@ -223,32 +284,35 @@ Price tiers
     :type price: decimal string
 
 
-.. http:delete:: /api/v1/services/price-tier/(int:id)/
+.. http:delete:: /api/v2/services/price-tier/(int:id)/
 
     Delete a price tier and all associated prices.
 
     .. note:: Requires admin account.
 
 
-.. http:get:: /api/v1/services/price-currency/
+.. http:get:: /api/v2/services/price-currency/
 
    Lists prices in various currencies.
 
    **Request**
+
    :param tier: Price tier ID to select currencies for.
    :type tier: number
 
    **Response**
+
    :param objects: A listing of :ref:`prices <price-response-label>`.
 
 
 .. _price-response-label:
 
-.. http:get:: /api/v1/services/price-currency/(int:id)/
+.. http:get:: /api/v2/services/price-currency/(int:id)/
 
     Fetch a single price.
 
     **Response**
+
     :param id: Identifier for this price.
     :type id: number
     :param tier: ID of tier this price belongs to.
@@ -265,13 +329,14 @@ Price tiers
     :type method: string; one of "operator", "card", or "operator+card".
 
 
-.. http:post:: /api/v1/services/price-currency/
+.. http:post:: /api/v2/services/price-currency/
 
     Create a price.
 
     .. note:: Requires admin account.
 
     **Request**
+
     :param tier: ID of tier this price belongs to.
     :type tier: number
     :param currency: Code for this price's currency.
@@ -286,13 +351,14 @@ Price tiers
     :type method: string; one of "operator", "card", or "operator+card".
 
 
-.. http:put:: /api/v1/services/price-currency/(int:id)/
+.. http:put:: /api/v2/services/price-currency/(int:id)/
 
     Update a price.
 
     .. note:: requires an admin account.
 
     **Request**
+
     :param tier: ID of tier this price belongs to.
     :type tier: number
     :param currency: Code for this price's currency.
@@ -307,7 +373,7 @@ Price tiers
     :type method: string; one of "operator", "card", or "operator+card".
 
 
-.. http:delete:: /api/v1/services/price-currency/(int:id)/
+.. http:delete:: /api/v2/services/price-currency/(int:id)/
 
     Delete a price.
 

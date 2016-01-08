@@ -3,16 +3,16 @@ from optparse import make_option
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand
 
-import amo
-from files.models import File
+import mkt
+from mkt.files.models import File
 
 HELP = 'List all Marketplace packaged apps'
 
 
-statuses = {'pending': amo.STATUS_PENDING,
-            'public': amo.STATUS_PUBLIC,
-            'approved': amo.STATUS_PUBLIC_WAITING,
-            'rejected': amo.STATUS_DISABLED}
+statuses = {'pending': mkt.STATUS_PENDING,
+            'public': mkt.STATUS_PUBLIC,
+            'approved': mkt.STATUS_APPROVED,
+            'rejected': mkt.STATUS_DISABLED}
 
 
 class Command(BaseCommand):
@@ -32,8 +32,7 @@ class Command(BaseCommand):
     help = HELP
 
     def handle(self, *args, **kwargs):
-        files = File.objects.filter(version__addon__type=amo.ADDON_WEBAPP,
-                                    version__addon__is_packaged=True)
+        files = File.objects.filter(version__addon__is_packaged=True)
         if kwargs.get('status'):
             files = files.filter(status=statuses[kwargs['status']])
 

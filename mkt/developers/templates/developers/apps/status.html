@@ -2,9 +2,9 @@
 {% from 'developers/includes/macros.html' import queue_position with context %}
 
 {% if addon.is_packaged %}
-  {% set title = _('Manage Status & Versions') %}
+  {% set title = _('Status & Versions') %}
 {% else %}
-  {% set title = _('Manage Status') %}
+  {% set title = _('Status') %}
 {% endif %}
 {% block title %}{{ hub_page_title(title, addon) }}{% endblock %}
 
@@ -18,254 +18,337 @@
     <h1>{{ title }}</h1>
   </header>
   <section id="edit-addon" class="primary devhub-form manage">
-    <div class="island" id="version-status" data-status="{{ addon.status }}">
-      <h2>{{ _('Current Status') }}</h2>
-      <div class="status-info">
-        {% if addon.disabled_by_user and addon.status != amo.STATUS_DISABLED %}
-          {{ status(_('You have <b>delisted</b> this app.')|safe) }}
-        {% elif addon.status == amo.STATUS_NULL %}
-          {% if addon.is_premium() and addon.is_complete()[0] %}
-            {{ status(_('This app is <b>incomplete</b> because it is missing payment information.')) }}
-            <a href="{{ addon.get_dev_url('payments') }}">
-              {{- _('Set Up Payments') -}}
-            </a>
-          {% else %}
-            {{ status(_('This app is <b>incomplete</b>.')|safe) }}
-            <a href="{{ url('submit.app.resume', addon.app_slug) }}">
-              {{- _('Please complete your app.') -}}
-            </a>
-          {% endif %}
-        {% elif addon.status == amo.STATUS_PENDING %}
-          <p>{{ status(_('This app is <b>pending review</b> by a Firefox Marketplace reviewer.')|safe) }}</p>
-          {{ queue_position(addon, 'p') }}
-          <p>{{ _('You will receive an email when the review is complete.') }}</p>
-        {% elif addon.status == amo.STATUS_PUBLIC %}
-          {{ status(_('This app is <b>public</b>.')|safe) }}
-        {% elif addon.status == amo.STATUS_DISABLED %}
-          {{ status(_('This app has been <b>disabled by Mozilla</b>.')|safe) }}
-          {% trans email=emaillink(settings.MKT_REVIEWERS_EMAIL) %}
-            Your app was disabled by a site administrator. If you have any
-            questions, please email {{ email }}.
-          {% endtrans %}
-        {% elif addon.status == amo.STATUS_BLOCKED %}
-          {{ status(_('Your app has been <b>blocked by Mozilla</b>.')|safe) }}
-          {% trans email=emaillink(settings.MKT_REVIEWERS_EMAIL) %}
-            Your app was blocked by a site administrator. If you have any
-            questions, please email {{ email }}.
-          {% endtrans %}
-        {% elif addon.status == amo.STATUS_REJECTED %}
-          {{ status(_('This app has been <b>rejected</b> by a Firefox Marketplace reviewer.')|safe) }}
-        {% elif addon.status == amo.STATUS_PUBLIC_WAITING %}
-          {{ status(_('Your app has been <b>approved but is not public</b>.')|safe) }}
-          {{ _('It is awaiting your approval to make public.') }}
-        {% endif %}
-        {% if not (addon.is_disabled or addon.is_incomplete()) %}
-          <p><a href="https://developer.mozilla.org/en-US/docs/Apps/Marketplace_Review"
-             target="_blank">{{ _('Learn more') }}</a></p>
-        {% endif %}
-        {% if addon.status == amo.STATUS_REJECTED %}
-            {% if rejection %}
-              <div class="island swagger" id="rejection">
-                <h3>
-                  {% trans reviewer=rejection.user.name %}
-                    Reviewed by <b>{{ reviewer }}</b>
-                  {% endtrans %}
-                  <time datetime="{{ rejection.created|isotime }}"
-                        title="{{ rejection.created|babel_datetime }}">
-                    ({{ rejection.created|timesince }})</time>
-                </h3>
-                <blockquote>
-                  {{ rejection.details.comments }}
-                </blockquote>
-              </div>
-              <p>
-                {% if addon.is_packaged %}
-                  {% trans resubmit_url='#upload-new-version' %}
-                    Once you have addressed these concerns, you may <a href="{{ resubmit_url }}">resubmit your
-                    app below</a>.
-                  {% endtrans %}
-                {% else %}
-                  {% trans %}
-                    Once you have addressed these concerns, you may resubmit your
-                    app below.
-                  {% endtrans %}
-                {% endif %}
-              </p>
+    <h2>{{ _('Current Status') }}</h2>
+
+    <section>
+      <div class="island" id="version-status" data-status="{{ addon.status }}">
+        <div class="status-info">
+
+          {# Show important app status changes regardless of packaged or hosted. #}
+          {% if addon.disabled_by_user and addon.status != mkt.STATUS_DISABLED %}
+            {{ status(_('You have <b>delisted</b> this app.')) }}
+
+          {% elif addon.status == mkt.STATUS_NULL %}
+            {# Links to complete app submission. #}
+            {{ status(_('This app is <b>incomplete</b>.')) }}
+            {% if next_step %}
+              {# L10n: `next_step_name` is a plural noun, the title of the page of the next step of the submission process (e.g. 'Payments' or 'Content Ratings'). #}
+              {%- trans next_url=next_step['url'], next_step_name=next_step['name'] %}
+                You must set up <a href="{{ next_url }}">{{ next_step_name }}</a> before your app can be reviewed or published.
+              {% endtrans %}
             {% endif %}
-            {% if not addon.is_packaged %}
+
+          {% elif addon.status == mkt.STATUS_DISABLED %}
+            {% if addon.iarc_purged %}
+              {{ status(_('This app has been <b>disabled by Mozilla</b>.')) }}
+              {% trans ratings_url=addon.get_dev_url('ratings') %}
+                Your app was disabled because it is missing content ratings. It will
+                automatically be re-enabled after
+                <a href="{{ ratings_url }}">obtaining content ratings</a>.
+              {% endtrans %}
+            {% else %}
+              {{ status(_('This app has been <b>banned on Marketplace</b>.')) }}
+              {% trans support_url=settings.SUPPORT_GROUP %}
+                Your app was banned by a site administrator. If you have any
+                questions, please <a href="{{ support_url }}"> contact us</a>.
+              {% endtrans %}
+            {% endif %}
+
+          {% elif addon.status == mkt.STATUS_BLOCKED %}
+            {{ status(_('Your app has been <b>blocked by Mozilla</b>.')) }}
+            {% trans support_url=settings.SUPPORT_GROUP %}
+              Your app was blocked by a site administrator. If you have any
+              questions, please <a href="{{ support_url }}"> contact us</a>.
+            {% endtrans %}
+
+          {% elif addon.status == mkt.STATUS_REJECTED %}
+            {{ status(_('This app has been <b>rejected</b> by a Firefox Marketplace reviewer.')) }}
+
+          {% endif %}
+
+          {% if not addon.disabled_by_user %}
+
+            {# Showing version information for packaged apps in approved statuses. #}
+            {% if addon.is_packaged and addon.status in mkt.WEBAPPS_APPROVED_STATUSES %}
+              {# Display some extra information about the status of the versions. #}
+              {% if addon.current_version %}
+                {% set file_status = addon.current_version.all_files[0].status %}
+                <p>
+                  {# L10n: {0} is an app version string. {1} is a file status like 'approved'. #}
+                  {{ _('Version <b>{0}</b> of your app is <b>{1}</b> and <b>Active</b>')|fe(addon.current_version.version, mkt.STATUS_FILE_CHOICES[file_status]) }}.
+                </p>
+              {% endif %}
+              {% if addon.current_version and addon.latest_version != addon.current_version %}
+                {% set file_status = addon.latest_version.all_files[0].status %}
+                {# L10n: {0} is an app version string. {1} is a file status like 'approved'. #}
+                <p>
+                  {# L10n: {0} is an app version string. {1} is a file status like 'approved'. #}
+                  {{ _('Version <b>{0}</b> of your app is <b>{1}</b>')|fe(addon.latest_version.version, mkt.STATUS_FILE_CHOICES[file_status]) }}.
+                </p>
+                {% if file_status == mkt.STATUS_PENDING %}{{ queue_position(addon, 'p') }}{% endif %}
+              {% endif %}
+            {% endif %}
+
+            {% if addon.status == mkt.STATUS_PENDING %}
+              <p>{{ status(_('This app is <b>pending review</b> by a Firefox Marketplace reviewer.')) }}</p>
+              {{ queue_position(addon, 'p') }}
+              <p>{{ _('You will receive an email when the review is complete.') }}</p>
+
+            {% elif addon.status == mkt.STATUS_PUBLIC and not addon.is_packaged %}
+              <p>
+                {{ status(_('This app is <b>published</b>.')) }}
+              </p>
+
+            {% elif addon.status == mkt.STATUS_UNLISTED %}
+              {% if not addon.is_packaged %}
+                {{ status(_('Your app has been <b>approved</b> and is currently <b>unlisted</b>.')) }}
+              {% endif %}
+              <p>
+                {% trans app_url=addon.get_detail_url()|absolutify %}
+                  Only those with the following URL can view and install this app:<br>
+                  <a href="{{ app_url }}">{{ app_url }}</a>.
+                {% endtrans %}
+              </p>
+
+            {% elif addon.status == mkt.STATUS_APPROVED %}
+              {% if not addon.is_packaged %}
+                {{ status(_('Your app has been <b>approved</b> and is currently only visible to team members.')) }}
+              {% endif %}
+              <p>
+                {% trans app_url=addon.get_detail_url()|absolutify %}
+                  Only <b>team members</b> with the following URL can view and install this app:<br>
+                  <a href="{{ app_url }}">{{ app_url }}</a>.
+                {% endtrans %}
+              </p>
+
+            {% endif %}
+
+            {% if addon.status not in mkt.WEBAPPS_APPROVED_STATUSES %}
+              <p><a href="https://developer.mozilla.org/en-US/docs/Apps/Marketplace_Review"
+                 target="_blank">{{ _('Learn about Review Criteria for apps') }}</a></p>
+            {% endif %}
+
+            {# If app is in an approved status, show the app visibility form. #}
+            {% if addon.status in mkt.WEBAPPS_APPROVED_STATUSES %}
               <form method="post">
+                {{ form_field(publish_form.publish_type) }}
+                {{ form_field(publish_form.limited, cls='field-limited') }}
+                {{ publish_form.publish_type.errors }}
+                <p>
+                  <button type="submit" name="publish-app">{{ _('Update App Visibility') }}</button>
+                </p>
                 {{ csrf() }}
-                {{ form_field(form.notes, opt=True) }}
-                <p><button type="submit" name="resubmit-app">{{ _('Resubmit App') }}</button></p>
               </form>
             {% endif %}
-        {% endif %}
-      </div>
-      {% if addon.status == amo.STATUS_PUBLIC_WAITING %}
-        <form method="post" action="{{ addon.get_dev_url('publicise') }}">
-          {{ csrf() }}
-          <p class="listing-footer"><button type="submit">{{ _('Make App public') }}</button></p>
-        </form>
-      {% endif %}
-    </div>
 
-    {% if waffle.switch('preload-apps') %}
-      <div id="preload" class="version island c">
-        <h2>{{ _('Pre-Installed App Status') }}</h2>
-        <a class="help" href="{{ addon.get_dev_url('preload_home') }}"></a>
-        <p>
-          {% if test_plan %}
-            {% trans last_submission=test_plan.last_submission|datetime %}
-              <strong class="submitted">Application Submitted</strong> on {{ last_submission }}
-            {% endtrans %}
-          {% else %}
-            <strong class="not-submitted">{{ _('Not Submitted') }}</strong>
+            {% if addon.status == mkt.STATUS_REJECTED %}
+              {% if rejection %}
+                <div class="island swagger" id="rejection">
+                  <h3>
+                    {% trans reviewer=rejection.user.name %}
+                      Reviewed by <b>{{ reviewer }}</b>
+                    {% endtrans %}
+                    <time datetime="{{ rejection.created|isotime }}"
+                          title="{{ rejection.created|babel_datetime }}">
+                      ({{ rejection.created|timesince }})</time>
+                  </h3>
+                  <blockquote>
+                    {{ rejection.details.comments }}
+                  </blockquote>
+                </div>
+                <p>
+                  {% if addon.is_packaged %}
+                    {% trans resubmit_url='#upload-new-version' %}
+                      Once you have addressed these concerns, you may <a href="{{ resubmit_url }}">resubmit your
+                      app below</a>.
+                    {% endtrans %}
+                  {% else %}
+                    {% trans %}
+                      Once you have addressed these concerns, you may resubmit your
+                      app below.
+                    {% endtrans %}
+                  {% endif %}
+                </p>
+              {% endif %}
+              {% if not addon.is_packaged and addon.is_rated() %}
+                <form method="post">
+                  {{ csrf() }}
+                  {{ form_field(appeal_form.notes, opt=True) }}
+                  <p><button type="submit" name="resubmit-app">{{ _('Resubmit App') }}</button></p>
+                </form>
+              {% elif not addon.is_rated() %}
+                {% trans ratings_url=addon.get_dev_url('ratings') %}
+                  You must <a href="{{ ratings_url }}">obtain content ratings</a>
+                  before resubmitting your app.
+                {% endtrans %}
+              {% endif %}
+            {% endif %}
           {% endif %}
-
-          {% if outdated_test_plan %}
-            <span class="outdated">{{ _('New version of the test plan available') }}</span>
-          {% endif %}
-        </p>
-        {% if test_plan %}
-          <p><a class="test-plan-download" href="{{ test_plan.preload_test_plan_url }}" download>
-            {{ _('View your most recently submitted test plan') }}</a></p>
-        {% endif %}
-        <p class="listing-footer">
-          {% set next_url_suffix = '_home' %}
-          {% set btn_txt = _('Learn how to get your app pre-installed on FirefoxOS devices') %}
-          {% if test_plan %}
-            {% set next_url_suffix = '_submit' %}
-            {% set btn_txt = _('Update your test plan') %}
-          {% endif %}
-          <a class="button" href="{{ addon.get_dev_url('preload' + next_url_suffix) }}">
-            {{ btn_txt }}
-          </a>
-       </p>
+        </div>
       </div>
-    {% endif %}
-
-    {% if check_addon_ownership(request, addon, dev=True) %}
-      {% set is_disabled = addon.disabled_by_user and addon.status != amo.STATUS_DISABLED %}
-      <div class="island c">
-        <h2>{{ _('List App') if is_disabled else _('Delist App') }}</h2>
-        <p>
-          {% if is_disabled %}
-            {% trans %}
-              Your app's listing is disabled and will not appear in the Firefox
-              Marketplace. You may re-list it at any time.
-            {% endtrans %}
-          {% else %}
-            {% trans %}
-              Delisting your app will prevent it from appearing anywhere in the
-              Marketplace.
-            {% endtrans %}
-          {% endif %}
-        </p>
-        <p class="listing-footer">
-          {% if is_disabled %}
-            <a href="{{ addon.get_dev_url('enable') }}" class="button" id="enable-addon">
-              {{ _('List App') }}</a>
-          {% elif not addon.is_disabled %}
-            <a href="#" class="button" id="disable-addon">
-              {{ _('Delist App') }}</a>
-          {% endif %}
-        </p>
-      </div>
-    {% endif %}
-
-    {% if check_addon_ownership(request, addon) and addon.can_be_deleted() %}
-      <div class="island c">
-        <h2>{{ _('Delete App') }}</h2>
-        <p>
-          {% trans %}
-          Deleting your app will permanently delete it from the site. <strong>There is no going back.</strong>
-          {% endtrans %}
-        </p>
-        <p class="listing-footer">
-          <a href="#" class="button bad delete-button" id="delete-addon">
-            {{ _('Delete App') }}</a>
-        </p>
-      </div>
-    {% endif %}
+    </section>
 
     {% if addon.is_packaged %}
       {% set versions = addon.versions.all() %}
       {% if versions %}
         <h2>{{ _('Packaged Versions') }}</h2>
-        <div class="island c">
-          <table id="version-list">
-            <thead>
-              <tr>
-                <th></th>
-                <th>{{ _('Status') }} </th>
-                <th class="date">{{ _('Submission date') }}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for version in versions %}
-                <tr{% if version == addon.current_version %} class="current"{% endif %}>
-                  <td><h4><a href="{{ addon.get_dev_url('versions.edit', [version.pk]) }}">{{ version.version }}</a></h4></td>
-                  <td>
-                    {% if addon.disabled_by_user %}
-                      <span class="{{ mkt_file_status_class(addon, version) }}"><b>{{ _('Disabled') }}</b></span>
-                    {% else %}
-                      <span class="{{ mkt_file_status_class(addon, version) }}"><b>{{ version.status|join(', ') }}</b></span>
-                    {% endif %}
-                  </td>
-                  <td class="date" title="{{ version.created|isotime }}">{{ version.created|datetime }}</td>
-                  <td>
-                    {% if version.all_files[0].status != amo.STATUS_BLOCKED %}
-                      <div class="buttons">
-                        <a href="{{ version.all_files[0].get_url_path('') }}" class="download">{{ _('Download') }}</a>
-                        {% if version.all_files[0].status == amo.STATUS_PUBLIC_WAITING %}
-                          <form method="post" action="{{ addon.get_dev_url('versions.publicise') }}">
-                            {{ csrf() }}
-                            <input type="hidden" name="version_id" value="{{ version.id }}">
-                            <button type="submit">{{ _('Publish') }}</button>
-                          </form>
-                        {% endif %}
-                        <a href="#" class="button bad delete-button delete-version" data-version="{{ version.id }}">{{ _('Delete') }}</a>
-                      </div>
-                    {% endif %}
-                  </td>
+
+        <section>
+          <div class="island c">
+            <table id="version-list">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>{{ _('Status') }} </th>
+                  <th class="date">{{ _('Submission date') }}</th>
+                  <th></th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {% for version in versions %}
+                  <tr{% if version == addon.current_version %} class="current"{% endif %}>
+                    <td><h4><a href="{{ addon.get_dev_url('versions.edit', [version.pk]) }}">{{ version.version }}</a></h4></td>
+                    <td>
+                      {% if addon.disabled_by_user %}
+                        <span class="{{ mkt_file_status_class(addon, version) }}"><b>{{ _('Disabled') }}</b></span>
+                      {% else %}
+                        <span class="{{ mkt_file_status_class(addon, version) }}">
+                          {% if version == addon.current_version %}
+                            <b>{{ version.status|join(', ') }} | Active</b>
+                          {% else %}
+                            <b>{{ version.status|join(', ') }}</b>
+                          {% endif %}
+                        </span>
+                      {% endif %}
+                    </td>
+                    <td class="date" title="{{ version.created|isotime }}">{{ version.created|babel_date('long') }}</td>
+                    <td>
+                      {% if version.all_files[0].status != mkt.STATUS_BLOCKED %}
+                        <div class="buttons">
+                          <a href="{{ version.all_files[0].get_url_path('') }}" class="download">{{ _('Download') }}</a>
+                          {% if version.all_files[0].status == mkt.STATUS_APPROVED %}
+                            <form method="post" action="{{ addon.get_dev_url('versions.publicise') }}">
+                              {{ csrf() }}
+                              <input type="hidden" name="version_id" value="{{ version.id }}">
+                              <button type="submit">{{ _('Make Active') }}</button>
+                            </form>
+                          {% endif %}
+                          <a href="#" class="button bad delete-button delete-version" data-version="{{ version.id }}">{{ _('Delete') }}</a>
+                        </div>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
       {% endif %}
 
       <h2 id="upload-new-version">{{ _('Upload New Version') }}</h2>
-      <div class="island">
-        <form method="post" id="upload-webapp" class="item">
-          {{ csrf() }}
-          <p>
-          {% trans %}
-            Upload a new version of this packaged app. New versions must be
-            reviewed before they will be available for install.
-          {% endtrans %}
-          </p>
-          <div id="upload-file">
-            <div class="hidden">{{ upload_form.upload }}</div>
-            <input type="file" id="upload-app" data-upload-url="{{ url('mkt.developers.upload_for_addon', addon.app_slug) }}">
-            {% if upload_form.non_field_errors() or upload_form.upload.errors %}
-              <div class="post-validation-errors">
-                {{ upload_form.non_field_errors() }}
-                {{ upload_form.upload.errors }}
+      <section>
+        <div class="island">
+          <form method="post" id="upload-webapp" class="item">
+            <p>
+              {% trans %}
+                Upload a new version of this packaged app. New versions must be
+                reviewed before they will be available for installation.
+              {% endtrans %}
+            </p>
+            <p>
+              {% trans ratings_url=addon.get_dev_url('ratings') %}
+                Remember to update the app's <a href="{{ ratings_url }}">content ratings</a>
+                if a large portion of the app's content has changed.
+              {% endtrans %}
+            </p>
+            <div id="upload-file">
+              <div class="hidden">{{ upload_form.upload }}</div>
+              <input type="file" id="upload-app" data-upload-url="{{ url('mkt.developers.upload_for_addon', addon.app_slug) }}">
+              {% if upload_form.non_field_errors() or upload_form.upload.errors %}
+                <div class="post-validation-errors">
+                  {{ upload_form.non_field_errors() }}
+                  {{ upload_form.upload.errors }}
+                </div>
+              {% endif %}
+              <div class="submission-buttons addon-submission-field">
+                <button class="prominent upload-file-submit" disabled id="submit-upload-file-finish" type="submit" name="upload-version">
+                  {{ _('Continue') }}
+                </button>
               </div>
-            {% endif %}
-            <div class="submission-buttons addon-submission-field">
-              <button class="prominent upload-file-submit" disabled id="submit-upload-file-finish" type="submit" name="upload-version">
-                {{ _('Continue') }}
-              </button>
             </div>
-          </div>
-        </form>
-      </div>
+            {{ csrf() }}
+          </form>
+        </div>
+      </section>
+    {% endif %}
 
-      {% if addon.is_packaged and addon.status == amo.STATUS_PUBLIC and action_allowed('Apps', 'Configure') %}
-        <h2>{{ _('Blocklist App') }}</h2>
+    {% if is_tarako %}
+    <section>
+      <h2 id="low-memory-devices">{{ _("Low-Memory Devices") }}</h2>
+      <div class="island">
+        <p>
+          {% trans support_url=settings.SUPPORT_GROUP %}
+            Your app is shown on <a href="https://developer.mozilla.org/Apps/Build/Performance/Apps_for_low-memory_Firefox_OS_devices" target="_blank">low-memory devices</a>.
+            If you want to stop showing your app on low-memory devices <a href="{{ support_url }}">contact us</a>.
+          {% endtrans %}
+          </strong>
+        </p>
+    </section>
+    {% endif %}
+
+    {% if check_addon_ownership(request, addon, dev=True) %}
+      {% set is_disabled = addon.disabled_by_user and addon.status != mkt.STATUS_DISABLED %}
+      <section>
+        <h2>{{ _('List App') if is_disabled else _('Delist App') }}</h2>
+        <div class="island c">
+          <p>
+            {% if is_disabled %}
+              {% trans %}
+                Your app's listing is disabled and will not appear in the Firefox
+                Marketplace. You may re-list it at any time.
+              {% endtrans %}
+            {% else %}
+              {% trans %}
+                Delisting your app will prevent it from appearing anywhere in the
+                Marketplace.
+              {% endtrans %}
+            {% endif %}
+          </p>
+          <p class="listing-footer">
+            {% if is_disabled %}
+              <a href="{{ addon.get_dev_url('enable') }}" class="button" id="enable-addon">
+                {{ _('List App') }}</a>
+            {% elif not addon.is_disabled %}
+              <a href="#" class="button" id="disable-addon">
+                {{ _('Delist App') }}</a>
+            {% endif %}
+          </p>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if check_addon_ownership(request, addon) and addon.can_be_deleted() %}
+      <h2>{{ _('Delete App') }}</h2>
+
+      <section>
+        <div class="island c">
+          <p>
+            {% trans %}
+            Deleting your app will permanently delete it from the site. <strong>There is no going back.</strong>
+            {% endtrans %}
+          </p>
+          <p class="listing-footer">
+            <a href="#" class="button bad delete-button" id="delete-addon">
+              {{ _('Delete App') }}</a>
+          </p>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if addon.is_packaged and addon.status == mkt.STATUS_PUBLIC and action_allowed('Apps', 'Configure') %}
+      <h2>{{ _('Blocklist App') }}</h2>
+
+      <section>
         <div class="island">
           <form method="post" id="blocklist-app" action="{{ addon.get_dev_url('blocklist') }}">
             <p>
@@ -281,8 +364,7 @@
             <input type="submit" value="{{ _('Blocklist') }}">
           </form>
         </div>
-      {% endif %}
-
+      </section>
     {% endif %}
 
   </section>
@@ -293,6 +375,7 @@
         {% include "developers/apps/listing/delete_form.html" %}
       </div>
     {% endif %}
+
     {% if not addon.disabled_by_user and not addon.is_disabled %}
       <div id="modal-disable" class="modal">
         <form method="post" action="{{ addon.get_dev_url('disable') }}">
@@ -308,15 +391,14 @@
         </form>
       </div>
     {% endif %}
+
     {% if addon.is_packaged %}
       <div id="modal-delete-version" class="modal modal-delete" data-versions="{{ version_strings }}">
         <form method="post" action="{{ addon.get_dev_url('versions.delete') }}">
           {{ csrf() }}
           <h3 data-tmpl="{{ _('Delete Version &quot;{version}&quot;') }}"></h3>
           <p id="last-version" class="hidden">{{ _('Deleting the only version will result in the following:') }}</p>
-          <p id="not-last-version" class="hidden">{{ _('Deleting this version will result in the following:') }}</p>
           <ul class="indent">
-            <li>{{ _('all associated user reviews will be deleted') }}</li>
             <li id="last-version-other" class="hidden">{{ _('the app status will be marked as &quot;incomplete&quot;') }}</li>
             <li id="last-version-pending" class="hidden">{{ _('the app will be removed from our review queue') }}</li>
             <li id="last-version-public" class="hidden">{{ _('the app will not be listed in our public pages') }}</li>
@@ -331,7 +413,7 @@
         </form>
       </div>
     {% endif %}
-
   </div>
+
   {% include 'developers/includes/addons_edit_nav.html' %}
 {% endblock %}

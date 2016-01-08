@@ -1,22 +1,31 @@
 <h5>{{ _('Actions') }}</h5>
 <ul>
-{% if addon.is_incomplete() %}
+{% if addon.has_incomplete_status() %}
   {% if check_addon_ownership(request, addon, dev=True) %}
-    {% if addon.is_complete()[0] and addon.needs_payment() %}
-      {# TODO: display whether app needs to be rated. #}
-      {# The app just needs payments information. #}
-      <li>
-        <a href="{{ addon.get_dev_url('payments') }}" class="tooltip"
-           title="{{ _('Provide payment information for the app.') }}">
-        {{ _('Set Up Payments') }}</a>
-      </li>
-    {% else %}
+    {% if not addon.details_complete() %}
       {# The app's submission is incomplete. #}
       <li>
         <a href="{{ url('submit.app.resume', addon.app_slug) }}" class="tooltip"
            title="{{ _('Resume the submission process for this app.') }}">
         {{ _('Resume') }}</a>
       </li>
+    {% else %}
+      {% if not addon.is_rated() %}
+        {# The app needs content ratings. #}
+        <li>
+          <a href="{{ addon.get_dev_url('ratings_edit') }}" class="tooltip"
+             title="{{ _('Get content ratings for the app.') }}">
+          {{ _('Set Up Content Ratings') }}</a>
+        </li>
+      {% endif %}
+      {% if addon.needs_payment() and not addon.has_payment_account() %}
+        {# The app needs payments information. #}
+        <li>
+          <a href="{{ addon.get_dev_url('payments') }}" class="tooltip"
+             title="{{ _('Provide payment information for the app.') }}">
+          {{ _('Set Up Payments') }}</a>
+        </li>
+      {% endif %}
     {% endif %}
   {% endif %}
 
@@ -51,29 +60,27 @@
       {{ _('Status &amp; Versions') if addon.is_packaged else _('Status') }}</a>
   </li>
 
-  {% if waffle.switch('iarc') %}
-    <li>
-      {% set rated = addon.is_pending() and addon.is_rated() %}
-      {% set unrated = not addon.is_rated() %}
-      <a class="action-link {% if unrated %} not-done{% endif%}{% if rated %} done{% endif %}"
-         href="{{ addon.get_dev_url('ratings') }}">
-        {{ _('Content Ratings') }}</a>
-    </li>
-  {% endif %}
+  <li>
+    {% set rated = addon.is_pending() and addon.is_rated() %}
+    {% set unrated = not addon.is_rated() %}
+    <a class="action-link {% if unrated %} not-done{% endif%}{% if rated %} done{% endif %}"
+       href="{{ addon.get_dev_url('ratings') }}">
+      {{ _('Content Ratings') }}</a>
+  </li>
 
-  {% if not waffle.switch('disabled-payments') or addon.is_premium() %}
-    <li>
-      {% set has_payments = addon.is_pending() and addon.is_premium() and hasOneToOne(addon, 'app_payment_account') %}
-      {% set no_payments = addon.is_premium() and not hasOneToOne(addon, 'app_payment_account') %}
-      <a class="action-link{{ ' alert' if waffle.switch('disabled-payments') and addon.is_premium() }}{% if has_payments %} done{% elif no_payments %} not-done{% endif %}"
+  {% if addon.is_premium() %}
+    <li/>
+      {% set has_payments = addon.is_pending() and addon.is_premium() and addon.has_payment_account() %}
+      {% set no_payments = addon.is_premium() and not addon.has_payment_account() %}
+      <a class="action-link{{ ' alert' if addon.is_premium() }}{% if has_payments %} done{% elif no_payments %} not-done{% endif %}"
          href="{{ addon.get_dev_url('payments') }}">
         {{ _('Compatibility & Payments') }}</a>
     </li>
   {% endif %}
 
-  {% if addon.premium_type in amo.ADDON_INAPPS and waffle.switch('in-app-payments') %}
+  {% if addon.premium_type in mkt.ADDON_INAPPS %}
     <li>
-      <a class="action-link" href="{{ addon.get_dev_url('in_app_config') }}">
+      <a class="action-link" href="{{ addon.get_dev_url('in_app_payments') }}">
         {{ _('In-App Payments') }}
       </a>
     </li>
@@ -87,18 +94,14 @@
     <a class="action-link" href="{{ addon.get_url_path() }}">{{ _('View Listing') }}</a>
   </li>
 
-  {% if waffle.switch('comm-dashboard') %}
-    <li>
-      <a class="action-link" href="{{ addon.get_comm_thread_url() }}">
-        {{ _('Messages') }}</a>
-    </li>
-  {% endif %}
+  <li>
+    <a class="action-link" href="{{ addon.get_comm_thread_url() }}">
+      {{ _('Messages') }}</a>
+  </li>
 
-  {# TODO: Re-enable with new URL when per-app stats are ready for Monolith.
   <li>
     <a class="action-link" href="{{ addon.get_stats_url() }}">{{ _('Statistics') }}</a>
   </li>
-  #}
 
   {% if waffle.switch('view-transactions') %}
     <li>

@@ -2,17 +2,15 @@ from urlparse import urlparse
 
 from django import forms
 
-from tower import ugettext_lazy as _lazy
-
-import amo
-from addons.models import Addon
+from django.utils.translation import ugettext_lazy as _lazy
 
 from mkt.api.forms import SluggableModelChoiceField
+from mkt.webapps.models import Webapp
 
 
 class ReceiptForm(forms.Form):
     app = SluggableModelChoiceField(
-        queryset=Addon.objects.filter(type=amo.ADDON_WEBAPP),
+        queryset=Webapp.objects.all(),
         sluggable_to_field_name='app_slug')
 
 

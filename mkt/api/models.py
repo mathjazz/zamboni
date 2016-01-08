@@ -1,11 +1,12 @@
-import os
 import time
 
 from django.db import models
+from django.utils.crypto import get_random_string
 
 from aesfield.field import AESField
 
-from amo.models import ModelBase
+from mkt.site.models import ModelBase
+from mkt.users.models import UserProfile
 
 
 REQUEST_TOKEN = 0
@@ -16,12 +17,23 @@ TOKEN_TYPES = ((REQUEST_TOKEN, u'Request'), (ACCESS_TOKEN, u'Access'))
 class Access(ModelBase):
     key = models.CharField(max_length=255, unique=True)
     secret = AESField(max_length=255, aes_key='api:access:secret')
-    user = models.ForeignKey('auth.User')
+    user = models.ForeignKey(UserProfile)
     redirect_uri = models.CharField(max_length=255)
     app_name = models.CharField(max_length=255)
 
     class Meta:
         db_table = 'api_access'
+
+    @classmethod
+    def create_for_user(cls, user):
+        key = 'mkt:%s:%s:%s' % (
+            user.pk,
+            user.email,
+            Access.objects.filter(user=user).count())
+        return Access.objects.create(
+            key=key,
+            user=user,
+            secret=get_random_string().encode('ascii'))
 
 
 class Token(ModelBase):
@@ -30,7 +42,7 @@ class Token(ModelBase):
     key = models.CharField(max_length=255)
     secret = models.CharField(max_length=255)
     timestamp = models.IntegerField()
-    user = models.ForeignKey('auth.User', null=True)
+    user = models.ForeignKey(UserProfile, null=True)
     verifier = models.CharField(max_length=255, null=True)
 
     class Meta:
@@ -41,10 +53,11 @@ class Token(ModelBase):
         return cls.objects.create(
             token_type=token_type,
             creds=creds,
-            key=generate(),
-            secret=generate(),
+            key=get_random_string(),
+            secret=get_random_string(),
             timestamp=time.time(),
-            verifier=generate() if token_type == REQUEST_TOKEN else None,
+            verifier=(get_random_string()
+                      if token_type == REQUEST_TOKEN else None),
             user=user)
 
 
@@ -59,7 +72,3 @@ class Nonce(ModelBase):
         db_table = 'oauth_nonce'
         unique_together = ('nonce', 'timestamp', 'client_key',
                            'request_token', 'access_token')
-
-
-def generate():
-    return os.urandom(64).encode('hex')

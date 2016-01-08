@@ -1,0 +1,11 @@
+<div id="sorter" class="c">
+  <h3>{{ _('Sort by:') }}</h3>
+  <ul>
+    <li{% if sorting == 'name' %} class="selected"{% endif %}>
+      <a class="opt" href="{{ request.get_full_path()|urlparams(sort='name') }}">{{ _('Name') }}</a>
+    </li>
+    <li{% if sorting == 'created' %} class="selected"{% endif %}>
+      <a class="opt" href="{{ request.get_full_path()|urlparams(sort='created') }}">{{ _('Created') }}</a>
+    </li>
+  </ul>
+</div>

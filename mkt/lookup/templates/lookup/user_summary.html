@@ -13,20 +13,41 @@
       <h2>{{ _('General') }}</h2>
       <dl>
         <dt>{{ _('Display Name') }}</dt>
-        <dd>{{ account.display_name }}</dd>
-        <dt>{{ _('Username') }}</dt>
-        <dd>{{ account.username }}</dd>
+        <dd>{{ account.name }}</dd>
+        <dt>{{ _('Firefox Accounts Identifier') }}</dt>
+        <dd>{{ account.fxa_uid }}</dd>
         <dt>{{ _('Email') }}</dt>
-        <dd>{{ account.email }}</dd>
+        <dd>{{ emaillink(account.email) }}</dd>
         <dt>{{ _('Registered') }}</dt>
         <dd>{{ account.created|babel_datetime }}</dd>
         <dt>UGC</dt>
         <dd>?</dd>
         <dt>{{ _('Groups') }}</dt>
-        <dd>
+        <dd class="group-memberships">
+          <table>
         {% for group in account.groups.all() %}
-          <div>{{ group }}</div>
+          <tr class="remove-group">
+            <td><a href="{{ url('lookup.group_summary', group_id=group.id) }}">{{ group }}</a></td>
+            {% if action_allowed('Admin', '%') %}
+              {% if not group.restricted %}
+                <td><button data-api-url="{{ url('account-groups', pk=account.id) }}" data-api-method="DELETE" data-api-group="{{ group.pk }}" class="remove button">{{ _('-') }}</button></td>
+              {% else %}
+                <td><button class="button disabled">&nbsp;</button></td>
+              {% endif %}
+            {% endif %}
+          </tr>
         {% endfor %}
+        {% if action_allowed('Admin', '%') %}
+          <tr class="remove-group-blank hidden">
+            <td>$group_name</td>
+            <td><button data-api-url="{{ url('account-groups', pk=account.id) }}" data-api-method="DELETE" data-api-group="$group_pk" class="remove button">-</button></td>
+          </tr>
+          <tr class="add-group">
+            <td>{{ group_membership_formset.empty_form.group }}</td>
+            <td><button data-api-url="{{ url('account-groups', pk=account.id) }}" data-api-method="POST" class="add button disabled">+</button></div></td>
+          </tr>
+        {% endif %}
+          </table>
         </dd>
       </dl>
     </section>
@@ -34,14 +55,6 @@
     <section id="payment-info">
       <h2>{{ _('Payments') }}</h2>
       <dl>
-        <dt>{{ _('PayPal linked') }}:</dt>
-        <dd class="pretty-list">
-          {% for email in paypal_ids %}
-            <div>{{ email }}</div>
-          {% else %}
-            <div>{{ _('None') }}</div>
-          {% endfor %}
-        </dd>
         <dt>{{ _('Marketplace Credit') }}:</dt>
         <dd>TODO</dd>
         <dt>{{ _('Payments') }}:</dt>
@@ -50,13 +63,7 @@
         <dt>{{ _('Refunds') }}:</dt>
         <dd>{{ refund_summary['requested'] }} {{ _('requested' ) }}</dd>
         <dd>{{ refund_summary['approved'] }} {{ _('auto-approved') }}</dd>
-        {% if payment_accounts and waffle.switch('bango-portal') %}
-          <dt>{{ _('Bango portal') }}:</dt>
-          {% for payment_account in payment_accounts %}
-            {# L10n: The account is the name of the payment account. #}
-            <dd><a href="{{ payment_account.get_lookup_portal_url() }}">{{ _('View transactions for: {account}').format(account=payment_account.name) }}</a></dd>
-          {% endfor %}
-        {% endif %}
+        {% include 'lookup/includes/provider_portals.html' %}
       </dl>
     </section>
 
@@ -93,14 +100,15 @@
         <dt>{{ _('Submissions') }}:</dt>
         <dd class="product-lookup-list">
           {% for addon in user_addons %}
-          <div><a href="{{ addon.get_url_path() }}">
-                  {% if addon.name %}
-                    {{ addon.name }}
-                  {% else %}
-                    {{ _('Unnamed') }}
-                  {% endif %}
-               </a>
-                ({{ amo.ADDON_TYPE[addon.type] }})</div>
+            <div>
+              <a href="{{ addon.get_url_path() }}">
+                {% if addon.name %}
+                  {{ addon.name }}
+                {% else %}
+                  {{ _('Unnamed') }}
+                {% endif %}
+              </a>
+            </div>
           {% endfor %}
         </dd>
       </dl>
@@ -134,7 +142,7 @@
         <p class="error">{{ _('This user has already been deleted.') }}</p>
         <dl>
           <dt>{{ _('Deleted by') }}</dt>
-          <dd>{{ emaillink(delete_log.user.email, delete_log.user.username) }}</dd>
+          <dd>{{ emaillink(delete_log.user.email, delete_log.user.name) }}</dd>
           {% if delete_log.details.reason %}
             <dt>{{ _('Reason') }}</dt>
             <dd>{{ delete_log.details.reason }}</dd>

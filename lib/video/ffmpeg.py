@@ -5,7 +5,7 @@ import tempfile
 from django.conf import settings
 
 from django_statsd.clients import statsd
-from tower import ugettext as _
+from django.utils.translation import ugettext as _
 
 from .utils import check_output, subprocess, VideoBase
 
@@ -57,9 +57,9 @@ class Video(VideoBase):
 
         duration = duration_re.search(result)
         if duration:
-            data['duration'] = ((3600 * int(duration.group(1)))
-                                + (60 * int(duration.group(2)))
-                                + float(duration.group(3)))
+            data['duration'] = ((3600 * int(duration.group(1))) +
+                                (60 * int(duration.group(2))) +
+                                float(duration.group(3)))
         dimensions = dimensions_re.search(result)
         if dimensions:
             data['dimensions'] = (int(dimensions.group(1)),
@@ -111,7 +111,7 @@ class Video(VideoBase):
         if 'webm' not in self.meta.get('formats', ''):
             self.errors.append(_('Videos must be in WebM.'))
 
-        #TODO(andym): More checks on duration, file size, bit rate?
+        # TODO(andym): More checks on duration, file size, bit rate?
         return not self.errors
 
     @classmethod

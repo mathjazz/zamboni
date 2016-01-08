@@ -1,38 +1,20 @@
-import json
 import urllib
 
 from django import forms
-from django.contrib.auth.models import User
-from django.core.exceptions import PermissionDenied
+from django.core.urlresolvers import reverse
+from django.test.client import RequestFactory
 
 from mock import patch
-from nose.tools import eq_, ok_
+from nose.tools import eq_
+from rest_framework.decorators import (authentication_classes,
+                                       permission_classes)
+from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
 
-from tastypie import http
-from tastypie.authorization import Authorization
-from tastypie.exceptions import ImmediateHttpResponse
-from tastypie.throttle import BaseThrottle
-from test_utils import RequestFactory
-
-from access.middleware import ACLMiddleware
-from amo.tests import TestCase
-from mkt.api.base import (AppViewSet, CORSResource, handle_500,
-                          MarketplaceResource)
-from mkt.api.http import HttpTooManyRequests
-from mkt.api.serializers import Serializer
-from mkt.receipts.tests.test_views import RawRequestFactory
-from mkt.site.fixtures import fixture
-
-
-class SampleResource(MarketplaceResource):
-
-    class Meta(object):
-        authorization = Authorization()
-        serializer = Serializer()
-        object_class = dict
-
-    def get_resource_uri(self, bundle):
-        return ''
+from mkt.api.base import cors_api_view, SubRouterWithFormat
+from mkt.api.tests.test_oauth import RestOAuth
+from mkt.site.tests import TestCase
+from mkt.webapps.views import AppViewSet
 
 
 class URLRequestFactory(RequestFactory):
@@ -41,184 +23,108 @@ class URLRequestFactory(RequestFactory):
         return urllib.urlencode(data)
 
 
-class TestLogging(TestCase):
-
-    def setUp(self):
-        self.resource = SampleResource()
-        self.request = URLRequestFactory().get('/')
-        self.exception_cls = type('SampleException', (Exception,), {})
-
-    @patch('mkt.api.base.tasty_log.error')
-    def test_logging(self, mock_error_log):
-        msg = 'oops'
-        handle_500(self.resource, self.request, self.exception_cls(msg))
-        eq_(mock_error_log.call_count, 1)
-        ok_(self.exception_cls.__name__ in mock_error_log.call_args[0][0])
-        ok_(msg in mock_error_log.call_args[0][0])
-        ok_('exc_info' in mock_error_log.call_args[1])
-
-
-class TestEncoding(TestCase):
-
-    def setUp(self):
-        self.resource = SampleResource()
-        self.request = URLRequestFactory().post('/')
+class TestEncoding(RestOAuth):
 
     def test_blah_encoded(self):
         """
-        Regression test of bug #858403: ensure that a 400 (and not 500) is
+        Regression test of bug #858403: ensure that a 415 (and not 500) is
         raised when an unsupported Content-Type header is passed to an API
         endpoint.
         """
-        self.request.META['CONTENT_TYPE'] = 'application/blah'
-        with self.assertImmediate(http.HttpBadRequest):
-            self.resource.dispatch('list', self.request)
-
-    def test_no_contenttype(self):
-        del self.request.META['CONTENT_TYPE']
-        with self.assertImmediate(http.HttpBadRequest):
-            self.resource.dispatch('list', self.request)
+        r = self.client.post(reverse('app-list'),
+                             CONTENT_TYPE='application/blah',
+                             data='cvan was here')
+        eq_(r.status_code, 415)
 
     def test_bad_json(self):
-        request = RawRequestFactory().post('/', "not ' json ' 5")
-        with self.assertImmediate(http.HttpBadRequest):
-            self.resource.dispatch('list', request)
+        r = self.client.post(reverse('app-list'),
+                             CONTENT_TYPE='application/json',
+                             data="not ' json ' 5")
+        eq_(r.status_code, 400)
 
     def test_not_json(self):
-        self.request.META['HTTP_ACCEPT'] = 'application/blah'
-        with self.assertImmediate(http.HttpBadRequest):
-            self.resource.dispatch('list', self.request)
+        r = self.client.get(reverse('app-list'),
+                            HTTP_ACCEPT='application/blah')
+        # We should return a 406, but for endpoints that only accept JSON, we
+        # cheat and return json content without even looking at the Accept
+        # header (see mkt.api.renderers and settings).
+        eq_(r.status_code, 200)
+        eq_(r['content-type'], 'application/json; charset=utf-8')
 
-    def test_errors(self):
-        self.request.META['HTTP_ACCEPT'] = 'application/blah'
-        self.request.META['CONTENT_TYPE'] = 'application/blah'
-        try:
-            self.resource.dispatch('list', self.request)
-        except ImmediateHttpResponse, error:
-            pass
-
-        res = json.loads(error.response.content)['error_message']['__all__']
-        eq_([u"Unsupported Content-Type header 'application/blah'",
-             u"Unsupported Accept header 'application/blah'"], res)
-
-    @patch.object(SampleResource, 'obj_create')
-    def test_form_encoded(self, obj_create):
-        request = URLRequestFactory().post('/', data={'foo': 'bar'},
-            content_type='application/x-www-form-urlencoded')
-        self.resource.dispatch('list', request)
-        eq_(obj_create.call_args[0][0].data, {'foo': 'bar'})
-
-    @patch.object(SampleResource, 'obj_create')
-    def test_permission(self, obj_create):
-        request = RequestFactory().post('/', data={},
-            content_type='application/json')
-        obj_create.side_effect = PermissionDenied
-        with self.assertImmediate(http.HttpForbidden):
-            self.resource.dispatch('list', request)
+    @patch.object(AppViewSet, 'create')
+    def test_form_encoded(self, create_mock):
+        create_mock.return_value = Response()
+        self.client.post(reverse('app-list'),
+                         data='foo=bar',
+                         content_type='application/x-www-form-urlencoded')
+        eq_(create_mock.call_args[0][0].data['foo'], 'bar')
 
 
-class ThrottleResource(MarketplaceResource):
+class TestCORSWrapper(TestCase):
+    urls = 'mkt.api.tests.test_base_urls'
 
-    class Meta(object):
-        authorization = Authorization()
-        throttle = BaseThrottle()
+    def test_cors(self):
+        @cors_api_view(['GET', 'PATCH'])
+        @authentication_classes([])
+        @permission_classes([])
+        def foo(request):
+            return Response()
+        request = RequestFactory().options('/')
+        foo(request)
+        eq_(request.CORS, ['GET', 'PATCH'])
 
+    def test_cors_with_headers(self):
+        @cors_api_view(['POST'], headers=('x-barfoo',))
+        @authentication_classes([])
+        @permission_classes([])
+        def foo(request):
+            return Response()
+        request = RequestFactory().options('/')
+        foo(request)
+        eq_(request.CORS_HEADERS, ('x-barfoo',))
 
-class TestThrottling(TestCase):
-    fixtures = fixture('user_2519')
-
-    def setUp(self):
-        self.resource = ThrottleResource()
-        self.request = RequestFactory().post('/')
-        self.user = User.objects.get(pk=2519)
-        self.request.user = self.user
-        self.throttle = self.resource._meta.throttle
-        self.request.META['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
-        self.mocked_sbt = patch.object(self.throttle, 'should_be_throttled')
-
-    def no_throttle_expected(self):
-        try:
-            self.resource.throttle_check(self.request)
-        except ImmediateHttpResponse, e:
-            if isinstance(e.response, HttpTooManyRequests):
-                self.fail('Unexpected 429')
-            raise e
-
-    def throttle_expected(self):
-        with self.assertImmediate(HttpTooManyRequests):
-            self.resource.throttle_check(self.request)
-
-    def test_should_throttle(self):
-        with self.mocked_sbt as sbt:
-            sbt.return_value = True
-            self.throttle_expected()
-
-    def test_shouldnt_throttle(self):
-        with self.mocked_sbt as sbt:
-            sbt.return_value = False
-            self.no_throttle_expected()
-
-    def test_unthrottled_user(self):
-        self.grant_permission(self.user.get_profile(), 'Apps:APIUnthrottled')
-        ACLMiddleware().process_request(self.request)
-        with self.mocked_sbt as sbt:
-            sbt.return_value = True
-            self.no_throttle_expected()
-
-    def test_throttled_user_setting_enabled(self):
-        with self.settings(API_THROTTLE=True):
-            ACLMiddleware().process_request(self.request)
-            with self.mocked_sbt as sbt:
-                sbt.return_value = True
-                self.throttle_expected()
-
-    def test_throttled_user_setting_disabled(self):
-        with self.settings(API_THROTTLE=False):
-            ACLMiddleware().process_request(self.request)
-            with self.mocked_sbt as sbt:
-                sbt.return_value = True
-                self.no_throttle_expected()
-
-
-class FilteredCORS(CORSResource, MarketplaceResource):
-
-    class Meta(object):
-        cors_allowed = ['get', 'put']
-
-
-class UnfilteredCORS(CORSResource, MarketplaceResource):
-    pass
-
-
-class TestCORSResource(TestCase):
-
-    def test_filtered(self):
-        request = RequestFactory().get('/')
-        FilteredCORS().method_check(request, allowed=['get'])
-        eq_(request.CORS, ['get', 'put'])
-
-    def test_unfiltered(self):
-        request = RequestFactory().get('/')
-        UnfilteredCORS().method_check(request, allowed=['get'])
-        eq_(request.CORS, ['get'])
+    def test_cors_options(self):
+        res = self.client.options(reverse('test-cors-api-view'))
+        eq_(res['Access-Control-Allow-Origin'], '*')
+        eq_(res['Access-Control-Allow-Headers'], 'x-barfoo, x-foobar')
 
 
 class Form(forms.Form):
     app = forms.ChoiceField(choices=(('valid', 'valid'),))
 
 
-class TestAppViewSet(TestCase):
+class TestSubRouterWithFormat(TestCase):
 
-    def setUp(self):
-        self.request = RequestFactory().get('/')
-        self.viewset = AppViewSet()
-        self.viewset.action_map = {}
-        self.viewset.form = Form
+    def test_format_is_included(self):
+        router = SubRouterWithFormat()
+        router.register('foo', ModelViewSet, base_name='bar')
+        expected = [
+            {'name': 'bar-list', 'pattern': '^(?P<pk>[^/.]+)/foo/$'},
+            {'name': 'bar-detail', 'pattern': '^(?P<pk>[^/.]+)/foo/$'},
+            {'name': 'bar-list',
+             'pattern': '^(?P<pk>[^/.]+)/foo\\.(?P<format>[a-z0-9]+)/?$'},
+            {'name': 'bar-detail',
+             'pattern': '^(?P<pk>[^/.]+)/foo\\.(?P<format>[a-z0-9]+)/?$'},
+        ]
+        actual = [{
+            'name': url.name, 'pattern': url.regex.pattern
+        } for url in router.urls]
+        for i, _ in enumerate(expected):
+            eq_(actual[i], expected[i])
 
-    def test_ok(self):
-        self.viewset.initialize_request(self.request, pk='valid')
-        ok_(self.viewset.app)
-
-    def test_not_ok(self):
-        self.viewset.initialize_request(self.request, pk='invalid')
-        eq_(self.viewset.app, None)
+    def test_format_is_included_no_trailing_slashes(self):
+        router = SubRouterWithFormat(trailing_slash=False)
+        router.register('foo', ModelViewSet, base_name='bar')
+        expected = [
+            {'name': 'bar-list', 'pattern': '^(?P<pk>[^/.]+)/foo$'},
+            {'name': 'bar-detail', 'pattern': '^(?P<pk>[^/.]+)/foo$'},
+            {'name': 'bar-list',
+             'pattern': '^(?P<pk>[^/.]+)/foo\\.(?P<format>[a-z0-9]+)/?$'},
+            {'name': 'bar-detail',
+             'pattern': '^(?P<pk>[^/.]+)/foo\\.(?P<format>[a-z0-9]+)/?$'},
+        ]
+        actual = [{
+            'name': url.name, 'pattern': url.regex.pattern
+        } for url in router.urls]
+        for i, _ in enumerate(expected):
+            eq_(actual[i], expected[i])

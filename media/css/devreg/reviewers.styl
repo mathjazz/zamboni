@@ -27,6 +27,7 @@ dt {
 
 dd {
     margin-bottom: 0;
+    margin-left: 20%;
 
     &:after {
         content: " ";
@@ -95,34 +96,11 @@ header {
             display: inline-block;
             float: left;
             margin-bottom: 0;
-            max-height: 44px;
-            max-width: 40px;
         }
         .icon {
-            bottom: 12px;
             display: inline-block;
-            margin-right: 10px;
-            position: relative;
-            right: 15px;
-
-            &.icon-body-classind, &.icon-body-generic {
-                transform(scale(.5));
-            }
-            &.icon-body-esrb {
-                transform(scale(.36));
-                bottom: 25px;
-                right: 17px;
-            }
-            &.icon-body-usk {
-                transform(scale(.47));
-                bottom: 14px;
-                right: 16px;
-            }
-            &.icon-body-pegi {
-                transform(scale(.44));
-                bottom: 16px;
-                right: 24px;
-            }
+            margin-right: 4px;
+            max-width: 32px;
         }
     }
 }
@@ -190,6 +168,18 @@ nav.paginator {
     }
 }
 
+.more-app-info-show,
+.less-app-info-show {
+    background-color: $faint-gray;
+    padding: 4px;
+    text-align: center;
+
+    a {
+        display: block;
+    }
+}
+
+
 /* sprites for data grid icons */
 
 .sprite-reviewer {
@@ -216,6 +206,24 @@ nav.paginator {
 }
 .sprite-reviewer-premium {
     background-position: -32px 0;
+
+    &.inapp:after {
+        color: $green;
+        content: '\002B';  // Plus sign.
+        font-size: 22px;
+        left: 10px;
+        position: absolute;
+        text-shadow: -1px 0 #000;
+        top: 1px;
+    }
+    &.free.inapp:before {
+        color: $green;
+        content: '\20E0';  // Prohibited sign.
+        font-size: 16px;
+        position: absolute;
+        right: 1px;
+        text-shadow: -1px 0 $ligt-gray;
+    }
 }
 .sprite-reviewer-info {
     background-position: -32px -16px;
@@ -223,11 +231,11 @@ nav.paginator {
 .sprite-reviewer-blocked {
     background-position: 0 -32px;
 }
-.sprite-reviewer-escalated {
-    background-position: -16px -32px;
-}
 .sprite-reviewer-privileged-app {
     background-position: -32px -32px;
+}
+.sprite-reviewer-priority {
+    background-position: -16px -32px;
 }
 
 .sort-icon {
@@ -279,6 +287,20 @@ nav.paginator {
 }
 table.data-grid .addon-version-notes a {
     text-decoration: none;
+}
+.data-grid .additional-review-comments {
+    td {
+        border-top: none;
+    }
+
+    span {
+        display: flex;
+    }
+
+    input {
+        flex: 1 auto;
+        margin-right: 10px;
+    }
 }
 .data-grid .extra-info {
     text-align: center;
@@ -345,6 +367,10 @@ table.data-grid .addon-version-notes a {
     float: left;
 }
 
+.editor-stats {
+    clear: both;
+}
+
 .editor-stats-title span,
 .editor-stats-title a {
     font-weight: bold;
@@ -388,39 +414,6 @@ table.data-grid .addon-version-notes a {
     line-height: 1.8em;
 }
 
-.daily-message {
-    background: lightgoldenrodyellow;
-    display: none;
-    position: relative;
-
-    .close {
-        background-color: $border-gray;
-        border-radius: 20px;
-        color: $white;
-        font-size: 16px;
-        font-weight: bold;
-        height: 20px;
-        line-height: 20px;
-        position: absolute;
-        right: 20px;
-        text-align: center;
-        text-decoration: none;
-        top: 20px;
-        width: 20px;
-
-        &:hover {
-            background-color: $light-gray;
-            text-decoration: none;
-        }
-    }
-    h2 {
-        color: darkgoldenrod;
-    }
-    p {
-        line-height: 1.3;
-        margin: 0 0 5px;
-    }
-}
 
 table.data-grid tr.comments td {
     border-top: none;
@@ -558,6 +551,78 @@ div.editor-stats-table > div.editor-stats-dark {
         float: right;
     }
 }
+
+/* Abuse report viewer */
+
+#abuse-reports {
+    .abuse-reports-items {
+        border-top: 1px dotted $medium-gray;
+        line-height: 20px;
+        margin: 0 0 1em 1em;
+        padding: 1em;
+
+        ul {
+            margin-bottom: 0;
+        }
+    }
+    &:first-child {
+        border-top: 0;
+    }
+    .abuse-reports-reports {
+        background-color: lighten($green, 85%);
+        border-radius: 10px;
+        clear: both;
+        margin: 0;
+        padding: 0 10px;
+
+        li {
+            border-top: 1px dotted $light-gray;
+            padding: 10px 0;
+
+            &:first-child {
+                border-top: 0;
+            }
+        }
+    }
+    h3 {
+        margin: 0;
+    }
+    p {
+        margin-bottom: 1.0em;
+    }
+    .abuse-report-actions {
+        border-left: 1px dashed $medium-gray;
+        float: right;
+        margin: 5px;
+        padding-left: 10px;
+        width: 200px;
+
+        label {
+            font-weight: normal;
+        }
+    }
+    form {
+        margin: 0;
+    }
+    div.reports-process {
+        margin-bottom: 0;
+        padding: 10px;
+        text-align: right;
+    }
+    label[for$=action_1] {
+        color: $green;
+    }
+    label[for$=action_2] {
+        color: $blue;
+    }
+    span.light {
+        color: $note-gray;
+    }
+    span.submitted-by {
+        font-style: italic;
+    }
+}
+
 
 /* data grid search form */
 #log-filter form {
@@ -731,7 +796,7 @@ button.search, .log-filter-outside button {
             }
         }
         a {
-            background: url("../../img/icons/news-feed-sprite.png") 0 -1407px no-repeat;
+            background: url("../../img/mkt/icons/mkt-reviewer-detail-icons.png") 0 -0px no-repeat;
             display: inline-block;
             min-height: 16px;
             padding-left: 22px;
@@ -764,26 +829,48 @@ button.search, .log-filter-outside button {
         color: #333;
         font-weight: bold;
     }
-    #review-files-paginate {
+}
+#review-files-paginate {
+    text-align: center;
+    padding: 10px;
+}
+#review-files-paginate .button,
+#review-files .activity .comm-notes-paginator .button {
+    height: 30px;
+    line-height: 30px;
+    min-width: 85px;
+    padding: 0 5px;
+}
+#review-files .activity .comm-notes-paginator {
+    border-bottom: none;
+    display: none;
+
+    a {
+        display: none;
         float: right;
-        margin-top: 2em;
+        margin-right: 5px;
+
     }
 }
-#review-files-paginate ol {
-    float: right;
-    margin: 0;
-    padding-left: 10px;
-    text-align: right;
-    top: -20px;
-    width: auto;
+
+.comm-note {
+
+    pre {
+        padding-left: 0;
+    }
+    strong {
+        color: lighten($medium-gray, 15%);
+    }
 }
+
 #review-files table.activity {
     th {
       width: 25%;
       padding-right: 1em;
     }
     tr {
-        border-top: 1px dotted #ccc;
+        border-bottom: 1px dotted #ccc;
+        border-top: none;
 
         td {
             padding: 15px 0;
@@ -795,8 +882,8 @@ button.search, .log-filter-outside button {
             padding-bottom: 0;
         }
     }
-    tr:first-child {
-        border-top: 0 none;
+    tr:last-child {
+        border-bottom: 0;
     }
 }
 #review-files .listing-header span.light {
@@ -868,6 +955,12 @@ button.search, .log-filter-outside button {
     .review-actions-options ul {
         columns(2, 1em);
     }
+}
+
+table.activity .error {
+    font-style: italic;
+    line-height: 18px;
+    max-width: 98%;
 }
 
 .review-actions {
@@ -971,6 +1064,19 @@ button.search, .log-filter-outside button {
     }
 }
 
+.review-actions-testedon {
+    .formset {
+        margin-top: 1.5em;
+    }
+    a.add-row {
+        background: url("../../img/mkt/icons/mkt-reviewer-detail-icons.png") no-repeat 0 -76px;
+        display: inline-block;
+        margin-top: 6px;
+        min-height: 15px;
+        padding: 1px 0 0 22px;
+    }
+}
+
 .review-actions-attachments {
     .formset {
         margin-top: 1.5em;
@@ -979,7 +1085,7 @@ button.search, .log-filter-outside button {
         margin-bottom: .3em;
     }
     a.add-row {
-        background: url("../../img/icons/news-feed-sprite.png") no-repeat 0 -1444px;
+        background: url("../../img/mkt/icons/mkt-reviewer-detail-icons.png") no-repeat 0 -37px;
         display: inline-block;
         margin-top: 6px;
         min-height: 15px;
@@ -1388,4 +1494,62 @@ span.currently_viewing_warning {
         left: 15%;
         position: relative;
     }
+}
+
+.regional-queue, .additional-review-queue {
+    min-width: 860px;
+    .action {
+        text-align: right;
+    }
+    .addon-row a.button {
+        border: 0;
+        display: inline-block;
+        font-size: inherit;
+        height: 35px;
+        line-height: 35px;
+        min-width: 80px;
+        padding: 0 10px;
+
+        &.approve {
+            background: $button-green-dark;
+
+            &:hover {
+                background: $button-green-light;
+            }
+        }
+        &.reject, &.duplicate, &.flag {
+            background: $button-red-dark;
+
+            &:hover {
+                background: $button-red-light;
+            }
+        }
+        &:hover {
+            color: $white;
+        }
+        &.disabled, &.disabled:hover {
+            background: #c1c5ca;
+            color: #919497;
+        }
+        + a.button {
+            margin-left: 10px;
+        }
+    }
+}
+
+#review-files table.activity .comm-notes-paginator {
+    td {
+        padding: 0;
+    }
+}
+#review-files table.activity .loading-msg {
+    font-style: italic;
+    display: none;
+
+    td {
+        padding: 0;
+    }
+}
+#review-files table.activity.comm-loading .loading-msg {
+    display: table-row;
 }

@@ -1,21 +1,16 @@
-from collections import defaultdict
-import urllib
-
 from django.conf import settings
-from django.utils.encoding import smart_unicode
+from django.core.urlresolvers import reverse
 
-import chardet
 import jinja2
 from jingo import register
-from jingo.helpers import datetime as jingo_datetime
-from tower import ugettext as _, ungettext as ngettext
+from django.utils.translation import ugettext as _
 
-import amo
-from amo.urlresolvers import reverse
-from access import acl
-from addons.helpers import new_context
+import mkt
+from mkt.access import acl
+from mkt.constants import CATEGORY_CHOICES_DICT
+from mkt.site.helpers import mkt_breadcrumbs, page_title
+from mkt.webapps.helpers import new_context
 
-from mkt.site.helpers import mkt_breadcrumbs
 
 register.function(acl.check_addon_ownership)
 
@@ -35,15 +30,7 @@ def hub_page_title(context, title=None, addon=None):
     else:
         devhub = _('Developers')
         title = '%s | %s' % (title, devhub) if title else devhub
-    return mkt_page_title(context, title)
-
-
-@register.function
-@jinja2.contextfunction
-def mkt_page_title(context, title, force_webapps=False):
-    title = smart_unicode(title)
-    base_title = _('Firefox Marketplace')
-    return u'%s | %s' % (title, base_title)
+    return page_title(context, title)
 
 
 @register.function
@@ -59,8 +46,6 @@ def hub_breadcrumbs(context, addon=None, items=None, add_default=False):
         specified then the Add-on will be linked.
     **add_default**
         Prepends trail back to home when True.  Default is False.
-    **impala**
-        Whether to use the impala_breadcrumbs helper. Default is False.
     """
     crumbs = [(reverse('ecosystem.landing'), _('Developers'))]
     title = _('My Submissions')
@@ -87,120 +72,31 @@ def hub_breadcrumbs(context, addon=None, items=None, add_default=False):
     return mkt_breadcrumbs(context, items=crumbs)
 
 
-@register.inclusion_tag('developers/versions/add_file_modal.html')
-@jinja2.contextfunction
-def add_file_modal(context, title, action, upload_url, action_label):
-    return new_context(modal_type='file', context=context, title=title,
-                       action=action, upload_url=upload_url,
-                       action_label=action_label)
-
-
-@register.inclusion_tag('developers/versions/add_file_modal.html')
-@jinja2.contextfunction
-def add_version_modal(context, title, action, upload_url, action_label):
-    return new_context(modal_type='version', context=context, title=title,
-                       action=action, upload_url=upload_url,
-                       action_label=action_label)
-
-
-@register.function
-def status_choices(addon):
-    """Return a dict like STATUS_CHOICES customized for the addon status."""
-    # Show "awaiting full review" for unreviewed files on that track.
-    choices = dict(amo.STATUS_CHOICES)
-    if addon.status in (amo.STATUS_NOMINATED, amo.STATUS_LITE_AND_NOMINATED,
-                        amo.STATUS_PUBLIC):
-        choices[amo.STATUS_UNREVIEWED] = choices[amo.STATUS_NOMINATED]
-    return choices
-
-
-@register.inclusion_tag('developers/versions/file_status_message.html')
-def file_status_message(file, addon, file_history=False):
-    choices = status_choices(addon)
-    return {'fileid': file.id, 'platform': file.amo_platform.name,
-            'created': jingo_datetime(file.created),
-            'status': choices[file.status],
-            'file_history': file_history,
-            'actions': amo.LOG_REVIEW_EMAIL_USER,
-            'status_date': jingo_datetime(file.datestatuschanged)}
-
-
-@register.function
-def dev_files_status(files, addon):
-    """Group files by their status (and files per status)."""
-    status_count = defaultdict(int)
-    choices = status_choices(addon)
-
-    for file in files:
-        status_count[file.status] += 1
-
-    return [(count, unicode(choices[status])) for
-            (status, count) in status_count.items()]
-
-
 @register.function
 def mkt_status_class(addon):
-    if addon.disabled_by_user and addon.status != amo.STATUS_DISABLED:
+    if addon.disabled_by_user and addon.status != mkt.STATUS_DISABLED:
         cls = 'disabled'
     else:
-        cls = amo.STATUS_CHOICES_API.get(addon.status, 'none')
+        cls = mkt.STATUS_CHOICES_API.get(addon.status, 'none')
     return 'status-' + cls
 
 
 @register.function
 def mkt_file_status_class(addon, version):
-    if addon.disabled_by_user and addon.status != amo.STATUS_DISABLED:
+    if addon.disabled_by_user and addon.status != mkt.STATUS_DISABLED:
         cls = 'disabled'
     else:
         file = version.all_files[0]
-        cls = amo.STATUS_CHOICES_API.get(file.status, 'none')
+        cls = mkt.STATUS_CHOICES_API.get(file.status, 'none')
     return 'status-' + cls
 
 
 @register.function
 def log_action_class(action_id):
-    if action_id in amo.LOG_BY_ID:
-        cls = amo.LOG_BY_ID[action_id].action_class
+    if action_id in mkt.LOG_BY_ID:
+        cls = mkt.LOG_BY_ID[action_id].action_class
         if cls is not None:
             return 'action-' + cls
-
-
-@register.function
-def summarize_validation(validation):
-    """Readable summary of add-on validation results."""
-    # L10n: first parameter is the number of errors
-    errors = ngettext('{0} error', '{0} errors',
-                      validation.errors).format(validation.errors)
-    # L10n: first parameter is the number of warnings
-    warnings = ngettext('{0} warning', '{0} warnings',
-                        validation.warnings).format(validation.warnings)
-    return "%s, %s" % (errors, warnings)
-
-
-@register.filter
-def display_url(url):
-    """Display a URL like the browser URL bar would.
-
-    Note: returns a Unicode object, not a valid URL.
-    """
-    if isinstance(url, unicode):
-        # Byte sequences will be url encoded so convert
-        # to bytes here just to stop auto decoding.
-        url = url.encode('utf8')
-    bytes = urllib.unquote(url)
-    c = chardet.detect(bytes)
-    return bytes.decode(c['encoding'], 'replace')
-
-
-@register.inclusion_tag('developers/helpers/disabled_payments_notice.html')
-@jinja2.contextfunction
-def disabled_payments_notice(context, addon=None):
-    """
-    If payments are disabled, we show a friendly message urging the developer
-    to make his/her app free.
-    """
-    addon = context.get('addon', addon)
-    return {'request': context.get('request'), 'addon': addon}
 
 
 @register.function
@@ -224,3 +120,10 @@ def dev_agreement_ok(user):
         return False
 
     return True
+
+
+@register.filter
+def categories_names(cat_slugs):
+    if cat_slugs is None:
+        return []
+    return sorted(unicode(CATEGORY_CHOICES_DICT.get(k)) for k in cat_slugs)

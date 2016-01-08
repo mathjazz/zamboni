@@ -8,42 +8,31 @@
   {% do urls.append((addon.get_dev_url('versions'), _('Status'))) %}
 {% endif %}
 
-{% if waffle.switch('iarc') %}
-  {% do urls.append(
-    (addon.get_dev_url('ratings'), _('Content Ratings'))
-  ) %}
-{% endif %}
+{% do urls.append(
+  (addon.get_dev_url('ratings'), _('Content Ratings'))
+) %}
 
-{% if not waffle.switch('disabled-payments') or addon.is_premium() %}
+{% if addon.needs_payment() %}
   {% do urls.append((addon.get_dev_url('payments'),
                      _('Compatibility & Payments'))) %}
-  {% if addon.is_webapp() and addon.premium_type in amo.ADDON_INAPPS
-        and waffle.switch('in-app-payments') %}
+  {% if addon.premium_type in mkt.ADDON_INAPPS %}
     {% do urls.insert(4,
-      (addon.get_dev_url('in_app_config'), _('In-App Payments'))
+      (addon.get_dev_url('in_app_payments'), _('In-App Payments'))
     ) %}
   {% endif %}
 {% else %}
   {% do urls.append((addon.get_dev_url('payments'),
-                     _('Manage Compatibility'))) %}
+                     _('Compatibility'))) %}
 {% endif %}
 
 {% do urls.append((addon.get_dev_url('owner'), _('Team Members'))) %}
 {% do urls.append((addon.get_url_path(), _('View Listing'))) %}
 
 
-{% set other_urls = [] %}
-{% if waffle.switch('comm-dashboard') %}
-  {% do other_urls.append(
-    (addon.get_comm_thread_url(), _('Messages'))
-  ) %}
-{% endif %}
-
-{# TODO: Re-enable with new URL when per-app stats are ready for Monolith.
-{% do other_urls.append(
+{% set other_urls = [
+  (addon.get_comm_thread_url(), _('Messages')),
   (addon.get_stats_url(), _('Statistics'))
-) %}
-#}
+] %}
 
 {% if waffle.switch('view-transactions') %}
   {% do other_urls.append(

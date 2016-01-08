@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
 import json
-import os
-import shutil
 import zipfile
 
 from django.conf import settings  # For mocking.
-from django.core.files.storage import default_storage as storage
 
 import jwt
 import mock
 from nose.tools import eq_, raises
+from requests import Timeout
 
-import amo.tests
+import mkt.site.tests
 from lib.crypto import packaged
 from lib.crypto.receipt import crack, sign, SigningError
+from mkt.site.storage_utils import copy_stored_file
+from mkt.site.fixtures import fixture
+from mkt.site.storage_utils import (local_storage, public_storage,
+                                    private_storage)
+from mkt.versions.models import Version
 from mkt.webapps.models import Webapp
-from versions.models import Version
 
 
 def mock_sign(version_id, reviewer=False):
@@ -26,52 +28,57 @@ def mock_sign(version_id, reviewer=False):
     """
     version = Version.objects.get(pk=version_id)
     file_obj = version.all_files[0]
-    path = (file_obj.signed_reviewer_file_path if reviewer else
-            file_obj.signed_file_path)
-    try:
-        os.makedirs(os.path.dirname(path))
-    except OSError:
-        pass
-    shutil.copyfile(file_obj.file_path, path)
+    if reviewer:
+        path = file_obj.signed_reviewer_file_path
+        storage = private_storage
+    else:
+        path = file_obj.signed_file_path
+        storage = public_storage
+    copy_stored_file(
+        file_obj.file_path, path,
+        src_storage=private_storage, dst_storage=storage)
     return path
 
 
-@mock.patch('lib.crypto.receipt.urllib2.urlopen')
+@mock.patch('lib.crypto.receipt.requests.post')
 @mock.patch.object(settings, 'SIGNING_SERVER', 'http://localhost')
-class TestReceipt(amo.tests.TestCase):
+class TestReceipt(mkt.site.tests.TestCase):
 
-    def test_called(self, urlopen):
-        urlopen.return_value = self.get_response(200)
+    def test_called(self, get):
+        get.return_value = self.get_response(200)
         sign('my-receipt')
-        eq_(urlopen.call_args[0][0].data, 'my-receipt')
+        eq_(get.call_args[1]['data'], 'my-receipt')
 
-    def test_some_unicode(self, urlopen):
-        urlopen.return_value = self.get_response(200)
+    def test_some_unicode(self, get):
+        get.return_value = self.get_response(200)
         sign({'name': u'Вагиф Сәмәдоғлу'})
 
     def get_response(self, code):
-        response = mock.Mock()
-        response.getcode = mock.Mock()
-        response.getcode.return_value = code
-        response.read.return_value = json.dumps({'receipt': ''})
-        return response
+        return mock.Mock(status_code=code,
+                         content=json.dumps({'receipt': ''}))
 
-    @raises(SigningError)
-    def test_error(self, urlopen):
-        urlopen.return_value = self.get_response(403)
-        sign('x')
-
-    def test_good(self, urlopen):
-        urlopen.return_value = self.get_response(200)
+    def test_good(self, req):
+        req.return_value = self.get_response(200)
         sign('x')
 
     @raises(SigningError)
-    def test_other(self, urlopen):
-        urlopen.return_value = self.get_response(206)
+    def test_timeout(self, req):
+        req.side_effect = Timeout
+        req.return_value = self.get_response(200)
+        sign('x')
+
+    @raises(SigningError)
+    def test_error(self, req):
+        req.return_value = self.get_response(403)
+        sign('x')
+
+    @raises(SigningError)
+    def test_other(self, req):
+        req.return_value = self.get_response(206)
         sign('x')
 
 
-class TestCrack(amo.tests.TestCase):
+class TestCrack(mkt.site.tests.TestCase):
 
     def test_crack(self):
         eq_(crack(jwt.encode('foo', 'x')), [u'foo'])
@@ -81,8 +88,8 @@ class TestCrack(amo.tests.TestCase):
             [u'foo', u'bar'])
 
 
-class PackagedApp(amo.tests.TestCase, amo.tests.AMOPaths):
-    fixtures = ['base/users', 'webapps/337141-steamcube']
+class PackagedApp(mkt.site.tests.TestCase, mkt.site.tests.MktPaths):
+    fixtures = fixture('webapp_337141', 'users')
 
     def setUp(self):
         self.app = Webapp.objects.get(pk=337141)
@@ -93,31 +100,22 @@ class PackagedApp(amo.tests.TestCase, amo.tests.AMOPaths):
 
     def setup_files(self):
         # Clean out any left over stuff.
-        storage.delete(self.file.signed_file_path)
-        storage.delete(self.file.signed_reviewer_file_path)
+        public_storage.delete(self.file.signed_file_path)
+        private_storage.delete(self.file.signed_reviewer_file_path)
 
         # Make sure the source file is there.
-        if not storage.exists(self.file.file_path):
-            try:
-                # We don't care if these dirs exist.
-                os.makedirs(os.path.dirname(self.file.file_path))
-            except OSError:
-                pass
-            shutil.copyfile(self.packaged_app_path('mozball.zip'),
-                            self.file.file_path)
+        if not private_storage.exists(self.file.file_path):
+            copy_stored_file(self.packaged_app_path('mozball.zip'),
+                             self.file.file_path, src_storage=local_storage,
+                             dst_storage=private_storage)
 
 
 @mock.patch('lib.crypto.packaged.os.unlink', new=mock.Mock)
-class TestPackaged(PackagedApp, amo.tests.TestCase):
+class TestPackaged(PackagedApp, mkt.site.tests.TestCase):
 
     def setUp(self):
         super(TestPackaged, self).setUp()
         self.setup_files()
-
-    @raises(packaged.SigningError)
-    def test_not_app(self):
-        self.app.update(type=amo.ADDON_EXTENSION)
-        packaged.sign(self.version.pk)
 
     @raises(packaged.SigningError)
     def test_not_packaged(self):
@@ -131,15 +129,33 @@ class TestPackaged(PackagedApp, amo.tests.TestCase):
 
     @mock.patch('lib.crypto.packaged.sign_app')
     def test_already_exists(self, sign_app):
-        storage.open(self.file.signed_file_path, 'w')
+        with public_storage.open(self.file.signed_file_path, 'w') as f:
+            f.write('.')
         assert packaged.sign(self.version.pk)
         assert not sign_app.called
 
     @mock.patch('lib.crypto.packaged.sign_app')
     def test_resign_already_exists(self, sign_app):
-        storage.open(self.file.signed_file_path, 'w')
+        private_storage.open(self.file.signed_file_path, 'w')
         packaged.sign(self.version.pk, resign=True)
         assert sign_app.called
+
+    @mock.patch('lib.crypto.packaged.sign_app')
+    def test_sign_consumer(self, sign_app):
+        packaged.sign(self.version.pk)
+        assert sign_app.called
+        ids = json.loads(sign_app.call_args[0][2])
+        eq_(ids['id'], self.app.guid)
+        eq_(ids['version'], self.version.pk)
+
+    @mock.patch('lib.crypto.packaged.sign_app')
+    def test_sign_reviewer(self, sign_app):
+        packaged.sign(self.version.pk, reviewer=True)
+        assert sign_app.called
+        ids = json.loads(sign_app.call_args[0][2])
+        eq_(ids['id'], 'reviewer-{guid}-{version_id}'.format(
+            guid=self.app.guid, version_id=self.version.pk))
+        eq_(ids['version'], self.version.pk)
 
     @raises(ValueError)
     def test_server_active(self):
@@ -185,6 +201,7 @@ class TestPackaged(PackagedApp, amo.tests.TestCase):
         post().status_code = 200
         post().content = '{"zigbert.rsa": ""}'
         packaged.sign(self.version.pk)
-        zf = zipfile.ZipFile(self.file.signed_file_path, mode='r')
+        zf = zipfile.ZipFile(public_storage.open(self.file.signed_file_path),
+                             mode='r')
         ids_data = zf.read('META-INF/ids.json')
         eq_(sorted(json.loads(ids_data).keys()), ['id', 'version'])

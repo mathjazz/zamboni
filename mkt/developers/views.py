@@ -1,65 +1,77 @@
 import json
 import os
 import sys
-import time
 import traceback
+import uuid
 from collections import defaultdict
+from datetime import datetime, timedelta
 
-from django import http
 from django import forms as django_forms
+from django import http
+from django.contrib import messages
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
-from django.shortcuts import get_object_or_404, redirect
+from django.core.urlresolvers import reverse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
-from django.views.decorators.csrf import csrf_view_exempt
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 import commonware.log
-import jingo
 import waffle
+from rest_framework import status as http_status
+from rest_framework.exceptions import ParseError
+from rest_framework.generics import CreateAPIView, GenericAPIView, ListAPIView
+from rest_framework.mixins import UpdateModelMixin
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.status import is_success
 from session_csrf import anonymous_csrf, anonymous_csrf_exempt
-from tower import ugettext as _, ugettext_lazy as _lazy
+from django.utils.translation import ugettext as _
 from waffle.decorators import waffle_switch
 
-import amo
-import amo.utils
-from access import acl
-from addons import forms as addon_forms
-from addons.decorators import addon_view
-from addons.models import Addon, AddonUser
-from addons.views import BaseFilter
-from amo import messages
-from amo.decorators import (any_permission_required, json_view, login_required,
-                            post_required)
-from amo.urlresolvers import reverse
-from amo.utils import escape_all
-from comm.utils import create_comm_thread
-from devhub.models import AppLog
-from files.models import File, FileUpload
-from files.utils import parse_addon
-from market.models import Refund
-from stats.models import Contribution
-from users.models import UserProfile
-from users.views import _login
-from versions.models import Version
-
-from mkt.api.models import Access, generate
+import mkt
+import lib.iarc
+from lib.iarc.utils import get_iarc_app_title
+from lib.iarc_v2.client import app_data as iarc_app_data
+from lib.iarc_v2.serializers import IARCV2RatingListSerializer
+from mkt.access import acl
+from mkt.api.base import CORSMixin, SlugOrIdMixin
+from mkt.api.models import Access
+from mkt.comm.utils import create_comm_note
+from mkt.constants import comm
 from mkt.developers.decorators import dev_required
-from mkt.developers.forms import (APIConsumerForm, AppFormBasic,
-                                  AppFormDetails, AppFormMedia,
-                                  AppFormSupport, AppFormTechnical,
-                                  AppVersionForm, CategoryForm,
-                                  NewPackagedAppForm, PreloadTestPlanForm,
-                                  PreviewFormSet, TransactionFilterForm,
-                                  trap_duplicate)
-from mkt.developers.models import PreloadTestPlan
-from mkt.developers.utils import check_upload
-from mkt.developers.tasks import run_validator, save_test_plan
+from mkt.developers.forms import (
+    APIConsumerForm, AppFormBasic, AppFormDetails, AppFormMedia,
+    AppFormSupport, AppFormTechnical, AppVersionForm, CategoryForm,
+    ContentRatingForm, IARCGetAppInfoForm, MOTDForm, NewPackagedAppForm,
+    PreviewFormSet, TransactionFilterForm, trap_duplicate)
+from mkt.developers.models import AppLog, IARCRequest
+from mkt.developers.serializers import ContentRatingSerializer
+from mkt.developers.tasks import (fetch_manifest, file_validator,
+                                  run_validator, validator)
+from mkt.developers.utils import (
+    check_upload, escalate_prerelease_permissions, handle_vip)
+from mkt.files.models import File, FileUpload
+from mkt.files.utils import parse_addon
+from mkt.purchase.models import Contribution
+from mkt.reviewers.models import QUEUE_TARAKO
+from mkt.site.decorators import (
+    json_view, login_required, permission_required, use_master)
+from mkt.site.storage_utils import public_storage
+from mkt.site.utils import escape_all, paginate
 from mkt.submit.forms import AppFeaturesForm, NewWebappVersionForm
+from mkt.translations.query import order_by_translation
+from mkt.users.models import UserProfile
+from mkt.users.views import _clean_next_url
+from mkt.versions.models import Version
+from mkt.webapps.decorators import app_view
+from mkt.webapps.models import AddonUser, ContentRating, IARCInfo, Webapp
 from mkt.webapps.tasks import _update_manifest, update_manifests
-from mkt.webapps.models import Webapp
+from mkt.zadmin.models import set_config, unmemoized_get_config
 
-from . import forms, tasks
+from . import forms
+
 
 log = commonware.log.getLogger('z.devhub')
 
@@ -68,36 +80,31 @@ log = commonware.log.getLogger('z.devhub')
 DEV_AGREEMENT_COOKIE = 'yes-I-read-the-dev-agreement'
 
 
-class AddonFilter(BaseFilter):
-    opts = (('name', _lazy(u'Name')),
-            ('updated', _lazy(u'Updated')),
-            ('created', _lazy(u'Created')),
-            ('popular', _lazy(u'Downloads')),
-            ('rating', _lazy(u'Rating')))
-
-
-class AppFilter(BaseFilter):
-    opts = (('name', _lazy(u'Name')),
-            ('created', _lazy(u'Created')))
-
-
-def addon_listing(request, default='name', webapp=False):
+def addon_listing(request):
     """Set up the queryset and filtering for addon listing for Dashboard."""
-    Filter = AppFilter if webapp else AddonFilter
-    addons = UserProfile.objects.get(pk=request.user.id).addons
-    if webapp:
-        qs = Webapp.objects.filter(id__in=addons.filter(type=amo.ADDON_WEBAPP))
-        model = Webapp
+    qs = request.user.addons.all()
+    sorting = 'name'
+    if request.GET.get('sort') == 'created':
+        sorting = 'created'
+        qs = qs.order_by('-created')
     else:
-        qs = addons.exclude(type=amo.ADDON_WEBAPP)
-        model = Addon
-    filter = Filter(request, qs, 'sort', default, model=model)
-    return filter.qs, filter
+        qs = order_by_translation(qs, 'name')
+    return qs, sorting
 
 
 @anonymous_csrf
 def login(request, template=None):
-    return _login(request, template='developers/login.html')
+    if 'to' in request.GET:
+        request = _clean_next_url(request)
+    data = {
+        'to': request.GET.get('to')
+    }
+
+    if request.user.is_authenticated():
+        return http.HttpResponseRedirect(
+            request.GET.get('to', settings.LOGIN_REDIRECT_URL))
+
+    return render(request, 'developers/login.html', data)
 
 
 def home(request):
@@ -111,39 +118,38 @@ def index(request):
 
 
 @login_required
-def dashboard(request, webapp=False):
-    addons, filter = addon_listing(request, webapp=webapp)
-    addons = amo.utils.paginate(request, addons, per_page=10)
-    data = dict(addons=addons, sorting=filter.field, filter=filter,
-                sort_opts=filter.opts, webapp=webapp)
-    return jingo.render(request, 'developers/apps/dashboard.html', data)
+def dashboard(request):
+    addons, sorting = addon_listing(request)
+    addons = paginate(request, addons, per_page=10)
+    data = {
+        'addons': addons,
+        'sorting': sorting,
+        'motd': unmemoized_get_config('mkt_developers_motd')
+    }
+    return render(request, 'developers/apps/dashboard.html', data)
 
 
-@dev_required(webapp=True, staff=True)
-def edit(request, addon_id, addon, webapp=False):
+@dev_required(staff=True)
+def edit(request, addon_id, addon):
     data = {
         'page': 'edit',
         'addon': addon,
-        'webapp': webapp,
         'valid_slug': addon.app_slug,
-        'tags': addon.tags.not_blacklisted().values_list('tag_text',
-                                                         flat=True),
+        'tags': addon.tags.not_blocked().values_list('tag_text', flat=True),
         'previews': addon.get_previews(),
         'version': addon.current_version or addon.latest_version
     }
-    if (waffle.switch_is_active('buchets') and not addon.is_packaged and
-        data['version']):
-        data['feature_list'] = [unicode(f) for f in
-                                data['version'].features.to_list()]
+    if not addon.is_packaged and data['version']:
+        data['feature_list'] = data['version'].features.to_names()
     if acl.action_allowed(request, 'Apps', 'Configure'):
         data['admin_settings_form'] = forms.AdminSettingsForm(instance=addon,
                                                               request=request)
-    return jingo.render(request, 'developers/apps/edit.html', data)
+    return render(request, 'developers/apps/edit.html', data)
 
 
-@dev_required(owner_for_post=True, webapp=True)
-@post_required
-def delete(request, addon_id, addon, webapp=False):
+@dev_required(owner_for_post=True)
+@require_POST
+def delete(request, addon_id, addon):
     # Database deletes only allowed for free or incomplete addons.
     if not addon.can_be_deleted():
         msg = _('Paid apps cannot be deleted. Disable this app instead.')
@@ -161,68 +167,56 @@ def delete(request, addon_id, addon, webapp=False):
         return redirect(request.GET.get('to') or
                         reverse('mkt.developers.apps'))
     else:
-        msg = _('Password was incorrect.  App was not deleted.')
+        msg = _('Password was incorrect. App was not deleted.')
         messages.error(request, msg)
         return redirect(addon.get_dev_url('versions'))
 
 
 @dev_required
-@post_required
+@require_POST
 def enable(request, addon_id, addon):
     addon.update(disabled_by_user=False)
-    amo.log(amo.LOG.USER_ENABLE, addon)
+    mkt.log(mkt.LOG.USER_ENABLE, addon)
     return redirect(addon.get_dev_url('versions'))
 
 
 @dev_required
-@post_required
+@require_POST
 def disable(request, addon_id, addon):
     addon.update(disabled_by_user=True)
-    amo.log(amo.LOG.USER_DISABLE, addon)
+    mkt.log(mkt.LOG.USER_DISABLE, addon)
     return redirect(addon.get_dev_url('versions'))
 
 
 @dev_required
-@post_required
-def publicise(request, addon_id, addon):
-    if addon.status == amo.STATUS_PUBLIC_WAITING:
-        addon.update(status=amo.STATUS_PUBLIC)
-        File.objects.filter(
-            version__addon=addon, status=amo.STATUS_PUBLIC_WAITING).update(
-                status=amo.STATUS_PUBLIC)
-        amo.log(amo.LOG.CHANGE_STATUS, addon.get_status_display(), addon)
-        # Call update_version, so various other bits of data update.
-        addon.update_version()
-        # Call to update names and locales if changed.
-        addon.update_name_from_package_manifest()
-        addon.update_supported_locales()
-
-    return redirect(addon.get_dev_url('versions'))
-
-
-@dev_required(webapp=True)
-def status(request, addon_id, addon, webapp=False):
-    form = forms.AppAppealForm(request.POST, product=addon)
+def status(request, addon_id, addon):
+    appeal_form = forms.AppAppealForm(request.POST, product=addon)
     upload_form = NewWebappVersionForm(request.POST or None, is_packaged=True,
                                        addon=addon, request=request)
+    publish_form = forms.PublishForm(
+        request.POST if 'publish-app' in request.POST else None, addon=addon)
 
     if request.method == 'POST':
-        if 'resubmit-app' in request.POST and form.is_valid():
-            form.save()
-            perms = ('reviewer', 'senior_reviewer', 'staff')
-            create_comm_thread(action='resubmit', addon=addon,
-                comments=form.data['notes'], profile=request.amo_user,
-                version=addon.current_version, perms=perms)
+        if 'resubmit-app' in request.POST and appeal_form.is_valid():
+            if not addon.is_rated():
+                # Cannot resubmit without content ratings.
+                return http.HttpResponseForbidden(
+                    'This app must obtain content ratings before being '
+                    'resubmitted.')
+
+            appeal_form.save()
+            create_comm_note(addon, addon.latest_version,
+                             request.user, appeal_form.data['notes'],
+                             note_type=comm.RESUBMISSION)
+            if addon.vip_app:
+                handle_vip(addon, addon.latest_version, request.user)
 
             messages.success(request, _('App successfully resubmitted.'))
             return redirect(addon.get_dev_url('versions'))
 
         elif 'upload-version' in request.POST and upload_form.is_valid():
-            mobile_only = (addon.latest_version and
-                           addon.latest_version.features.has_qhd)
-
-            ver = Version.from_upload(upload_form.cleaned_data['upload'],
-                                      addon, [amo.PLATFORM_ALL])
+            upload = upload_form.cleaned_data['upload']
+            ver = Version.from_upload(upload, addon)
 
             # Update addon status now that the new version was saved.
             addon.update_status()
@@ -230,15 +224,20 @@ def status(request, addon_id, addon, webapp=False):
             res = run_validator(ver.all_files[0].file_path)
             validation_result = json.loads(res)
 
+            # Escalate the version if it uses prerelease permissions.
+            escalate_prerelease_permissions(addon, validation_result, ver)
+
             # Set all detected features as True and save them.
             keys = ['has_%s' % feature.lower()
                     for feature in validation_result['feature_profile']]
             data = defaultdict.fromkeys(keys, True)
 
             # Set "Smartphone-Sized Displays" if it's a mobile-only app.
-            qhd_devices = (set((amo.DEVICE_GAIA,)),
-                           set((amo.DEVICE_MOBILE,)),
-                           set((amo.DEVICE_GAIA, amo.DEVICE_MOBILE,)))
+            qhd_devices = (set((mkt.DEVICE_GAIA,)),
+                           set((mkt.DEVICE_MOBILE,)),
+                           set((mkt.DEVICE_GAIA, mkt.DEVICE_MOBILE,)))
+            mobile_only = (addon.latest_version and
+                           addon.latest_version.features.has_qhd)
             if set(addon.device_types) in qhd_devices or mobile_only:
                 data['has_qhd'] = True
 
@@ -247,11 +246,24 @@ def status(request, addon_id, addon, webapp=False):
 
             messages.success(request, _('New version successfully added.'))
             log.info('[Webapp:%s] New version created id=%s from upload: %s'
-                     % (addon, ver.pk, upload_form.cleaned_data['upload']))
+                     % (addon, ver.pk, upload))
+
+            if addon.vip_app:
+                handle_vip(addon, ver, request.user)
+
             return redirect(addon.get_dev_url('versions.edit', args=[ver.pk]))
 
-    ctx = {'addon': addon, 'webapp': webapp, 'form': form,
-           'upload_form': upload_form}
+        elif 'publish-app' in request.POST and publish_form.is_valid():
+            publish_form.save()
+            return redirect(addon.get_dev_url('versions'))
+
+    ctx = {
+        'addon': addon,
+        'appeal_form': appeal_form,
+        'is_tarako': addon.tags.filter(tag_text=QUEUE_TARAKO).exists(),
+        'publish_form': publish_form,
+        'upload_form': upload_form,
+    }
 
     # Used in the delete version modal.
     if addon.is_packaged:
@@ -260,91 +272,143 @@ def status(request, addon_id, addon, webapp=False):
         version_strings['num'] = len(versions)
         ctx['version_strings'] = json.dumps(version_strings)
 
-    if addon.status == amo.STATUS_REJECTED:
+    if addon.status == mkt.STATUS_REJECTED:
         try:
             entry = (AppLog.objects
                      .filter(addon=addon,
-                             activity_log__action=amo.LOG.REJECT_VERSION.id)
+                             activity_log__action=mkt.LOG.REJECT_VERSION.id)
                      .order_by('-created'))[0]
         except IndexError:
             entry = None
         # This contains the rejection reason and timestamp.
         ctx['rejection'] = entry and entry.activity_log
 
-    if waffle.switch_is_active('preload-apps'):
-        test_plan = PreloadTestPlan.objects.filter(
-            addon=addon, status=amo.STATUS_PUBLIC)
-        if test_plan.exists():
-            test_plan = test_plan[0]
-            if (test_plan.last_submission <
-                settings.PREINSTALL_TEST_PLAN_LATEST):
-                ctx['outdated_test_plan'] = True
-        ctx['test_plan'] = test_plan
-
-    return jingo.render(request, 'developers/apps/status.html', ctx)
+    return render(request, 'developers/apps/status.html', ctx)
 
 
-@waffle_switch('iarc')
-@dev_required
-def ratings(request, addon_id, addon):
-    """IARC ratings."""
-    return jingo.render(request, 'developers/apps/ratings.html', {
-        'addon': addon,
-    })
+@permission_required([('DeveloperMOTD', 'Edit')])
+def motd(request):
+    message = unmemoized_get_config('mkt_developers_motd')
+    form = MOTDForm(request.POST or None, initial={'motd': message})
+    if request.method == 'POST' and form and form.is_valid():
+        set_config('mkt_developers_motd', form.cleaned_data['motd'])
+        messages.success(request, _('Changes successfully saved.'))
+        return redirect(reverse('mkt.developers.motd'))
+    return render(request, 'developers/motd.html', {'form': form})
 
 
-@waffle_switch('preload-apps')
-@dev_required
-def preload_home(request, addon_id, addon):
+def _submission_msgs():
+    return {
+        'complete': _('Congratulations, your app submission is now complete '
+                      'and will be reviewed shortly!'),
+        'content_ratings_saved': _('Content ratings successfully saved.'),
+    }
+
+
+def _ratings_success_msg(app, old_status, old_modified):
     """
-    Gives information on the preload process, links to test plan template.
+    Ratings can be created via IARC pinging our API.
+    Thus we can't display a success message via the standard POST/req/res.
+    To workaround, we stored app's rating's `modified` from edit page.
+    When hitting back to the ratings summary page, calc what msg to show.
+
+    old_status -- app status during ratings edit page.
+    old_modified -- rating modified datetime during ratings edit page.
     """
-    return jingo.render(request, 'developers/apps/preload/home.html', {
+    if old_modified:
+        old_modified = datetime.strptime(
+            old_modified, '%Y-%m-%dT%H:%M:%S')
+
+    if old_status != app.status:
+        # App just created a rating to go pending, show 'app now pending'.
+        return _submission_msgs()['complete']
+
+    elif old_modified != app.last_rated_time():
+        # App create/update rating, but was already pending/public, show 'ok'.
+        return _submission_msgs()['content_ratings_saved']
+
+
+@dev_required
+def content_ratings(request, addon_id, addon):
+    if not addon.is_rated():
+        return redirect(addon.get_dev_url('ratings_edit'))
+
+    # Use _ratings_success_msg to display success message.
+    session = request.session
+    app_id = str(addon.id)
+    if 'ratings_edit' in session and app_id in session['ratings_edit']:
+        prev_state = session['ratings_edit'][app_id]
+        msg = _ratings_success_msg(
+            addon, prev_state['app_status'], prev_state['rating_modified'])
+        messages.success(request, msg) if msg else None
+        del session['ratings_edit'][app_id]  # Clear msg so not shown again.
+        request.session.modified = True
+
+    return render(request, 'developers/apps/ratings/ratings_summary.html',
+                  {'addon': addon})
+
+
+@dev_required
+def content_ratings_edit(request, addon_id, addon):
+    initial = {}
+    try:
+        app_info = addon.iarc_info
+        initial['submission_id'] = app_info.submission_id
+        initial['security_code'] = app_info.security_code
+    except IARCInfo.DoesNotExist:
+        pass
+    messages.debug(request,
+                   "DEBUG mode on; you may use IARC id 0 with any code")
+    form = IARCGetAppInfoForm(data=request.POST or None, initial=initial,
+                              app=addon)
+
+    if request.method == 'POST' and form.is_valid():
+        try:
+            form.save()
+            return redirect(addon.get_dev_url('ratings'))
+        except django_forms.ValidationError:
+            pass  # Fall through to show the form error.
+
+    # Save some information for _ratings_success_msg.
+    if 'ratings_edit' not in request.session:
+        request.session['ratings_edit'] = {}
+    last_rated = addon.last_rated_time()
+    request.session['ratings_edit'][str(addon.id)] = {
+        'app_status': addon.status,
+        'rating_modified': last_rated.isoformat() if last_rated else None
+    }
+    request.session.modified = True
+
+    ctx = {
         'addon': addon,
-    })
-
-
-@waffle_switch('preload-apps')
-@dev_required(owner_for_post=True, webapp=True)
-def preload_submit(request, addon_id, addon, webapp):
-    if request.method == 'POST':
-        form = PreloadTestPlanForm(request.POST, request.FILES)
-        if form.is_valid():
-            # Save test plan file.
-            test_plan = request.FILES['test_plan']
-            # Figure the type to save it as (cleaned as pdf/xls from the form).
-            if test_plan.content_type == 'application/pdf':
-                filename = 'test_plan_%s.pdf'
-            else:
-                filename = 'test_plan_%s.xls'
-            # Timestamp.
-            filename = filename % str(time.time()).split('.')[0]
-            save_test_plan(request.FILES['test_plan'], filename, addon)
-
-            # Log test plan.
-            PreloadTestPlan.objects.filter(addon=addon).update(
-                status=amo.STATUS_DISABLED
-            )
-            PreloadTestPlan.objects.create(addon=addon, filename=filename)
-
-            messages.success(
-                request,
-                _('Application for preload successfully submitted.'))
-            return redirect(addon.get_dev_url('versions'))
-        else:
-            messages.error(request, _('There was an error with the form.'))
-    else:
-        form = PreloadTestPlanForm()
-
-    return jingo.render(request, 'developers/apps/preload/submit.html', {
-        'addon': addon,
+        'app_name': get_iarc_app_title(addon),
         'form': form,
-    })
+        'company': addon.latest_version.developer_name,
+        'now': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+    if waffle.switch_is_active('iarc-upgrade-v2'):
+        try:
+            iarc_request = addon.iarc_request
+            outdated = (datetime.now() - iarc_request.created >
+                        timedelta(hours=1))
+            if outdated:
+                # IARC request outdated. Re-create.
+                iarc_request.delete()
+                iarc_request = IARCRequest.objects.create(
+                    app=addon, uuid=uuid.uuid4())
+        except IARCRequest.DoesNotExist:
+            # No IARC request exists. Create.
+            iarc_request = IARCRequest.objects.create(
+                app=addon, uuid=uuid.uuid4())
+        ctx['iarc_request_id'] = unicode(uuid.UUID(iarc_request.uuid))
+
+    return render(request, 'developers/apps/ratings/ratings_edit.html', ctx)
 
 
 @dev_required
 def version_edit(request, addon_id, addon, version_id):
-    show_features = waffle.switch_is_active('buchets') and addon.is_packaged
+    show_features = addon.is_packaged
     formdata = request.POST if request.method == 'POST' else None
     version = get_object_or_404(Version, pk=version_id, addon=addon)
     version.addon = addon  # Avoid extra useless query.
@@ -353,18 +417,16 @@ def version_edit(request, addon_id, addon, version_id):
 
     if show_features:
         appfeatures = version.features
-        appfeatures_form = AppFeaturesForm(request.POST or None,
-                                           instance=appfeatures)
+        appfeatures_form = AppFeaturesForm(formdata, instance=appfeatures)
         all_forms.append(appfeatures_form)
 
     if request.method == 'POST' and all(f.is_valid() for f in all_forms):
         [f.save() for f in all_forms]
 
-        # Make note visible to reviewers, senior reviewers and staff.
-        comm_perms = ('reviewer', 'senior_reviewer', 'staff')
-        create_comm_thread(addon=addon, version=version, action='comment',
-            perms=comm_perms, comments=f.data['approvalnotes'],
-            profile=request.amo_user)
+        if f.data.get('approvalnotes'):
+            create_comm_note(
+                addon, version, request.user, f.data['approvalnotes'],
+                note_type=comm.DEVELOPER_VERSION_NOTE_FOR_REVIEWER)
 
         messages.success(request, _('Version successfully edited.'))
         return redirect(addon.get_dev_url('versions'))
@@ -379,46 +441,39 @@ def version_edit(request, addon_id, addon, version_id):
         context.update({
             'appfeatures_form': appfeatures_form,
             'appfeatures': appfeatures,
-            'feature_list': [unicode(f) for f in appfeatures.to_list()]
+            'feature_list': appfeatures.to_names(),
         })
 
-    return jingo.render(request, 'developers/apps/version_edit.html', context)
+    return render(request, 'developers/apps/version_edit.html', context)
 
 
 @dev_required
-@post_required
+@require_POST
 def version_publicise(request, addon_id, addon):
     version_id = request.POST.get('version_id')
     version = get_object_or_404(Version, pk=version_id, addon=addon)
-    if version.all_files[0].status == amo.STATUS_PUBLIC_WAITING:
-        File.objects.filter(version=version).update(status=amo.STATUS_PUBLIC)
-        amo.log(amo.LOG.CHANGE_VERSION_STATUS, unicode(version.status[0]),
+
+    if version.all_files[0].status == mkt.STATUS_APPROVED:
+        File.objects.filter(version=version).update(status=mkt.STATUS_PUBLIC)
+        mkt.log(mkt.LOG.CHANGE_VERSION_STATUS, unicode(version.status[0]),
                 version)
         # Call update_version, so various other bits of data update.
         addon.update_version()
 
-        # If the version we are publishing is the current_version one, and the
-        # app was in waiting state as well, update the app status.
-        if (version == addon.current_version and
-                addon.status == amo.STATUS_PUBLIC_WAITING):
-            addon.update(status=amo.STATUS_PUBLIC)
-            amo.log(amo.LOG.CHANGE_STATUS, addon.get_status_display(), addon)
-
         # Call to update names and locales if changed.
         addon.update_name_from_package_manifest()
         addon.update_supported_locales()
-        messages.success(request, _('Version successfully made public.'))
+        messages.success(request, _('Version successfully made active.'))
 
     return redirect(addon.get_dev_url('versions'))
 
 
 @dev_required
-@post_required
-@transaction.commit_on_success
+@require_POST
 def version_delete(request, addon_id, addon):
     version_id = request.POST.get('version_id')
     version = get_object_or_404(Version, pk=version_id, addon=addon)
-    if version.all_files[0].status == amo.STATUS_BLOCKED:
+    if version.all_files[0].status == mkt.STATUS_BLOCKED:
         raise PermissionDenied
     version.delete()
     messages.success(request,
@@ -426,8 +481,8 @@ def version_delete(request, addon_id, addon):
     return redirect(addon.get_dev_url('versions'))
 
 
-@dev_required(owner_for_post=True, webapp=True)
-def ownership(request, addon_id, addon, webapp=False):
+@dev_required(owner_for_post=True)
+def ownership(request, addon_id, addon):
     # Authors.
     qs = AddonUser.objects.filter(addon=addon).order_by('position')
     user_form = forms.AuthorFormSet(request.POST or None, queryset=qs)
@@ -435,54 +490,50 @@ def ownership(request, addon_id, addon, webapp=False):
     if request.method == 'POST' and user_form.is_valid():
         # Authors.
         authors = user_form.save(commit=False)
+        redirect_url = addon.get_dev_url('owner')
+
         for author in authors:
             action = None
             if not author.id or author.user_id != author._original_user_id:
-                action = amo.LOG.ADD_USER_WITH_ROLE
+                action = mkt.LOG.ADD_USER_WITH_ROLE
                 author.addon = addon
             elif author.role != author._original_role:
-                action = amo.LOG.CHANGE_USER_WITH_ROLE
+                action = mkt.LOG.CHANGE_USER_WITH_ROLE
 
             author.save()
             if action:
-                amo.log(action, author.user, author.get_role_display(), addon)
+                mkt.log(action, author.user, author.get_role_display(), addon)
+
             if (author._original_user_id and
-                author.user_id != author._original_user_id):
-                amo.log(amo.LOG.REMOVE_USER_WITH_ROLE,
+                    author.user_id != author._original_user_id):
+                mkt.log(mkt.LOG.REMOVE_USER_WITH_ROLE,
                         (UserProfile, author._original_user_id),
                         author.get_role_display(), addon)
+                # Unsubscribe user from emails (Commbadge).
+                author.user.comm_thread_cc.filter(
+                    thread___addon=addon).delete()
 
         for author in user_form.deleted_objects:
-            amo.log(amo.LOG.REMOVE_USER_WITH_ROLE, author.user,
+            author.delete()
+            if author.user_id == request.user.id:
+                # The current user removed their own access to the app.
+                redirect_url = reverse('mkt.developers.apps')
+
+            mkt.log(mkt.LOG.REMOVE_USER_WITH_ROLE, author.user,
                     author.get_role_display(), addon)
+            # Unsubscribe user from emails (Commbadge).
+            author.user.comm_thread_cc.filter(thread___addon=addon).delete()
 
         messages.success(request, _('Changes successfully saved.'))
+        return redirect(redirect_url)
 
-        return redirect(addon.get_dev_url('owner'))
-
-    ctx = dict(addon=addon, webapp=webapp, user_form=user_form)
-    return jingo.render(request, 'developers/apps/owner.html', ctx)
-
-
-@waffle_switch('allow-refund')
-@dev_required(support=True, webapp=True)
-def refunds(request, addon_id, addon, webapp=False):
-    ctx = {'addon': addon, 'webapp': webapp}
-    queues = {
-        'pending': Refund.objects.pending(addon).order_by('requested'),
-        'approved': Refund.objects.approved(addon).order_by('-requested'),
-        'instant': Refund.objects.instant(addon).order_by('-requested'),
-        'declined': Refund.objects.declined(addon).order_by('-requested'),
-        'failed': Refund.objects.failed(addon).order_by('-requested'),
-    }
-    for status, refunds in queues.iteritems():
-        ctx[status] = amo.utils.paginate(request, refunds, per_page=50)
-    return jingo.render(request, 'developers/payments/refunds.html', ctx)
+    ctx = dict(addon=addon, user_form=user_form)
+    return render(request, 'developers/apps/owner.html', ctx)
 
 
 @anonymous_csrf
-def validate_addon(request):
-    return jingo.render(request, 'developers/validate_addon.html', {
+def validate_app(request):
+    return render(request, 'developers/validate_app.html', {
         'upload_hosted_url':
             reverse('mkt.developers.standalone_hosted_upload'),
         'upload_packaged_url':
@@ -490,15 +541,15 @@ def validate_addon(request):
     })
 
 
-@post_required
+@require_POST
 def _upload(request, addon=None, is_standalone=False):
-
+    user = request.user
     # If there is no user, default to None (saves the file upload as anon).
     form = NewPackagedAppForm(request.POST, request.FILES,
-                              user=getattr(request, 'amo_user', None),
+                              user=user if user.is_authenticated() else None,
                               addon=addon)
     if form.is_valid():
-        tasks.validator.delay(form.file_upload.pk)
+        validator.delay(form.file_upload.pk)
 
     if addon:
         return redirect('mkt.developers.upload_detail_for_addon',
@@ -527,27 +578,34 @@ def upload_for_addon(request, addon_id, addon):
 
 
 @dev_required
-def refresh_manifest(request, addon_id, addon, webapp=False):
+@require_POST
+def refresh_manifest(request, addon_id, addon):
     log.info('Manifest %s refreshed for %s' % (addon.manifest_url, addon))
     _update_manifest(addon_id, True, {})
     return http.HttpResponse(status=204)
 
 
-@post_required
+@require_POST
 @json_view
+@use_master
 def _upload_manifest(request, is_standalone=False):
     form = forms.NewManifestForm(request.POST, is_standalone=is_standalone)
     if (not is_standalone and
-        waffle.switch_is_active('webapps-unique-by-domain')):
+            waffle.switch_is_active('webapps-unique-by-domain')):
         # Helpful error if user already submitted the same manifest.
         dup_msg = trap_duplicate(request, request.POST.get('manifest'))
         if dup_msg:
-            return {'validation': {'errors': 1, 'success': False,
-                    'messages': [{'type': 'error', 'message': dup_msg,
-                                  'tier': 1}]}}
+            return {
+                'validation': {
+                    'errors': 1, 'success': False,
+                    'messages': [{
+                        'type': 'error', 'message': dup_msg, 'tier': 1}]
+                }
+            }
     if form.is_valid():
-        upload = FileUpload.objects.create()
-        tasks.fetch_manifest.delay(form.cleaned_data['manifest'], upload.pk)
+        user = request.user if request.user.is_authenticated() else None
+        upload = FileUpload.objects.create(user=user)
+        fetch_manifest.delay(form.cleaned_data['manifest'], upload.pk)
         if is_standalone:
             return redirect('mkt.developers.standalone_upload_detail',
                             'hosted', upload.pk)
@@ -596,12 +654,11 @@ def make_validation_result(data):
     """Safe wrapper around JSON dict containing a validation result."""
     if not settings.EXPOSE_VALIDATOR_TRACEBACKS:
         if data['error']:
-            # Just expose the message, not the traceback.
-            data['error'] = data['error'].strip().split('\n')[-1].strip()
+            data['error'] = _('An error occurred validating the manifest.')
     if data['validation']:
         for msg in data['validation']['messages']:
             for k, v in msg.items():
-                msg[k] = escape_all(v)
+                msg[k] = escape_all(v, linkify=k in ('message', 'description'))
     return data
 
 
@@ -610,14 +667,13 @@ def file_validation(request, addon_id, addon, file_id):
     file = get_object_or_404(File, id=file_id)
 
     v = addon.get_dev_url('json_file_validation', args=[file.id])
-    return jingo.render(request, 'developers/validation.html',
-                        dict(validate_url=v, filename=file.filename,
-                             timestamp=file.created,
-                             addon=addon))
+    return render(request, 'developers/validation.html',
+                  dict(validate_url=v, filename=file.filename,
+                       timestamp=file.created, addon=addon))
 
 
 @json_view
-@csrf_view_exempt
+@csrf_exempt
 @dev_required(allow_editors=True)
 def json_file_validation(request, addon_id, addon, file_id):
     file = get_object_or_404(File, id=file_id)
@@ -626,7 +682,7 @@ def json_file_validation(request, addon_id, addon, file_id):
             return http.HttpResponseNotAllowed(['POST'])
 
         try:
-            v_result = tasks.file_validator(file.id)
+            v_result = file_validator(file.id)
         except Exception, exc:
             log.error('file_validator(%s): %s' % (file.id, exc))
             error = "\n".join(traceback.format_exception(*sys.exc_info()))
@@ -636,8 +692,7 @@ def json_file_validation(request, addon_id, addon, file_id):
         v_result = file.validation
     validation = json.loads(v_result.validation)
 
-    return make_validation_result(dict(validation=validation,
-                                       error=None))
+    return make_validation_result(dict(validation=validation, error=None))
 
 
 @json_view
@@ -661,7 +716,6 @@ def json_upload_detail(request, upload, addon=None):
 def upload_validation_context(request, upload, addon=None, url=None):
     if not settings.VALIDATE_ADDONS:
         upload.task_error = ''
-        upload.is_webapp = True
         upload.validation = json.dumps({'errors': 0, 'messages': [],
                                         'metadata': {}, 'notices': 0,
                                         'warnings': 0})
@@ -691,16 +745,14 @@ def upload_detail(request, uuid, format='html'):
 
     validate_url = reverse('mkt.developers.standalone_upload_detail',
                            args=['hosted', upload.uuid])
-    return jingo.render(request, 'developers/validation.html',
-                        dict(validate_url=validate_url, filename=upload.name,
-                             timestamp=upload.created))
+    return render(request, 'developers/validation.html',
+                  dict(validate_url=validate_url, filename=upload.name,
+                       timestamp=upload.created))
 
 
-@dev_required(webapp=True, staff=True)
-def addons_section(request, addon_id, addon, section, editable=False,
-                   webapp=False):
-    basic = AppFormBasic if webapp else addon_forms.AddonFormBasic
-    models = {'basic': basic,
+@dev_required(staff=True)
+def addons_section(request, addon_id, addon, section, editable=False):
+    models = {'basic': AppFormBasic,
               'media': AppFormMedia,
               'details': AppFormDetails,
               'support': AppFormSupport,
@@ -714,20 +766,26 @@ def addons_section(request, addon_id, addon, section, editable=False,
 
     version = addon.current_version or addon.latest_version
 
-    tags, previews, restricted_tags = [], [], []
-    cat_form = appfeatures = appfeatures_form = None
+    tags, previews = [], []
+    cat_form = appfeatures = appfeatures_form = version_form = None
+    formdata = request.POST if request.method == 'POST' else None
 
     # Permissions checks.
     # Only app owners can edit any of the details of their apps.
     # Users with 'Apps:Configure' can edit the admin settings.
-    if (section != 'admin' and not is_dev) or (section == 'admin' and
-        not acl.action_allowed(request, 'Apps', 'Configure') and
-        not acl.action_allowed(request, 'Apps', 'ViewConfiguration')):
+    if ((section != 'admin' and not is_dev) or
+            (section == 'admin' and
+             not acl.action_allowed(request, 'Apps', 'Configure') and
+             not acl.action_allowed(request, 'Apps', 'ViewConfiguration'))):
         raise PermissionDenied
 
     if section == 'basic':
-        cat_form = CategoryForm(request.POST or None, product=addon,
-                                request=request)
+        cat_form = CategoryForm(formdata, product=addon, request=request)
+        # Only show/use the release notes form for hosted apps, packaged apps
+        # can do that from the version edit page.
+        if not addon.is_packaged:
+            version_form = AppVersionForm(formdata, instance=version)
+        tags = addon.tags.not_blocked().values_list('tag_text', flat=True)
 
     elif section == 'media':
         previews = PreviewFormSet(
@@ -735,16 +793,11 @@ def addons_section(request, addon_id, addon, section, editable=False,
             queryset=addon.get_previews())
 
     elif section == 'technical':
-        # Only show the list of features if app isn't packaged.
-        if (waffle.switch_is_active('buchets') and not addon.is_packaged and
-                section == 'technical'):
+        # Only show/use the features form for hosted apps, packaged apps
+        # can do that from the version edit page.
+        if not addon.is_packaged:
             appfeatures = version.features
-            formdata = request.POST if request.method == 'POST' else None
             appfeatures_form = AppFeaturesForm(formdata, instance=appfeatures)
-
-    elif section == 'admin':
-        tags = addon.tags.not_blacklisted().values_list('tag_text', flat=True)
-        restricted_tags = addon.tags.filter(restricted=True)
 
     # Get the slug before the form alters it to the form data.
     valid_slug = addon.app_slug
@@ -752,17 +805,17 @@ def addons_section(request, addon_id, addon, section, editable=False,
         if request.method == 'POST':
 
             if (section == 'admin' and
-                not acl.action_allowed(request, 'Apps', 'Configure')):
+                    not acl.action_allowed(request, 'Apps', 'Configure')):
                 raise PermissionDenied
 
-            form = models[section](request.POST, request.FILES,
-                                   instance=addon, request=request)
+            form = models[section](formdata, request.FILES, instance=addon,
+                                   version=version, request=request)
 
             all_forms = [form, previews]
-            if appfeatures_form:
-                all_forms.append(appfeatures_form)
-            if cat_form:
-                all_forms.append(cat_form)
+            for additional_form in (appfeatures_form, cat_form, version_form):
+                if additional_form:
+                    all_forms.append(additional_form)
+
             if all(not f or f.is_valid() for f in all_forms):
                 if cat_form:
                     cat_form.save()
@@ -771,6 +824,14 @@ def addons_section(request, addon_id, addon, section, editable=False,
 
                 if appfeatures_form:
                     appfeatures_form.save()
+
+                if version_form:
+                    # We are re-using version_form without displaying all its
+                    # fields, so we need to override the boolean fields,
+                    # otherwise they'd be considered empty and therefore False.
+                    version_form.cleaned_data['publish_immediately'] = (
+                        version_form.fields['publish_immediately'].initial)
+                    version_form.save()
 
                 if 'manifest_url' in form.changed_data:
                     addon.update(
@@ -783,36 +844,37 @@ def addons_section(request, addon_id, addon, section, editable=False,
 
                 editable = False
                 if section == 'media':
-                    amo.log(amo.LOG.CHANGE_ICON, addon)
+                    mkt.log(mkt.LOG.CHANGE_ICON, addon)
                 else:
-                    amo.log(amo.LOG.EDIT_PROPERTIES, addon)
+                    mkt.log(mkt.LOG.EDIT_PROPERTIES, addon)
 
                 valid_slug = addon.app_slug
         else:
-            form = models[section](instance=addon, request=request)
+            form = models[section](instance=addon, version=version,
+                                   request=request)
     else:
         form = False
 
-    data = {'addon': addon,
-            'webapp': webapp,
-            'version': version,
-            'form': form,
-            'editable': editable,
-            'tags': tags,
-            'restricted_tags': restricted_tags,
-            'cat_form': cat_form,
-            'preview_form': previews,
-            'valid_slug': valid_slug, }
+    data = {
+        'addon': addon,
+        'version': version,
+        'form': form,
+        'editable': editable,
+        'tags': tags,
+        'cat_form': cat_form,
+        'version_form': version_form,
+        'preview_form': previews,
+        'valid_slug': valid_slug,
+    }
 
     if appfeatures_form and appfeatures:
         data.update({
             'appfeatures': appfeatures,
-            'feature_list': [unicode(f) for f in appfeatures.to_list()],
-            'appfeatures_form': appfeatures_form
+            'feature_list': appfeatures.to_names(),
+            'appfeatures_form': appfeatures_form,
         })
 
-    return jingo.render(request,
-                        'developers/apps/edit/%s.html' % section, data)
+    return render(request, 'developers/apps/edit/%s.html' % section, data)
 
 
 @never_cache
@@ -822,14 +884,11 @@ def image_status(request, addon_id, addon, icon_size=64):
     # Default icon needs no checking.
     if not addon.icon_type or addon.icon_type.split('/')[0] == 'icon':
         icons = True
-    # Persona icon is handled differently.
-    elif addon.type == amo.ADDON_PERSONA:
-        icons = True
     else:
-        icons = os.path.exists(os.path.join(addon.get_icon_dir(),
-                                            '%s-%s.png' %
-                                            (addon.id, icon_size)))
-    previews = all(os.path.exists(p.thumbnail_path)
+        icons = public_storage.exists(
+            os.path.join(addon.get_icon_dir(), '%s-%s.png' % (
+                addon.id, icon_size)))
+    previews = all(public_storage.exists(p.thumbnail_path)
                    for p in addon.get_previews())
     return {'overall': icons and previews,
             'icons': icons,
@@ -863,7 +922,7 @@ def upload_media(request, addon_id, addon, upload_type):
 
 
 @dev_required
-@post_required
+@require_POST
 def remove_locale(request, addon_id, addon):
     locale = request.POST.get('locale')
     if locale and locale != addon.default_locale:
@@ -888,29 +947,32 @@ def docs(request, doc_name=None, doc_page=None):
     if not filename:
         return redirect('ecosystem.landing')
 
-    return jingo.render(request, 'developers/docs/%s' % filename)
+    return render(request, 'developers/docs/%s' % filename)
 
 
 @login_required
 def terms(request):
     form = forms.DevAgreementForm({'read_dev_agreement': True},
-                                  instance=request.amo_user)
+                                  instance=request.user)
     if request.POST and form.is_valid():
         form.save()
-        log.info('Dev agreement agreed for user: %s' % request.amo_user.pk)
+        log.info('Dev agreement agreed for user: %s' % request.user.pk)
         if request.GET.get('to') and request.GET['to'].startswith('/'):
             return redirect(request.GET['to'])
         messages.success(request, _('Terms of service accepted.'))
-    return jingo.render(request, 'developers/terms.html',
-                        {'accepted': request.amo_user.read_dev_agreement,
-                         'agreement_form': form})
+    return render(request, 'developers/terms.html',
+                  {'accepted': request.user.read_dev_agreement,
+                   'agreement_form': form})
 
 
-@waffle_switch('create-api-tokens')
+def terms_standalone(request):
+    return render(request, 'developers/terms_standalone.html')
+
+
 @login_required
 def api(request):
-    roles = request.amo_user.groups.filter(name='Admins').exists()
-    f = APIConsumerForm()
+    roles = request.user.groups.filter(name='Admins').exists()
+    form = APIConsumerForm()
     if roles:
         messages.error(request,
                        _('Users with the admin role cannot use the API.'))
@@ -918,38 +980,33 @@ def api(request):
     elif request.method == 'POST':
         if 'delete' in request.POST:
             try:
-                consumer = Access.objects.get(pk=request.POST.get('consumer'))
+                consumer = Access.objects.get(pk=request.POST.get('consumer'),
+                                              user=request.user)
                 consumer.delete()
             except Access.DoesNotExist:
                 messages.error(request, _('No such API key.'))
         else:
-            key = 'mkt:%s:%s:%s' % (
-                request.amo_user.pk,
-                request.amo_user.email,
-                Access.objects.filter(user=request.user).count())
-            access = Access.objects.create(key=key,
-                                           user=request.user,
-                                           secret=generate())
-            f = APIConsumerForm(request.POST, instance=access)
-            if f.is_valid():
-                f.save()
+            access = Access.create_for_user(request.user)
+            form = APIConsumerForm(request.POST, instance=access)
+            if form.is_valid():
+                form.save()
                 messages.success(request, _('New API key generated.'))
             else:
                 access.delete()
     consumers = list(Access.objects.filter(user=request.user))
-    return jingo.render(request, 'developers/api.html',
-                        {'consumers': consumers, 'roles': roles, 'form': f})
+    return render(request, 'developers/api.html',
+                  {'consumers': consumers, 'roles': roles, 'form': form,
+                   'domain': settings.DOMAIN, 'site_url': settings.SITE_URL})
 
 
-@addon_view
-@post_required
-@any_permission_required([('Admin', '%'),
-                          ('Apps', 'Configure')])
+@app_view
+@require_POST
+@permission_required([('Admin', '%'), ('Apps', 'Configure')])
 def blocklist(request, addon):
     """
     Blocklists the app by creating a new version/file.
     """
-    if addon.status != amo.STATUS_BLOCKED:
+    if addon.status != mkt.STATUS_BLOCKED:
         addon.create_blocklisted_version()
         messages.success(request, _('Created blocklisted version.'))
     else:
@@ -962,19 +1019,17 @@ def blocklist(request, addon):
 @login_required
 def transactions(request):
     form, transactions = _get_transactions(request)
-    return jingo.render(
+    return render(
         request, 'developers/transactions.html',
-        {'form': form,
-         'CONTRIB_TYPES': amo.CONTRIB_TYPES,
+        {'form': form, 'CONTRIB_TYPES': mkt.CONTRIB_TYPES,
          'count': transactions.count(),
-         'transactions': amo.utils.paginate(request,
-                                            transactions, per_page=50)})
+         'transactions': paginate(request, transactions, per_page=50)})
 
 
 def _get_transactions(request):
-    apps = addon_listing(request, webapp=True)[0]
+    apps = addon_listing(request)[0]
     transactions = Contribution.objects.filter(addon__in=list(apps),
-                                               type__in=amo.CONTRIB_TYPES)
+                                               type__in=mkt.CONTRIB_TYPES)
 
     form = TransactionFilterForm(request.GET, apps=apps)
     if form.is_valid():
@@ -999,4 +1054,170 @@ def _filter_transactions(qs, data):
 
 
 def testing(request):
-    return jingo.render(request, 'developers/testing.html')
+    return render(request, 'developers/testing.html')
+
+
+class ContentRatingList(CORSMixin, SlugOrIdMixin, ListAPIView):
+    model = ContentRating
+    serializer_class = ContentRatingSerializer
+    permission_classes = (AllowAny,)
+    cors_allowed_methods = ['get']
+
+    queryset = Webapp.objects.all()
+    slug_field = 'app_slug'
+
+    def get(self, request, *args, **kwargs):
+        app = self.get_object()
+
+        self.queryset = app.content_ratings.all()
+
+        if 'since' in request.GET:
+            form = ContentRatingForm(request.GET)
+            if form.is_valid():
+                self.queryset = self.queryset.filter(
+                    modified__gt=form.cleaned_data['since'])
+
+        if not self.queryset.exists():
+            raise http.Http404()
+
+        return super(ContentRatingList, self).get(self, request)
+
+
+class ContentRatingsPingback(CORSMixin, SlugOrIdMixin, CreateAPIView):
+    cors_allowed_methods = ['post']
+    parser_classes = (lib.iarc.utils.IARC_JSON_Parser,)
+    permission_classes = (AllowAny,)
+
+    queryset = Webapp.objects.all()
+    slug_field = 'app_slug'
+
+    def post(self, request, pk, *args, **kwargs):
+        log.info(u'Received IARC pingback for app:%s' % pk)
+
+        if request.content_type != 'application/json':
+            log.info(u'IARC pingback not of content-type "application/json"')
+            return Response({
+                'detail': "Endpoint only accepts 'application/json'."
+            }, status=http_status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+        app = self.get_object()
+        data = request.data[0]
+        if settings.DEBUG:
+            log.debug(u'%s' % data)
+
+        if app.iarc_token() != data.get('token'):
+            # Verify token.
+            log.info(u'Token mismatch in IARC pingback for app:%s' % app.id)
+            return Response({'detail': 'Token mismatch'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+
+        if data.get('ratings'):
+            # Double-check with IARC that it's the correct rating.
+            if not self.verify_data(data):
+                return Response('The ratings do not match the submission ID.',
+                                status=http_status.HTTP_400_BAD_REQUEST)
+
+            log.info(u'Setting content ratings from IARC pingback for app:%s' %
+                     app.id)
+            # We found a rating, so store the id and code for future use.
+            if 'submission_id' in data and 'security_code' in data:
+                app.set_iarc_info(data['submission_id'], data['security_code'])
+
+            # Update status if incomplete status.
+            # Do this before set_content_ratings to not prematurely trigger
+            # a refresh.
+            log.info('Checking app:%s completeness after IARC pingback.'
+                     % app.id)
+            if (app.has_incomplete_status() and
+                    app.is_fully_complete(ignore_ratings=True)):
+                log.info('Updating app status from IARC pingback for app:%s' %
+                         app.id)
+                # Don't call update to prevent recursion in update_status.
+                app.update(status=mkt.STATUS_PENDING)
+                log.info('Updated app status from IARC pingback for app:%s' %
+                         app.id)
+            elif app.has_incomplete_status():
+                log.info('Reasons for app:%s incompleteness after IARC '
+                         'pingback: %s' % (app.id, app.completion_errors()))
+
+            app.set_descriptors(data.get('descriptors', []))
+            app.set_interactives(data.get('interactives', []))
+            # Set content ratings last since it triggers a refresh on Content
+            # Ratings page. We want descriptors and interactives visible by
+            # the time it's refreshed.
+            app.set_content_ratings(data.get('ratings', {}))
+
+        return Response('ok')
+
+    def verify_data(self, data):
+        client = lib.iarc.client.get_iarc_client('services')
+        xml = lib.iarc.utils.render_xml('get_app_info.xml', data)
+        resp = client.Get_App_Info(XMLString=xml)
+        check_data = lib.iarc.utils.IARC_XML_Parser().parse_string(resp)
+        try:
+            check_data = check_data.get('rows', [])[0]
+        except IndexError:
+            return False
+
+        rates_bad = data.get('ratings') != check_data.get('ratings')
+        inter_bad = (set(data.get('interactives', [])) !=
+                     set(check_data.get('interactives', [])))
+        descs_bad = (set(data.get('descriptors', [])) !=
+                     set(check_data.get('descriptors', [])))
+        if rates_bad:
+            log.error('IARC pingback did not match rating %s vs %s' %
+                      (data.get('ratings'), check_data.get('ratings')))
+        if inter_bad:
+            log.error('IARC pingback did not match interactives %s vs %s' %
+                      (data.get('interactives'),
+                       check_data.get('interactives')))
+        if descs_bad:
+            log.error('IARC pingback did not match descriptors %s vs %s' %
+                      (data.get('descriptors'), check_data.get('descriptors')))
+        if rates_bad or inter_bad or descs_bad:
+            return False
+
+        return True
+
+
+class ContentRatingsPingbackV2(CORSMixin, UpdateModelMixin, GenericAPIView):
+    """Pingback API for IARC v2.
+
+    Should conform to the PushCert API spec. Assumes that the RatingList is
+    always sent with PushCert, so we don't need to call SearchCert afterwards
+    to get the ratings."""
+    cors_allowed_methods = ['post']
+    permission_classes = (AllowAny,)
+    queryset = IARCRequest.objects.all()
+    serializer_class = IARCV2RatingListSerializer
+    lookup_field = 'uuid'
+
+    def get_object(self, queryset=None):
+        request = self.request
+        try:
+            self.kwargs[self.lookup_field] = request.data['StoreRequestID']
+        except KeyError:
+            raise ParseError('Need a StoreRequestID')
+        self.object = super(ContentRatingsPingbackV2, self).get_object().app
+        return self.object
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        """Alter response to conform to IARC spec (which is not REST)."""
+        if is_success(response.status_code):
+            # not care about our serialized data.
+            # Override data, because IARC wants a specific response and does
+            response.data = iarc_app_data(self.object)
+            # FIXME: not sure what StatusCode value to use when everything is
+            # OK. The spec says it's not nullable and only gives 2 possible
+            # values, to use when something goes wrong.
+            response.data['StatusCode'] = 'Success'
+        else:
+            response.data['StatusCode'] = 'InvalidRequest'
+        return super(ContentRatingsPingbackV2, self).finalize_response(
+            request, response, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        # IARC sends a POST, but what we really want is to update some data,
+        # passing an object to the serializer. So we implement post() to match
+        # the HTTP verb but really have it call update() behind the scenes.
+        return self.update(request, *args, **kwargs)

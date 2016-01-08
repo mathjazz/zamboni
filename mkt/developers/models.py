@@ -1,36 +1,42 @@
-import posixpath
+import json
+import string
 import uuid
+from copy import copy
+from datetime import datetime
 
+from django.apps import apps
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.urlresolvers import reverse
 from django.db import models
+from uuidfield.fields import UUIDField
 
 import commonware.log
-from tower import ugettext_lazy as _lazy, ugettext as _
+import jinja2
+from django.utils.translation import ugettext as _
 
-import amo
-from amo.urlresolvers import reverse
+import mkt
 from lib.crypto import generate_key
 from lib.pay_server import client
-from mkt.constants.payments import ACCESS_PURCHASE, ACCESS_SIMULATE
-from mkt.purchase import webpay
-from users.models import UserForeignKey
+from mkt.access.models import Group
+from mkt.constants.payments import (ACCESS_SIMULATE, PROVIDER_BANGO,
+                                    PROVIDER_CHOICES)
+from mkt.ratings.models import Review
+from mkt.site.models import ManagerBase, ModelBase
+from mkt.tags.models import Tag
+from mkt.users.models import UserForeignKey, UserProfile
+from mkt.versions.models import Version
+from mkt.webapps.models import Webapp
+from mkt.websites.models import Website
+
 
 log = commonware.log.getLogger('z.devhub')
-
-
-def uri_to_pk(uri):
-    """
-    Convert a resource URI to the primary key of the resource.
-    """
-    return uri.rstrip('/').split('/')[-1]
 
 
 class CantCancel(Exception):
     pass
 
 
-class SolitudeSeller(amo.models.ModelBase):
+class SolitudeSeller(ModelBase):
     # TODO: When Solitude allows for it, this should be updated to be 1:1 with
     # users.
     user = UserForeignKey()
@@ -48,14 +54,14 @@ class SolitudeSeller(amo.models.ModelBase):
         obj = cls.objects.create(user=user, uuid=uuid_, resource_uri=uri)
 
         log.info('[User:%s] Created Solitude seller (uuid:%s)' %
-                     (user, uuid_))
+                 (user, uuid_))
         return obj
 
 
-class PaymentAccount(amo.models.ModelBase):
+class PaymentAccount(ModelBase):
     user = UserForeignKey()
     name = models.CharField(max_length=64)
-    agreed_tos = models.BooleanField()
+    agreed_tos = models.BooleanField(default=False)
     solitude_seller = models.ForeignKey(SolitudeSeller)
 
     # These two fields can go away when we're not 1:1 with SolitudeSellers.
@@ -63,57 +69,16 @@ class PaymentAccount(amo.models.ModelBase):
     uri = models.CharField(max_length=255, unique=True)
     # A soft-delete so we can talk to Solitude asynchronously.
     inactive = models.BooleanField(default=False)
-    bango_package_id = models.IntegerField(blank=True, null=True)
-
+    # The id for this account from the provider.
+    account_id = models.CharField(max_length=255)
+    # Each account will be for a particular provider.
+    provider = models.IntegerField(choices=PROVIDER_CHOICES,
+                                   default=PROVIDER_BANGO)
     shared = models.BooleanField(default=False)
-
-    BANGO_PACKAGE_VALUES = (
-        'adminEmailAddress', 'supportEmailAddress', 'financeEmailAddress',
-        'paypalEmailAddress', 'vendorName', 'companyName', 'address1',
-        'addressCity', 'addressState', 'addressZipCode', 'addressPhone',
-        'countryIso', 'currencyIso', 'vatNumber')
-    BANGO_BANK_DETAILS_VALUES = (
-        'seller_bango', 'bankAccountPayeeName', 'bankAccountNumber',
-        'bankAccountCode', 'bankName', 'bankAddress1', 'bankAddressZipCode',
-        'bankAddressIso', )
 
     class Meta:
         db_table = 'payment_accounts'
         unique_together = ('user', 'uri')
-
-    @classmethod
-    def create_bango(cls, user, form_data):
-        # Get the seller object.
-        user_seller = SolitudeSeller.create(user)
-
-        # Get the data together for the package creation.
-        package_values = dict((k, v) for k, v in form_data.items() if
-                              k in cls.BANGO_PACKAGE_VALUES)
-        # Dummy value since we don't really use this.
-        package_values.setdefault('paypalEmailAddress', 'nobody@example.com')
-        package_values['seller'] = user_seller.resource_uri
-
-        log.info('[User:%s] Creating Bango package' % user)
-        res = client.api.bango.package.post(data=package_values)
-        uri = res['resource_uri']
-
-        # Get the data together for the bank details creation.
-        bank_details_values = dict((k, v) for k, v in form_data.items() if
-                                   k in cls.BANGO_BANK_DETAILS_VALUES)
-        bank_details_values['seller_bango'] = uri
-
-        log.info('[User:%s] Creating Bango bank details' % user)
-        client.api.bango.bank.post(data=bank_details_values)
-
-        obj = cls.objects.create(user=user, uri=uri,
-                                 solitude_seller=user_seller,
-                                 seller_uri=user_seller.resource_uri,
-                                 bango_package_id=res['package_id'],
-                                 name=form_data['account_name'])
-
-        log.info('[User:%s] Created Bango payment account (uri: %s)' %
-                     (user, uri))
-        return obj
 
     def cancel(self, disable_refs=False):
         """Cancels the payment account.
@@ -143,168 +108,51 @@ class PaymentAccount(amo.models.ModelBase):
         log.info('Soft-deleted payment account (uri: %s)' % self.uri)
 
         for acc_ref in account_refs:
-            if disable_refs:
+            if (disable_refs and
+                    not acc_ref.addon.has_multiple_payment_accounts()):
                 log.info('Changing app status to NULL for app: {0}'
                          'because of payment account deletion'.format(
                              acc_ref.addon_id))
 
-                acc_ref.addon.update(status=amo.STATUS_NULL)
+                acc_ref.addon.update(status=mkt.STATUS_NULL)
             log.info('Deleting AddonPaymentAccount for app: {0} because of '
                      'payment account deletion'.format(acc_ref.addon_id))
             acc_ref.delete()
 
-    def update_account_details(self, **kwargs):
-        self.update(name=kwargs.pop('account_name'))
-        client.api.by_url(self.uri).patch(
-            data=dict((k, v) for k, v in kwargs.items() if
-                      k in self.BANGO_PACKAGE_VALUES))
-
-    def get_details(self):
-        data = {'account_name': self.name}
-        package_data = (client.api.bango.package(uri_to_pk(self.uri))
-                        .get(data={'full': True}))
-        data.update((k, v) for k, v in package_data.get('full').items() if
-                    k in self.BANGO_PACKAGE_VALUES)
-        return data
+    def get_provider(self):
+        """Returns an instance of the payment provider for this account."""
+        # TODO: fix circular import. Providers imports models which imports
+        # forms which imports models.
+        from mkt.developers.providers import get_provider
+        return get_provider(id=self.provider)
 
     def __unicode__(self):
         date = self.created.strftime('%m/%y')
         if not self.shared:
             return u'%s - %s' % (date, self.name)
         # L10n: {0} is the name of the account.
-        return _(u'Shared Account: {0}'.format(self.name))
+        return _(u'Donate to {0}'.format(self.name))
 
     def get_agreement_url(self):
-        return reverse('mkt.developers.bango.agreement', args=[self.pk])
-
-    def get_lookup_portal_url(self):
-        return reverse('lookup.bango_portal_from_package',
-                       args=[self.bango_package_id])
+        return reverse('mkt.developers.provider.agreement', args=[self.pk])
 
 
-class AddonPaymentAccount(amo.models.ModelBase):
-    addon = models.OneToOneField(
-        'addons.Addon', related_name='app_payment_account')
+class AddonPaymentAccount(ModelBase):
+    addon = models.ForeignKey(
+        'webapps.Webapp', related_name='app_payment_accounts')
     payment_account = models.ForeignKey(PaymentAccount)
-    provider = models.CharField(
-        max_length=8, choices=[('bango', _lazy('Bango'))])
     account_uri = models.CharField(max_length=255)
     product_uri = models.CharField(max_length=255, unique=True)
 
     class Meta:
         db_table = 'addon_payment_account'
 
-    @classmethod
-    def create(cls, provider, addon, payment_account):
-        # TODO: remove once API is the only access point.
-        uri = cls.setup_bango(provider, addon, payment_account)
-        return cls.objects.create(addon=addon, provider=provider,
-                                  payment_account=payment_account,
-                                  account_uri=payment_account.uri,
-                                  product_uri=uri)
-
-    @classmethod
-    def setup_bango(cls, provider, addon, payment_account):
-        secret = generate_key(48)
-        external_id = webpay.make_ext_id(addon.pk)
-        data = {'seller': uri_to_pk(payment_account.seller_uri),
-                'external_id': external_id}
-        try:
-            generic_product = client.api.generic.product.get_object(**data)
-        except ObjectDoesNotExist:
-            generic_product = client.api.generic.product.post(data={
-                'seller': payment_account.seller_uri, 'secret': secret,
-                'external_id': external_id, 'public_id': str(uuid.uuid4()),
-                'access': ACCESS_PURCHASE,
-            })
-
-        product_uri = generic_product['resource_uri']
-        if provider == 'bango':
-            uri = cls._create_bango(
-                product_uri, addon, payment_account, secret)
-        else:
-            uri = ''
-        return uri
-
-    @classmethod
-    def _create_bango(cls, product_uri, addon, payment_account, secret):
-        if not payment_account.bango_package_id:
-            raise NotImplementedError('Currently we only support Bango '
-                                      'so the associated account must '
-                                      'have a bango_package_id')
-        res = None
-        if product_uri:
-            data = {'seller_product': uri_to_pk(product_uri)}
-            try:
-                res = client.api.bango.product.get_object(**data)
-            except ObjectDoesNotExist:
-                # The product does not exist in Solitude so create it.
-                res = client.api.bango.product.post(data={
-                    'seller_bango': payment_account.uri,
-                    'seller_product': product_uri,
-                    'name': unicode(addon.name),
-                    'packageId': payment_account.bango_package_id,
-                    'categoryId': 1,
-                    'secret': secret
-                })
-
-        product_uri = res['resource_uri']
-        bango_number = res['bango_id']
-
-        # If the app is already premium this does nothing.
-        if addon.premium_type != amo.ADDON_FREE_INAPP:
-            cls._push_bango_premium(bango_number, product_uri,
-                                    addon.addonpremium.price.price)
-
-        return product_uri
-
-    @classmethod
-    def _push_bango_premium(cls, bango_number, product_uri, price):
-        if price != 0:
-            # Make the Bango product premium.
-            client.api.bango.premium.post(
-                data={'bango': bango_number,
-                      'price': price,
-                      'currencyIso': 'USD',
-                      'seller_product_bango': product_uri})
-
-        # Update the Bango rating.
-        client.api.bango.rating.post(
-            data={'bango': bango_number,
-                  'rating': 'UNIVERSAL',
-                  'ratingScheme': 'GLOBAL',
-                  'seller_product_bango': product_uri})
-        # Bug 836865.
-        client.api.bango.rating.post(
-            data={'bango': bango_number,
-                  'rating': 'GENERAL',
-                  'ratingScheme': 'USA',
-                  'seller_product_bango': product_uri})
-
-        return product_uri
-
-    def update_price(self, new_price):
-        if self.provider == 'bango':
-            # Get the Bango number for this product.
-            res = client.api.by_url(self.product_uri).get_object()
-            bango_number = res['bango_id']
-
-            AddonPaymentAccount._push_bango_premium(
-                bango_number, self.product_uri, new_price)
-
-    def delete(self):
-        if self.provider == 'bango':
-            # TODO(solitude): Once solitude supports DeleteBangoNumber, that
-            # goes here.
-            # ...also, make it a (celery) task.
-
-            # client.delete_product_bango(self.product_uri)
-            pass
-
-        super(AddonPaymentAccount, self).delete()
+    @property
+    def user(self):
+        return self.payment_account.user
 
 
-class UserInappKey(amo.models.ModelBase):
+class UserInappKey(ModelBase):
     solitude_seller = models.ForeignKey(SolitudeSeller)
     seller_product_pk = models.IntegerField(unique=True)
 
@@ -318,16 +166,22 @@ class UserInappKey(amo.models.ModelBase):
         self._product().patch(data={'secret': generate_key(48)})
 
     @classmethod
-    def create(cls, user):
+    def create(cls, user, public_id=None, secret=None, access_type=None):
+        if public_id is None:
+            public_id = str(uuid.uuid4())
+        if secret is None:
+            secret = generate_key(48)
+        if access_type is None:
+            access_type = ACCESS_SIMULATE
+
         sel = SolitudeSeller.create(user)
-        # Create a product key that can only be used for simulated purchases.
         prod = client.api.generic.product.post(data={
-            'seller': sel.resource_uri, 'secret': generate_key(48),
-            'external_id': str(uuid.uuid4()), 'public_id': str(uuid.uuid4()),
-            'access': ACCESS_SIMULATE,
+            'seller': sel.resource_uri, 'secret': secret,
+            'external_id': str(uuid.uuid4()), 'public_id': public_id,
+            'access': access_type,
         })
-        log.info('User %s created an in-app payments dev key product=%s '
-                 'with %s' % (user, prod['resource_pk'], sel))
+        log.info(u'User %s created an in-app payments dev key product=%s '
+                 u'with %s' % (unicode(user), prod['resource_pk'], sel))
         return cls.objects.create(solitude_seller=sel,
                                   seller_product_pk=prod['resource_pk'])
 
@@ -338,18 +192,307 @@ class UserInappKey(amo.models.ModelBase):
         db_table = 'user_inapp_keys'
 
 
-class PreloadTestPlan(amo.models.ModelBase):
-    addon = models.ForeignKey('addons.Addon')
-    last_submission = models.DateTimeField(auto_now_add=True)
-    filename = models.CharField(max_length=60)
-    status = models.PositiveSmallIntegerField(default=amo.STATUS_PUBLIC)
+class AppLog(ModelBase):
+    """
+    This table is for indexing the activity log by app.
+    """
+    addon = models.ForeignKey('webapps.Webapp', db_constraint=False)
+    activity_log = models.ForeignKey('ActivityLog')
 
     class Meta:
-        db_table = 'preload_test_plans'
-        ordering = ['-last_submission']
+        db_table = 'log_activity_app'
+        ordering = ('-created',)
+
+
+class CommentLog(ModelBase):
+    """
+    This table is for indexing the activity log by comment.
+    """
+    activity_log = models.ForeignKey('ActivityLog')
+    comments = models.TextField()
+
+    class Meta:
+        db_table = 'log_activity_comment'
+        ordering = ('-created',)
+
+
+class VersionLog(ModelBase):
+    """
+    This table is for indexing the activity log by version.
+    """
+    activity_log = models.ForeignKey('ActivityLog')
+    version = models.ForeignKey(Version)
+
+    class Meta:
+        db_table = 'log_activity_version'
+        ordering = ('-created',)
+
+
+class UserLog(ModelBase):
+    """
+    This table is for indexing the activity log by user.
+    Note: This includes activity performed unto the user.
+    """
+    activity_log = models.ForeignKey('ActivityLog')
+    user = models.ForeignKey(UserProfile)
+
+    class Meta:
+        db_table = 'log_activity_user'
+        ordering = ('-created',)
+
+
+class GroupLog(ModelBase):
+    """
+    This table is for indexing the activity log by access group.
+    """
+    activity_log = models.ForeignKey('ActivityLog')
+    group = models.ForeignKey(Group)
+
+    class Meta:
+        db_table = 'log_activity_group'
+        ordering = ('-created',)
+
+
+class ActivityLogManager(ManagerBase):
+
+    def for_apps(self, apps):
+        vals = (AppLog.objects.filter(addon__in=apps)
+                .values_list('activity_log', flat=True))
+
+        if vals:
+            return self.filter(pk__in=list(vals))
+        else:
+            return self.none()
+
+    def for_version(self, version):
+        vals = (VersionLog.objects.filter(version=version)
+                .values_list('activity_log', flat=True))
+        return self.filter(pk__in=list(vals))
+
+    def for_group(self, group):
+        return self.filter(grouplog__group=group)
+
+    def for_user(self, user):
+        vals = (UserLog.objects.filter(user=user)
+                .values_list('activity_log', flat=True))
+        return self.filter(pk__in=list(vals))
+
+    def for_developer(self):
+        return self.exclude(action__in=mkt.LOG_ADMINS + mkt.LOG_HIDE_DEVELOPER)
+
+    def admin_events(self):
+        return self.filter(action__in=mkt.LOG_ADMINS)
+
+    def editor_events(self):
+        return self.filter(action__in=mkt.LOG_EDITORS)
+
+    def review_queue(self, webapp=False):
+        qs = self._by_type(webapp)
+        return (qs.filter(action__in=mkt.LOG_REVIEW_QUEUE)
+                  .exclude(user__id=settings.TASK_USER_ID))
+
+    def total_reviews(self, webapp=False):
+        qs = self._by_type(webapp)
+        """Return the top users, and their # of reviews."""
+        return (qs.values('user', 'user__display_name', 'user__email')
+                  .filter(action__in=mkt.LOG_REVIEW_QUEUE)
+                  .exclude(user__id=settings.TASK_USER_ID)
+                  .annotate(approval_count=models.Count('id'))
+                  .order_by('-approval_count'))
+
+    def monthly_reviews(self, webapp=False):
+        """Return the top users for the month, and their # of reviews."""
+        qs = self._by_type(webapp)
+        now = datetime.now()
+        created_date = datetime(now.year, now.month, 1)
+        return (qs.values('user', 'user__display_name', 'user__email')
+                  .filter(created__gte=created_date,
+                          action__in=mkt.LOG_REVIEW_QUEUE)
+                  .exclude(user__id=settings.TASK_USER_ID)
+                  .annotate(approval_count=models.Count('id'))
+                  .order_by('-approval_count'))
+
+    def user_position(self, values_qs, user):
+        try:
+            return next(i for (i, d) in enumerate(list(values_qs))
+                        if d.get('user') == user.id) + 1
+        except StopIteration:
+            return None
+
+    def total_reviews_user_position(self, user, webapp=False):
+        return self.user_position(self.total_reviews(webapp), user)
+
+    def monthly_reviews_user_position(self, user, webapp=False):
+        return self.user_position(self.monthly_reviews(webapp), user)
+
+    def _by_type(self, webapp=False):
+        qs = super(ActivityLogManager, self).get_queryset()
+        return qs.extra(
+            tables=['log_activity_app'],
+            where=['log_activity_app.activity_log_id=log_activity.id'])
+
+
+class SafeFormatter(string.Formatter):
+    """A replacement for str.format that escapes interpolated values."""
+
+    def get_field(self, *args, **kw):
+        # obj is the value getting interpolated into the string.
+        obj, used_key = super(SafeFormatter, self).get_field(*args, **kw)
+        return jinja2.escape(obj), used_key
+
+
+class ActivityLog(ModelBase):
+    TYPES = sorted([(value.id, key) for key, value in mkt.LOG.items()])
+    user = models.ForeignKey('users.UserProfile', null=True)
+    action = models.SmallIntegerField(choices=TYPES, db_index=True)
+    _arguments = models.TextField(blank=True, db_column='arguments')
+    _details = models.TextField(blank=True, db_column='details')
+    objects = ActivityLogManager()
+
+    formatter = SafeFormatter()
+
+    class Meta:
+        db_table = 'log_activity'
+        ordering = ('-created',)
+
+    def f(self, *args, **kw):
+        """Calls SafeFormatter.format and returns a Markup string."""
+        # SafeFormatter escapes everything so this is safe.
+        return jinja2.Markup(self.formatter.format(*args, **kw))
 
     @property
-    def preload_test_plan_url(self):
-        host = (settings.PRIVATE_MIRROR_URL if self.addon.is_disabled
-                else settings.LOCAL_MIRROR_URL)
-        return posixpath.join(host, str(self.addon.id), self.filename)
+    def arguments(self):
+
+        try:
+            # d is a structure:
+            # ``d = [{'addons.addon':12}, {'addons.addon':1}, ... ]``
+            d = json.loads(self._arguments)
+        except:
+            log.debug('unserializing data from addon_log failed: %s' % self.id)
+            return None
+
+        objs = []
+        for item in d:
+            # item has only one element.
+            model_name, pk = item.items()[0]
+            if model_name in ('str', 'int', 'null'):
+                objs.append(pk)
+            else:
+                (app_label, model_name) = model_name.split('.')
+                model = apps.get_model(app_label, model_name)
+                # Cope with soft deleted models.
+                if hasattr(model, 'with_deleted'):
+                    objs.extend(model.with_deleted.filter(pk=pk))
+                else:
+                    objs.extend(model.objects.filter(pk=pk))
+
+        return objs
+
+    @arguments.setter
+    def arguments(self, args=[]):
+        """
+        Takes an object or a tuple of objects and serializes them and stores it
+        in the db as a json string.
+        """
+        if args is None:
+            args = []
+
+        if not isinstance(args, (list, tuple)):
+            args = (args,)
+
+        serialize_me = []
+
+        for arg in args:
+            if isinstance(arg, basestring):
+                serialize_me.append({'str': arg})
+            elif isinstance(arg, (int, long)):
+                serialize_me.append({'int': arg})
+            elif isinstance(arg, tuple):
+                # Instead of passing an addon instance you can pass a tuple:
+                # (Webapp, 3) for Webapp with pk=3
+                serialize_me.append(dict(((unicode(arg[0]._meta), arg[1]),)))
+            elif arg is not None:
+                serialize_me.append(dict(((unicode(arg._meta), arg.pk),)))
+
+        self._arguments = json.dumps(serialize_me)
+
+    @property
+    def details(self):
+        if self._details:
+            return json.loads(self._details)
+
+    @details.setter
+    def details(self, data):
+        self._details = json.dumps(data)
+
+    @property
+    def log(self):
+        return mkt.LOG_BY_ID[self.action]
+
+    def to_string(self, type_=None):
+        log_type = mkt.LOG_BY_ID[self.action]
+        if type_ and hasattr(log_type, '%s_format' % type_):
+            format = getattr(log_type, '%s_format' % type_)
+        else:
+            format = log_type.format
+
+        # We need to copy arguments so we can remove elements from it
+        # while we loop over self.arguments.
+        arguments = copy(self.arguments)
+        addon = None
+        review = None
+        version = None
+        collection = None
+        tag = None
+        group = None
+        website = None
+
+        for arg in self.arguments:
+            if isinstance(arg, Webapp) and not addon:
+                addon = self.f(u'<a href="{0}">{1}</a>',
+                               arg.get_url_path(), arg.name)
+                arguments.remove(arg)
+            if isinstance(arg, Review) and not review:
+                review = self.f(u'<a href="{0}">{1}</a>',
+                                arg.get_url_path(), _('Review'))
+                arguments.remove(arg)
+            if isinstance(arg, Version) and not version:
+                text = _('Version {0}')
+                version = self.f(text, arg.version)
+                arguments.remove(arg)
+            if isinstance(arg, Tag) and not tag:
+                if arg.can_reverse():
+                    tag = self.f(u'<a href="{0}">{1}</a>',
+                                 arg.get_url_path(), arg.tag_text)
+                else:
+                    tag = self.f('{0}', arg.tag_text)
+            if isinstance(arg, Group) and not group:
+                group = arg.name
+                arguments.remove(arg)
+            if isinstance(arg, Website) and not website:
+                website = self.f(u'<a href="{0}">{1}</a>',
+                                 arg.get_url_path(), arg.name)
+                arguments.remove(arg)
+
+        try:
+            kw = dict(addon=addon, review=review, version=version, group=group,
+                      collection=collection, tag=tag,
+                      user=self.user.display_name)
+            return self.f(format, *arguments, **kw)
+        except (AttributeError, KeyError, IndexError):
+            log.warning('%d contains garbage data' % (self.id or 0))
+            return 'Something magical happened.'
+
+    def __unicode__(self):
+        return self.to_string()
+
+    def __html__(self):
+        return self
+
+
+class IARCRequest(ModelBase):
+    app = models.OneToOneField(Webapp, related_name='iarc_request')
+    uuid = UUIDField(auto=True, editable=False)
+
+    class Meta:
+        db_table = 'iarc_request'

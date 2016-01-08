@@ -1,11 +1,9 @@
-from django.conf.urls import include, patterns, url
+from django.conf.urls import patterns, url
 
-from tastypie.api import Api
-from .resources import MonolithData
+from mkt.monolith.views import MonolithView
 
-api = Api(api_name='monolith')
-api.register(MonolithData())
 
-urlpatterns = patterns('',
-    url(r'^', include(api.urls)),
+urlpatterns = patterns(
+    '',
+    url(r'^monolith/data/', MonolithView.as_view(), name='monolith-list'),
 )

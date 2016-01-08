@@ -1,8 +1,5 @@
-from django.shortcuts import redirect
 from django.utils.cache import patch_vary_headers
 
-from amo.helpers import urlparams
-from amo.urlresolvers import set_url_prefix
 from mkt.constants.carriers import CARRIER_MAP
 
 from . import set_carrier
@@ -23,7 +20,6 @@ class CarrierURLMiddleware(object):
 
     def process_request(self, request):
         carrier = stored_carrier = None
-        set_url_prefix(None)
         set_carrier(None)
 
         # If I have a cookie use that carrier.
@@ -31,7 +27,7 @@ class CarrierURLMiddleware(object):
         if remembered in CARRIER_MAP:
             carrier = stored_carrier = remembered
 
-        choice = request.REQUEST.get('carrier')
+        choice = request.GET.get('carrier')
         if choice in CARRIER_MAP:
             carrier = choice
         elif 'carrier' in request.GET:
@@ -45,5 +41,6 @@ class CarrierURLMiddleware(object):
         set_carrier(carrier)
 
     def process_response(self, request, response):
-        patch_vary_headers(response, ['Accept-Language', 'Cookie'])
+        if request.GET.get('vary') != '0':
+            patch_vary_headers(response, ['Accept-Language', 'Cookie'])
         return response

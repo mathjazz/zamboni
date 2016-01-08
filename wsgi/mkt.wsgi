@@ -1,6 +1,5 @@
 import os
 import site
-import sys
 from datetime import datetime
 
 # Tell manage that we need to pull in the default settings file.
@@ -10,31 +9,23 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'settings_local_mkt'
 wsgi_loaded = datetime.now()
 
 # Tell celery that we're using Django.
-os.environ['CELERY_LOADER'] = 'django'
+import djcelery  # noqa
+djcelery.setup_loader()
 
 # Add the zamboni dir to the python path so we can import manage.
 wsgidir = os.path.dirname(__file__)
 site.addsitedir(os.path.abspath(os.path.join(wsgidir, '../')))
 
 # manage adds /apps, /lib, and /vendor to the Python path.
-import manage
+import manage  # noqa
 
-import django.conf
-import django.core.handlers.wsgi
-import django.core.management
-import django.utils
-
-# Do validate and activate translations like using `./manage.py runserver`.
-# http://blog.dscpl.com.au/2010/03/improved-wsgi-script-for-use-with.html
-django.utils.translation.activate(django.conf.settings.LANGUAGE_CODE)
-utility = django.core.management.ManagementUtility()
-command = utility.fetch_command('runserver')
-command.validate()
+from django.conf import settings  # noqa
+from django.core.wsgi import get_wsgi_application  # noqa
 
 # This is what mod_wsgi runs.
-django_app = django.core.handlers.wsgi.WSGIHandler()
+django_app = get_wsgi_application()
 
-newrelic_ini = getattr(django.conf.settings, 'NEWRELIC_INI', None)
+newrelic_ini = getattr(settings, 'NEWRELIC_INI', None)
 load_newrelic = False
 
 if newrelic_ini:
@@ -55,7 +46,7 @@ def application(env, start_response):
     if 'HTTP_X_ZEUS_DL_PT' in env:
         env['SCRIPT_URL'] = env['SCRIPT_NAME'] = ''
     env['wsgi.loaded'] = wsgi_loaded
-    env['hostname'] = django.conf.settings.HOSTNAME
+    env['hostname'] = settings.HOSTNAME
     env['datetime'] = str(datetime.now())
     return django_app(env, start_response)
 

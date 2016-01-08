@@ -1,57 +1,455 @@
 # -*- coding: utf-8 -*-
-from nose.tools import eq_
+from django.core.exceptions import ValidationError
+from django.test.client import RequestFactory
 
-from amo.tests import TestCase
-from mkt.api.fields import TranslationSerializerField
+from mock import Mock
+from nose.tools import eq_, ok_
+from rest_framework.request import Request
+from rest_framework.serializers import CharField, Serializer
+from rest_framework.test import APIRequestFactory
+
+from mkt.api.fields import (ESTranslationSerializerField,
+                            GuessLanguageTranslationField, IntegerRangeField,
+                            SlugChoiceField, SlugOrPrimaryKeyRelatedField,
+                            SplitField, TranslationSerializerField)
+from mkt.carriers import CARRIER_MAP
 from mkt.site.fixtures import fixture
+from mkt.site.tests import TestCase
+from mkt.site.utils import app_factory
+from mkt.translations.models import Translation
 from mkt.webapps.models import Webapp
-from translations.models import Translation
 
 
-class TestTranslationSerializerField(TestCase):
-    fixtures = fixture('user_2519', 'webapp_337141')
+class _TestTranslationSerializerField(object):
+    field_class = TranslationSerializerField
 
-    def test_from_native(self):
+    def setUp(self):
+        super(_TestTranslationSerializerField, self).setUp()
+        self.factory = APIRequestFactory()
+        self.app = Webapp.objects.get(pk=337141)
+
+    def _test_expected_dict(self, field, serializer=None):
+        field.bind('name', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = {
+            'en-US': unicode(Translation.objects.get(id=self.app.name.id,
+                                                     locale='en-US')),
+            'es': unicode(Translation.objects.get(id=self.app.name.id,
+                                                  locale='es')),
+        }
+        eq_(result, expected)
+        field.source = None
+        field.bind('description', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = {
+            'en-US': Translation.objects.get(id=self.app.description.id,
+                                             locale='en-US'),
+        }
+        eq_(result, expected)
+
+    def _test_expected_single_string(self, field, serializer=None):
+        field.bind('name', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = unicode(self.app.name)
+        eq_(result, expected)
+        field.source = None
+        field.bind('description', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = unicode(self.app.description)
+        eq_(result, expected)
+
+    def test_to_internal_value(self):
         data = u'Translatiön'
-        field = TranslationSerializerField()
-        result = field.from_native(data)
+        field = self.field_class()
+        result = field.to_internal_value(data)
         eq_(result, data)
 
         data = {
             'fr': u'Non mais Allô quoi !',
             'en-US': u'No But Hello what!'
         }
-        field = TranslationSerializerField()
-        result = field.from_native(data)
+        field = self.field_class()
+        result = field.to_internal_value(data)
         eq_(result, data)
 
         data = ['Bad Data']
-        field = TranslationSerializerField()
-        result = field.from_native(data)
+        field = self.field_class()
+        result = field.to_internal_value(data)
         eq_(result, unicode(data))
 
-    def test_field_from_native_strip(self):
+    def test_to_internal_value_strip(self):
         data = {
             'fr': u'  Non mais Allô quoi ! ',
             'en-US': u''
         }
-        field = TranslationSerializerField()
-        result = field.from_native(data)
+        field = self.field_class()
+        result = field.to_internal_value(data)
         eq_(result, {'fr': u'Non mais Allô quoi !', 'en-US': u''})
 
+    def test_wrong_locale_code(self):
+        data = {
+            'unknown-locale': 'some name',
+        }
+        field = self.field_class()
+
+        with self.assertRaises(ValidationError) as exc:
+            field.to_internal_value(data)
+        eq_(exc.exception.message,
+            "The language code 'unknown-locale' is invalid.")
+
+    def test_none_type_locale_is_allowed(self):
+        # None values are valid because they are used to nullify existing
+        # translations in something like a PATCH.
+        data = {
+            'en-US': None,
+        }
+        field = self.field_class()
+        result = field.to_internal_value(data)
+        field.validate(result)
+        eq_(result, data)
+
     def test_field_to_native(self):
-        app = Webapp.objects.get(pk=337141)
-        field = TranslationSerializerField()
-        result = field.field_to_native(app, 'name')
+        field = self.field_class()
+        self._test_expected_dict(field)
+
+    def test_field_to_native_source(self):
+        self.app.mymock = Mock()
+        self.app.mymock.mymocked_field = self.app.name
+        field = self.field_class(source='mymock.mymocked_field')
+        result = field.to_internal_value(field.get_attribute(self.app))
         expected = {
-            'en-US': Translation.objects.get(id=app.name.id, locale='en-US'),
-            'es': Translation.objects.get(id=app.name.id, locale='es')
+            'en-US': unicode(Translation.objects.get(id=self.app.name.id,
+                                                     locale='en-US')),
+            'es': unicode(Translation.objects.get(id=self.app.name.id,
+                                                  locale='es')),
         }
         eq_(result, expected)
 
-        result = field.field_to_native(app, 'description')
-        expected = {
-            'en-US': Translation.objects.get(id=app.description.id, 
-                                             locale='en-US'),
+    def test_field_to_native_empty_context(self):
+        mock_serializer = Serializer()
+        mock_serializer.context = {}
+        field = self.field_class()
+        self._test_expected_dict(field, mock_serializer)
+
+    def test_field_to_native_request_POST(self):
+        request = Request(self.factory.post('/'))
+        mock_serializer = Serializer()
+        mock_serializer.context = {'request': request}
+        field = self.field_class()
+        self._test_expected_dict(field)
+
+    def test_field_to_native_request_GET(self):
+        request = Request(self.factory.get('/'))
+        mock_serializer = Serializer()
+        mock_serializer.context = {'request': request}
+        field = self.field_class()
+        self._test_expected_dict(field)
+
+    def test_field_to_native_request_GET_lang(self):
+        """
+        Pass a lang in the query string, expect to have a single string
+        returned instead of an object.
+        """
+        # Note that we don't go through the middlewares etc so the actual
+        # language for the process isn't changed, we don't care as
+        # _expect_single_string() method simply tests with the current
+        # language, whatever it is.
+        request = Request(self.factory.get('/', {'lang': 'lol'}))
+        eq_(request.GET['lang'], 'lol')
+        field = self.field_class()
+        field.context = {'request': request}
+        self._test_expected_single_string(field)
+
+    def test_field_null(self):
+        field = self.field_class()
+        self.app = Webapp()
+        field.bind('name', None)
+        result = field.to_representation(field.get_attribute(self.app))
+        eq_(result, None)
+        field.source = None
+        field.bind('description', None)
+        result = field.to_representation(field.get_attribute(self.app))
+        eq_(result, None)
+
+
+class GuessLangSerializer(Serializer):
+    msg = GuessLanguageTranslationField()
+
+
+class TestGuessLanguageTranslationField(TestCase):
+    def guessed_value(self, input, expected_output):
+        s = GuessLangSerializer(data={'msg': input})
+        ok_(s.is_valid())
+        eq_(expected_output, s.validated_data['msg'])
+
+    def test_english(self):
+        data = u'This is in English.'
+        self.guessed_value(data, {'en-us': data})
+
+    def test_french(self):
+        data = u'Ceci est écrit en français.'
+        self.guessed_value(data, {'fr': data})
+
+
+class TestESTranslationSerializerField(_TestTranslationSerializerField,
+                                       TestCase):
+    field_class = ESTranslationSerializerField
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.app = Webapp()
+        self.app.default_locale = 'en-US'
+        self.app.name_translations = {
+            'en-US': u'English Name',
+            'es': u'Spànish Name'
         }
+        self.app.description_translations = {
+            'en-US': u'English Description',
+            'fr': u'Frençh Description'
+        }
+
+    def test_attach_translations(self):
+        data = {
+            'foo_translations': [{
+                'lang': 'testlang',
+                'string': 'teststring'
+            }, {
+                'lang': 'testlang2',
+                'string': 'teststring2'
+            }]
+        }
+        self.app = Webapp()
+        self.field_class().attach_translations(self.app, data, 'foo')
+        eq_(self.app.foo_translations, {'testlang': 'teststring',
+                                        'testlang2': 'teststring2'})
+
+    def test_attach_translations_target_name(self):
+        data = {
+            'foo_translations': [{
+                'lang': 'testlang',
+                'string': 'teststring'
+            }, {
+                'lang': 'testlang2',
+                'string': 'teststring2'
+            }]
+        }
+        self.app = Webapp()
+        self.field_class().attach_translations(
+            self.app, data, 'foo', target_name='bar')
+        eq_(self.app.bar_translations, {'testlang': 'teststring',
+                                        'testlang2': 'teststring2'})
+
+    def test_attach_translations_missing_key(self):
+        data = {
+            'foo_translations': None
+        }
+        self.app = Webapp()
+        self.field_class().attach_translations(self.app, data, 'foo')
+        eq_(self.app.foo_translations, {})
+
+    def _test_expected_dict(self, field, serializer=None):
+        field.bind('name', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = self.app.name_translations
         eq_(result, expected)
+        field.source = None
+        field.bind('description', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = self.app.description_translations
+        eq_(result, expected)
+
+    def _test_expected_single_string(self, field, serializer=None):
+        field.bind('name', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = unicode(self.app.name_translations['en-US'])
+        eq_(result, expected)
+        field.source = None
+        field.bind('description', serializer)
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = unicode(self.app.description_translations['en-US'])
+        eq_(result, expected)
+
+    def test_field_to_native_source(self):
+        self.app.mymock = Mock()
+        self.app.mymock.mymockedfield_translations = self.app.name_translations
+        field = self.field_class(source='mymock.mymockedfield')
+        result = field.to_representation(field.get_attribute(self.app))
+        expected = self.app.name_translations
+        eq_(result, expected)
+
+    def test_field_null(self):
+        field = self.field_class()
+        self.app.name_translations = {}
+        field.bind('name', None)
+        result = field.to_representation(field.get_attribute(self.app))
+        eq_(result, None)
+        field.source = None
+        self.app.description_translations = None
+        field.bind('description', None)
+        result = field.to_representation(field.get_attribute(self.app))
+        eq_(result, None)
+
+
+class SlugOrPrimaryKeyRelatedFieldTests(TestCase):
+    fixtures = fixture('webapp_337141')
+
+    def setUp(self):
+        self.app = Webapp.objects.get(pk=337141)
+
+    def test_render_as_pk(self):
+        obj = Mock()
+        obj.attached = self.app
+
+        field = SlugOrPrimaryKeyRelatedField(read_only=True)
+        field.bind('attached', None)
+        eq_(field.to_representation(field.get_attribute(obj)), self.app.pk)
+
+    def test_render_as_pks_many(self):
+        obj = Mock()
+        obj.attached = [self.app]
+
+        field = SlugOrPrimaryKeyRelatedField(many=True, read_only=True)
+        field.bind('attached', None)
+        eq_(field.to_representation(field.get_attribute(obj)), [self.app.pk])
+
+    def test_render_as_slug(self):
+        obj = Mock()
+        obj.attached = self.app
+
+        field = SlugOrPrimaryKeyRelatedField(render_as='slug',
+                                             slug_field='app_slug',
+                                             read_only=True)
+        field.bind('attached', None)
+        eq_(field.to_representation(field.get_attribute(obj)),
+            self.app.app_slug)
+
+    def test_render_as_slugs_many(self):
+        obj = Mock()
+        obj.attached = [self.app]
+
+        field = SlugOrPrimaryKeyRelatedField(render_as='slug',
+                                             slug_field='app_slug', many=True,
+                                             read_only=True)
+        field.bind('attached', None)
+        eq_(field.to_representation(field.get_attribute(obj)),
+            [self.app.app_slug])
+
+    def test_parse_as_pk(self):
+        field = SlugOrPrimaryKeyRelatedField(slug_field='app_slug',
+                                             queryset=Webapp.objects.all())
+        eq_(field.to_internal_value(self.app.pk), self.app)
+
+    def test_parse_as_pks_many(self):
+        app2 = app_factory()
+        field = SlugOrPrimaryKeyRelatedField(queryset=Webapp.objects.all(),
+                                             many=True)
+        eq_(field.to_internal_value([self.app.pk, app2.pk]),
+            [self.app, app2])
+
+    def test_parse_as_slug(self):
+        field = SlugOrPrimaryKeyRelatedField(queryset=Webapp.objects.all(),
+                                             slug_field='app_slug')
+        eq_(field.to_internal_value(self.app.app_slug), self.app)
+
+    def test_parse_as_slugs_many(self):
+        app2 = app_factory(app_slug='foo')
+        field = SlugOrPrimaryKeyRelatedField(queryset=Webapp.objects.all(),
+                                             slug_field='app_slug', many=True)
+        eq_(field.to_internal_value([self.app.app_slug, app2.app_slug]),
+            [self.app, app2])
+
+
+class TestSlugChoiceField(TestCase):
+    field_class = SlugChoiceField
+
+    def setUp(self):
+        super(TestSlugChoiceField, self).setUp()
+        self.factory = APIRequestFactory()
+
+    def field(self, **kwargs):
+        self.field = self.field_class(**kwargs)
+        return self.field
+
+    def test_to_native(self):
+        field = self.field(choices_dict=CARRIER_MAP)
+        eq_(field.to_representation(1), 'telefonica')
+
+    def test_to_native_none(self):
+        field = self.field(choices_dict=CARRIER_MAP)
+        eq_(field.to_representation(None), None)
+
+    def test_to_native_zero(self):
+        field = self.field(choices_dict=CARRIER_MAP)
+        eq_(field.to_representation(0), 'carrierless')
+
+
+class Spud(object):
+    pass
+
+
+class Potato(object):
+    def __init__(self, spud):
+        self.spud = spud
+
+
+class SpudSerializer(Serializer):
+    pass
+
+
+class PotatoSerializer(Serializer):
+    spud = SplitField(CharField(), SpudSerializer())
+
+
+class TestSplitField(TestCase):
+    def setUp(self):
+        self.request = RequestFactory().get('/')
+        self.spud = Spud()
+        self.potato = Potato(self.spud)
+        self.serializer = PotatoSerializer(self.potato,
+                                           context={'request': self.request})
+
+    def test_initialize(self):
+        """
+        Test that the request context is passed from PotatoSerializer's context
+        to the context of `PotatoSerializer.spud.output`.
+        """
+        field = self.serializer.fields['spud']
+        eq_(self.request, field.output.context['request'],
+            self.serializer.context['request'])
+
+
+class TestIntegerRangeField(TestCase):
+    field_class = IntegerRangeField
+
+    def setUp(self):
+        self.field = None
+
+    def set_field(self, min_value=None, max_value=None):
+        self.field = self.field_class(min_value=min_value, max_value=max_value)
+
+    def is_invalid(self, value):
+        with self.assertRaises(ValidationError):
+            self.field.to_python(value)
+
+    def is_valid(self, value):
+        eq_(value, self.field.to_python(value))
+
+    def test_min_value(self):
+        self.set_field(min_value=2)
+        self.is_invalid(1)
+        self.is_valid(2)
+        self.is_valid(3)
+
+    def test_max_value(self):
+        self.set_field(max_value=2)
+        self.is_valid(1)
+        self.is_valid(2)
+        self.is_invalid(3)
+
+    def test_min_max_value(self):
+        self.set_field(min_value=2, max_value=4)
+        self.is_invalid(1)
+        self.is_valid(2)
+        self.is_valid(3)
+        self.is_valid(4)
+        self.is_invalid(5)

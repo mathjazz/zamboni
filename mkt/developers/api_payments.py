@@ -1,57 +1,143 @@
-from functools import partial
-
 from django.core.exceptions import PermissionDenied
+from django.core.urlresolvers import reverse
 
 import commonware
-
+from rest_framework import status
 from rest_framework.mixins import (CreateModelMixin, DestroyModelMixin,
-                                   RetrieveModelMixin, UpdateModelMixin)
-from rest_framework.permissions import BasePermission
-from rest_framework.relations import HyperlinkedRelatedField
+                                   ListModelMixin, RetrieveModelMixin,
+                                   UpdateModelMixin)
+from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.relations import (HyperlinkedIdentityField,
+                                      HyperlinkedRelatedField)
 from rest_framework.response import Response
 from rest_framework.serializers import (HyperlinkedModelSerializer,
+                                        Serializer,
                                         ValidationError)
 from rest_framework.viewsets import GenericViewSet
+from slumber.exceptions import HttpClientError, HttpServerError
+from django.utils.translation import ugettext as _
 
-import amo
-from addons.models import AddonUpsell
-
-from mkt.api.authorization import (AllowAppOwner, PermissionAuthorization,
-                                   switch)
-from mkt.api.base import AppViewSet, CompatRelatedField
-from mkt.constants.payments import PAYMENT_STATUSES
-from mkt.developers.forms_payments import PaymentCheckForm
-from mkt.developers.models import AddonPaymentAccount
-from mkt.webapps.models import Webapp
-
+import mkt
 from lib.pay_server import get_client
+from mkt.api.authentication import (RestOAuthAuthentication,
+                                    RestSharedSecretAuthentication)
+from mkt.api.base import MarketplaceView
+from mkt.api.permissions import AllowAppOwner, GroupPermission
+from mkt.constants.payments import PAYMENT_STATUSES
+from mkt.constants.payments import PROVIDER_BANGO
+from mkt.developers.forms_payments import (BangoPaymentAccountForm,
+                                           PaymentCheckForm)
+from mkt.developers.models import (AddonPaymentAccount, CantCancel,
+                                   PaymentAccount)
+from mkt.developers.providers import get_provider
+from mkt.webapps.models import AddonUpsell, Webapp
+
 
 log = commonware.log.getLogger('z.api.payments')
 
 
-class PaymentSerializer(HyperlinkedModelSerializer):
-    upsell = HyperlinkedRelatedField(read_only=True, required=False,
-                                     view_name='app-upsell-detail')
-    account = HyperlinkedRelatedField(read_only=True, required=False,
-                                      source='app_payment_account',
-                                      view_name='app-payment-account-detail')
+class PaymentAppViewSet(GenericViewSet):
 
-    class Meta:
-        model = Webapp
-        fields = ('upsell', 'account', 'url')
-        view_name = 'app-payments-detail'
+    def initialize_request(self, request, *args, **kwargs):
+        """
+        Pass the value in the URL through to the form defined on the
+        ViewSet, which will populate the app property with the app object.
+
+        You must define a form which will take an app object.
+        """
+        request = (super(PaymentAppViewSet, self)
+                   .initialize_request(request, *args, **kwargs))
+        self.app = None
+        form = self.form({'app': kwargs.get('pk')})
+        if form.is_valid():
+            self.app = form.cleaned_data['app']
+        return request
 
 
-class PaymentViewSet(RetrieveModelMixin, GenericViewSet):
-    permission_classes = (AllowAppOwner,)
-    queryset = Webapp.objects.filter()
-    serializer_class = PaymentSerializer
+class PaymentAccountSerializer(Serializer):
+    """
+    Fake serializer that returns PaymentAccount details when
+    serializing a PaymentAccount instance. Use only for read operations.
+    """
+
+    def to_representation(self, obj):
+        data = obj.get_provider().account_retrieve(obj)
+        data['resource_uri'] = reverse('payment-account-detail',
+                                       kwargs={'pk': obj.pk})
+        return data
+
+
+class PaymentAccountViewSet(ListModelMixin, RetrieveModelMixin,
+                            MarketplaceView, GenericViewSet):
+    queryset = PaymentAccount.objects.all()
+    # PaymentAccountSerializer is not a real serializer, it just looks up
+    # the details on the object. It's only used for GET requests, in every
+    # other case we use BangoPaymentAccountForm directly.
+    serializer_class = PaymentAccountSerializer
+    authentication_classes = [RestOAuthAuthentication,
+                              RestSharedSecretAuthentication]
+    # Security checks are performed in get_queryset(), so we allow any
+    # authenticated users by default.
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Return the queryset specific to the user using the view. (This replaces
+        permission checks, unauthorized users won't be able to see that an
+        account they don't have access to exists, we'll return 404 for them.)
+        """
+        qs = super(PaymentAccountViewSet, self).get_queryset()
+        return qs.filter(user=self.request.user, inactive=False)
+
+    def create(self, request, *args, **kwargs):
+        provider = get_provider()
+        form = provider.forms['account'](request.data)
+        if form.is_valid():
+            try:
+                provider = get_provider()
+                obj = provider.account_create(request.user, form.data)
+            except HttpClientError as e:
+                log.error('Client error creating Bango account; %s' % e)
+                return Response(e.content,
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except HttpServerError as e:
+                log.error('Error creating Bango payment account; %s' % e)
+                return Response(_(u'Could not connect to payment server.'),
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            serializer = self.get_serializer(obj)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        form = BangoPaymentAccountForm(request.data, account=True)
+        if form.is_valid():
+            self.object.get_provider().account_update(self.object,
+                                                      form.cleaned_data)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        account = self.get_object()
+        try:
+            account.cancel(disable_refs=True)
+        except CantCancel:
+            return Response(_('Cannot delete shared account'),
+                            status=status.HTTP_409_CONFLICT)
+        log.info('Account cancelled: %s' % account.pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class UpsellSerializer(HyperlinkedModelSerializer):
-    free = premium = CompatRelatedField(
-        tastypie={'resource_name': 'app', 'api_name': 'apps'},
-        view_name='api_dispatch_detail')
+    free = HyperlinkedRelatedField(view_name='app-detail',
+                                   queryset=Webapp.objects)
+    premium = HyperlinkedRelatedField(view_name='app-detail',
+                                      queryset=Webapp.objects)
+    url = HyperlinkedIdentityField(view_name='app-upsell-detail')
 
     class Meta:
         model = AddonUpsell
@@ -59,10 +145,12 @@ class UpsellSerializer(HyperlinkedModelSerializer):
         view_name = 'app-upsell-detail'
 
     def validate(self, attrs):
-        if attrs['free'].premium_type not in amo.ADDON_FREES:
+        if ('free' not in attrs or
+                attrs['free'].premium_type not in mkt.ADDON_FREES):
             raise ValidationError('Upsell must be from a free app.')
 
-        if attrs['premium'].premium_type in amo.ADDON_FREES:
+        if ('premium' not in attrs or
+                attrs['premium'].premium_type in mkt.ADDON_FREES):
             raise ValidationError('Upsell must be to a premium app.')
 
         return attrs
@@ -86,15 +174,20 @@ class UpsellPermission(BasePermission):
 
 
 class UpsellViewSet(CreateModelMixin, DestroyModelMixin, RetrieveModelMixin,
-                    UpdateModelMixin, GenericViewSet):
-    permission_classes = (switch('allow-b2g-paid-submission'),
-                          UpsellPermission,)
+                    UpdateModelMixin, MarketplaceView, GenericViewSet):
+    permission_classes = (UpsellPermission,)
     queryset = AddonUpsell.objects.filter()
     serializer_class = UpsellSerializer
 
-    def pre_save(self, obj):
-        if not UpsellPermission().check(self.request, obj.free, obj.premium):
+    def perform_create(self, serializer):
+        if not UpsellPermission().check(self.request,
+                                        serializer.validated_data['free'],
+                                        serializer.validated_data['premium']):
             raise PermissionDenied('Not allowed to alter that object')
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self.perform_create(serializer)
 
 
 class AddonPaymentAccountPermission(BasePermission):
@@ -105,16 +198,16 @@ class AddonPaymentAccountPermission(BasePermission):
 
     def check(self, request, app, account):
         if AllowAppOwner().has_object_permission(request, '', app):
-            if account.shared or account.user.pk == request.amo_user.pk:
+            if account.shared or account.user.pk == request.user.pk:
                 return True
             else:
                 log.info('AddonPaymentAccount access %(account)s denied '
                          'for %(user)s: wrong user, not shared.'.format(
-                         {'account': account.pk, 'user': request.amo_user.pk}))
+                             {'account': account.pk, 'user': request.user.pk}))
         else:
             log.info('AddonPaymentAccount access %(account)s denied '
                      'for %(user)s: no app permission.'.format(
-                     {'account': account.pk, 'user': request.amo_user.pk}))
+                         {'account': account.pk, 'user': request.user.pk}))
         return False
 
     def has_object_permission(self, request, view, object):
@@ -122,54 +215,60 @@ class AddonPaymentAccountPermission(BasePermission):
 
 
 class AddonPaymentAccountSerializer(HyperlinkedModelSerializer):
-    addon = CompatRelatedField(
-        source='addon',
-        tastypie={'resource_name': 'app', 'api_name': 'apps'},
-        view_name='api_dispatch_detail')
-    payment_account = CompatRelatedField(
-        tastypie={'resource_name': 'account', 'api_name': 'payments'},
-        view_name='api_dispatch_detail')
+    addon = HyperlinkedRelatedField(view_name='app-detail',
+                                    queryset=Webapp.objects)
+    payment_account = HyperlinkedRelatedField(
+        view_name='payment-account-detail',
+        queryset=PaymentAccount.objects)
+    url = HyperlinkedIdentityField(view_name='app-payment-account-detail')
 
     class Meta:
         model = AddonPaymentAccount
-        fields = ('addon', 'payment_account', 'provider',
-                  'created', 'modified', 'url')
+        fields = ('addon', 'payment_account', 'created', 'modified', 'url')
         view_name = 'app-payment-account-detail'
 
     def validate(self, attrs):
-        if attrs['addon'].premium_type in amo.ADDON_FREES:
+        if attrs['addon'].premium_type in mkt.ADDON_FREES:
             raise ValidationError('App must be a premium app.')
 
         return attrs
 
 
 class AddonPaymentAccountViewSet(CreateModelMixin, RetrieveModelMixin,
-                                 UpdateModelMixin, GenericViewSet):
+                                 UpdateModelMixin, MarketplaceView,
+                                 GenericViewSet):
     permission_classes = (AddonPaymentAccountPermission,)
-    queryset = AddonPaymentAccount.objects.filter()
+    queryset = AddonPaymentAccount.objects.all()
     serializer_class = AddonPaymentAccountSerializer
 
-    def pre_save(self, obj):
-        if not AddonPaymentAccountPermission().check(self.request,
-                obj.addon, obj.payment_account):
+    def perform_create(self, serializer, created=True):
+        if not AddonPaymentAccountPermission().check(
+                self.request,
+                serializer.validated_data['addon'],
+                serializer.validated_data['payment_account']):
             raise PermissionDenied('Not allowed to alter that object.')
 
         if self.request.method != 'POST':
-            addon = obj.__class__.objects.no_cache().get(pk=obj.pk).addon
-            if not obj.addon == addon:
+            if not self.queryset.filter(
+                    addon=serializer.validated_data['addon'],
+                    payment_account=serializer.validated_data[
+                        'payment_account']).exists():
                 # This should be a 400 error.
                 raise PermissionDenied('Cannot change the add-on.')
 
-    def post_save(self, obj, created=False):
-        """Ensure that the setup_bango method is called after creation."""
+        obj = serializer.save()
+
         if created:
-            uri = obj.__class__.setup_bango(obj.provider, obj.addon,
-                                            obj.payment_account)
+            provider = get_provider()
+            uri = provider.product_create(obj.payment_account, obj.addon)
             obj.product_uri = uri
-            obj.save()
+        obj.save()
+
+    def perform_update(self, obj):
+        self.perform_create(obj, created=False)
 
 
-class PaymentCheckViewSet(AppViewSet):
+class PaymentCheckViewSet(PaymentAppViewSet):
     permission_classes = (AllowAppOwner,)
     form = PaymentCheckForm
 
@@ -185,8 +284,8 @@ class PaymentCheckViewSet(AppViewSet):
         client = get_client()
 
         res = client.api.bango.status.post(
-                data={'seller_product_bango':
-                      self.app.app_payment_account.account_uri})
+            data={'seller_product_bango':
+                  self.app.payment_account(PROVIDER_BANGO).account_uri})
 
         filtered = {
             'bango': {
@@ -197,9 +296,8 @@ class PaymentCheckViewSet(AppViewSet):
         return Response(filtered, status=200)
 
 
-class PaymentDebugViewSet(AppViewSet):
-    permission_classes = (partial(PermissionAuthorization,
-                                  'Transaction', 'Debug',),)
+class PaymentDebugViewSet(PaymentAppViewSet):
+    permission_classes = [GroupPermission('Transaction', 'Debug')]
     form = PaymentCheckForm
 
     def list(self, request, *args, **kwargs):
@@ -208,8 +306,8 @@ class PaymentDebugViewSet(AppViewSet):
 
         client = get_client()
         res = client.api.bango.debug.get(
-                data={'seller_product_bango':
-                      self.app.app_payment_account.account_uri})
+            data={'seller_product_bango':
+                  self.app.payment_account(PROVIDER_BANGO).account_uri})
         filtered = {
             'bango': res['bango'],
         }

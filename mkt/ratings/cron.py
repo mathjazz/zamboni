@@ -5,9 +5,9 @@ from django.conf import settings
 import commonware.log
 import cronjobs
 
-import amo
-from amo.utils import send_mail_jinja
-from reviews.models import Review
+from mkt.site.mail import send_mail_jinja
+from mkt.ratings.models import Review
+
 
 cron_log = commonware.log.getLogger('mkt.ratings.cron')
 
@@ -24,8 +24,7 @@ def email_daily_ratings():
     pretty_date = '%04d-%02d-%02d' % (dt.year, dt.month, dt.day)
 
     yesterday_reviews = Review.objects.filter(created__gte=yesterday,
-                                              created__lt=today,
-                                              addon__type=amo.ADDON_WEBAPP)
+                                              created__lt=today)
 
     # For each app in yesterday's set of reviews, gather reviews and email out.
     apps = set(review.addon for review in yesterday_reviews)
@@ -42,4 +41,4 @@ def email_daily_ratings():
 
         send_mail_jinja(subject, 'ratings/emails/daily_digest.html',
                         context, recipient_list=author_emails,
-                        perm_setting='app_new_review')
+                        perm_setting='app_new_review', async=True)

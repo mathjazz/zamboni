@@ -1,45 +1,19 @@
 import datetime
 
-from django.core.management import call_command
-
-import commonware.log
+from celery.task.sets import TaskSet
 import cronjobs
-import pyes
 
-from stats.models import Contribution
-from lib.es.utils import raise_if_reindex_in_progress
-from mkt.webapps.models import Installed
-
-cron_log = commonware.log.getLogger('mkt.cron')
+from mkt.stats import tasks
 
 
 @cronjobs.register
-def index_latest_mkt_stats(index=None, aliased=True):
-    raise_if_reindex_in_progress()
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+def update_monolith_stats(date=None):
+    """Update monolith statistics."""
+    if date:
+        date = datetime.datetime.strptime(date, '%Y-%m-%d').date()
+    today = date or datetime.date.today()
+    jobs = [{'metric': metric,
+             'date': today} for metric in tasks._get_monolith_jobs(date)]
 
-    try:
-        latest = Contribution.search(index).order_by('-date').values_dict()
-        latest_contribution = latest and latest[0]['date'] or yesterday
-    except pyes.exceptions.SearchPhaseExecutionException:
-        latest_contribution = yesterday
-
-    try:
-        latest = Installed.search(index).order_by('-date').values_dict()
-        latest_install = latest and latest[0]['date'] or yesterday
-    except pyes.exceptions.SearchPhaseExecutionException:
-        latest_install = yesterday
-
-    latest = min(latest_contribution, latest_install)
-
-    fmt = lambda d: d.strftime('%Y-%m-%d')
-    date_range = '%s:%s' % (fmt(latest), fmt(datetime.date.today()))
-    cron_log.info('index_mkt_stats --date=%s' % date_range)
-    call_command('index_mkt_stats', addons=None, date=date_range, index=index,
-                 aliased=True)
-
-
-@cronjobs.register
-def index_mkt_stats(index=None, aliased=True):
-    cron_log.info('index_mkt_stats')
-    call_command('index_mkt_stats', addons=None, date=None)
+    ts = [tasks.update_monolith_stats.subtask(kwargs=kw) for kw in jobs]
+    TaskSet(ts).apply_async()

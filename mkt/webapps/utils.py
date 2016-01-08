@@ -1,19 +1,17 @@
-from django.conf import settings
-from django.utils import translation
+# -*- coding: utf-8 -*-
+import hashlib
+import json
+
+from django.core.cache import cache
 
 import commonware.log
 
-import amo
-from addons.models import AddonUser
-from amo.helpers import absolutify
-from amo.utils import find_language, no_translation
-from constants.applications import DEVICE_TYPES
-from market.models import Price
-from users.models import UserProfile
+import lib.iarc
+import mkt
+from mkt.site.storage_utils import public_storage
+from mkt.site.utils import JSONEncoder
+from mkt.translations.utils import find_language
 
-from mkt.purchase.utils import payments_enabled
-from mkt.regions import REGIONS_CHOICES_ID_DICT
-from mkt.regions.api import RegionResource
 
 log = commonware.log.getLogger('z.webapps')
 
@@ -47,210 +45,111 @@ def get_supported_locales(manifest):
         manifest.get('locales', {}).keys()))))
 
 
-def app_to_dict(app, region=None, profile=None, request=None):
-    """Return app data as dict for API."""
-    # Sad circular import issues.
-    from mkt.api.resources import AppResource
-    from mkt.developers.api import AccountResource
-    from mkt.developers.models import AddonPaymentAccount
-    from mkt.submit.api import PreviewResource
-    from mkt.webapps.models import reverse_version
+def dehydrate_content_rating(rating):
+    """
+    {body.id, rating.id} to translated rating.label.
+    """
+    try:
+        body = mkt.ratingsbodies.dehydrate_ratings_body(
+            mkt.ratingsbodies.RATINGS_BODIES[int(rating['body'])])
+    except TypeError:
+        # Legacy ES format (bug 943371).
+        return {}
 
-    supported_locales = getattr(app.current_version, 'supported_locales', '')
+    rating = mkt.ratingsbodies.dehydrate_rating(
+        body.ratings[int(rating['rating'])])
 
-    content_ratings = {}
-    for cr in app.content_ratings.all():
-        for _region in cr.get_region_slugs():
-            content_ratings.setdefault(_region, []).append({
-                'body': cr.get_body().name,
-                'name': cr.get_rating().name,
-                'description': unicode(cr.get_rating().description),
-            })
+    return rating.label
+
+
+def dehydrate_content_ratings(content_ratings):
+    """Dehydrate an object of content ratings from rating IDs to dict."""
+    for body in content_ratings or {}:
+        # Dehydrate all content ratings.
+        content_ratings[body] = dehydrate_content_rating(content_ratings[body])
+    return content_ratings
+
+
+def iarc_get_app_info(app):
+    client = lib.iarc.client.get_iarc_client('services')
+    iarc = app.iarc_info
+    iarc_id = iarc.submission_id
+    iarc_code = iarc.security_code
+
+    # Generate XML.
+    xml = lib.iarc.utils.render_xml(
+        'get_app_info.xml',
+        {'submission_id': iarc_id, 'security_code': iarc_code})
+
+    # Process that shizzle.
+    resp = client.Get_App_Info(XMLString=xml)
+
+    # Handle response.
+    return lib.iarc.utils.IARC_XML_Parser().parse_string(resp)
+
+
+def get_cached_minifest(app_or_langpack, force=False):
+    """
+    Create a "mini" manifest for a packaged app or langpack and cache it (Call
+    with `force=True` to bypass existing cache).
+
+    Note that platform expects name/developer/locales to match the data from
+    the real manifest in the package, so it needs to be read from the zip file.
+
+    Returns a tuple with the minifest contents and the corresponding etag.
+    """
+    cache_prefix = 1  # Change this if you are modifying what enters the cache.
+    cache_key = '{0}:{1}:{2}:manifest'.format(cache_prefix,
+                                              app_or_langpack._meta.model_name,
+                                              app_or_langpack.pk)
+
+    if not force:
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+
+    sign_if_packaged = getattr(app_or_langpack, 'sign_if_packaged', None)
+    if sign_if_packaged is None:
+        # Langpacks are already signed when we generate the manifest and have
+        # a file_path attribute.
+        signed_file_path = app_or_langpack.file_path
+    else:
+        # sign_if_packaged() will return the signed path. But to call it, we
+        # need a current version. If we don't have one, return an empty
+        # manifest, bypassing caching so that when a version does become
+        # available it can get picked up correctly.
+        if not app_or_langpack.current_version:
+            return '{}'
+        signed_file_path = sign_if_packaged()
+
+    manifest = app_or_langpack.get_manifest_json()
+    package_path = app_or_langpack.get_package_path()
 
     data = {
-        'app_type': app.app_type,
-        'author': app.developer_name,
-        'categories': list(app.categories.values_list('slug', flat=True)),
-        'content_ratings': content_ratings or None,
-        'created': app.created,
-        'current_version': (app.current_version.version if
-                            getattr(app, 'current_version') else None),
-        'default_locale': app.default_locale,
-        'icons': dict([(icon_size,
-                        app.get_icon_url(icon_size))
-                       for icon_size in (16, 48, 64, 128)]),
-        'is_packaged': app.is_packaged,
-        'manifest_url': app.get_manifest_url(),
-        'payment_required': False,
-        'previews': PreviewResource().dehydrate_objects(app.previews.all()),
-        'premium_type': amo.ADDON_PREMIUM_API[app.premium_type],
-        'public_stats': app.public_stats,
-        'price': None,
-        'price_locale': None,
-        'ratings': {'average': app.average_rating,
-                    'count': app.total_reviews},
-        'regions': RegionResource().dehydrate_objects(app.get_regions()),
-        'slug': app.app_slug,
-        'supported_locales': (supported_locales.split(',') if supported_locales
-                              else []),
-        'weekly_downloads': app.weekly_downloads if app.public_stats else None,
-        'versions': dict((v.version, reverse_version(v)) for
-                         v in app.versions.all())
+        'size': public_storage.size(signed_file_path),
+        'package_path': package_path,
     }
-
-    data['upsell'] = False
-    if app.upsell and region in app.upsell.premium.get_price_region_ids():
-        upsell = app.upsell.premium
-        data['upsell'] = {
-            'id': upsell.id,
-            'app_slug': upsell.app_slug,
-            'icon_url': upsell.get_icon_url(128),
-            'name': unicode(upsell.name),
-            'resource_uri': AppResource().get_resource_uri(upsell),
-        }
-
-    if app.premium:
-        q = AddonPaymentAccount.objects.filter(addon=app)
-        if len(q) > 0 and q[0].payment_account:
-            data['payment_account'] = AccountResource().get_resource_uri(
-                q[0].payment_account)
-
-        if (region in app.get_price_region_ids() or
-            payments_enabled(request)):
-            data['price'] = app.get_price(region=region)
-            data['price_locale'] = app.get_price_locale(region=region)
-        data['payment_required'] = (bool(app.get_tier().price)
-                                    if app.get_tier() else False)
-
-    with no_translation():
-        data['device_types'] = [n.api_name
-                                for n in app.device_types]
-    if profile:
-        data['user'] = {
-            'developed': app.addonuser_set.filter(
-                user=profile, role=amo.AUTHOR_ROLE_OWNER).exists(),
-            'installed': app.has_installed(profile),
-            'purchased': app.pk in profile.purchase_ids(),
-        }
-
-    return data
-
-
-def get_attr_lang(src, attr, default_locale):
-    """
-    Our index stores localized strings in elasticsearch as, e.g.,
-    "name_spanish": [u'Nombre']. This takes the current language in the
-    threadlocal and gets the localized value, defaulting to
-    settings.LANGUAGE_CODE.
-    """
-    req_lang = amo.SEARCH_LANGUAGE_TO_ANALYZER.get(
-        translation.get_language().lower())
-    def_lang = amo.SEARCH_LANGUAGE_TO_ANALYZER.get(
-        default_locale.lower())
-    svr_lang = amo.SEARCH_LANGUAGE_TO_ANALYZER.get(
-        settings.LANGUAGE_CODE.lower())
-
-    value = (src.get('%s_%s' % (attr, req_lang)) or
-             src.get('%s_%s' % (attr, def_lang)) or
-             src.get('%s_%s' % (attr, svr_lang)))
-    return value[0] if value else u''
-
-
-def es_app_to_dict(obj, region=None, profile=None, request=None):
-    """
-    Return app data as dict for API where `app` is the elasticsearch result.
-    """
-    # Circular import.
-    from mkt.api.base import GenericObject
-    from mkt.api.resources import AppResource, PrivacyPolicyResource
-    from mkt.developers.api import AccountResource
-    from mkt.developers.models import AddonPaymentAccount
-    from mkt.webapps.models import Installed, Webapp
-
-    src = obj._source
-    # The following doesn't perform a database query, but gives us useful
-    # methods like `get_detail_url`. If you use `obj` make sure the calls
-    # don't query the database.
-    is_packaged = src.get('app_type') != amo.ADDON_WEBAPP_HOSTED
-    app = Webapp(app_slug=obj.app_slug, is_packaged=is_packaged)
-
-    attrs = ('content_ratings', 'created', 'current_version', 'default_locale',
-             'homepage', 'manifest_url', 'previews', 'ratings', 'status',
-             'support_email', 'support_url', 'weekly_downloads')
-    data = dict((a, getattr(obj, a, None)) for a in attrs)
-    data.update({
-        'absolute_url': absolutify(app.get_detail_url()),
-        'app_type': app.app_type,
-        'author': src.get('author', ''),
-        'categories': [c for c in obj.category],
-        'description': get_attr_lang(src, 'description', obj.default_locale),
-        'device_types': [DEVICE_TYPES[d].api_name for d in src.get('device')],
-        'icons': dict((i['size'], i['url']) for i in src.get('icons')),
-        'id': str(obj._id),
-        'is_packaged': is_packaged,
-        'name': get_attr_lang(src, 'name', obj.default_locale),
-        'payment_required': False,
-        'premium_type': amo.ADDON_PREMIUM_API[src.get('premium_type')],
-        'privacy_policy': PrivacyPolicyResource().get_resource_uri(
-            GenericObject({'pk': obj._id})
-        ),
-        'public_stats': obj.has_public_stats,
-        'supported_locales': src.get('supported_locales', ''),
-        'slug': obj.app_slug,
-        # TODO: Remove the type check once this code rolls out and our indexes
-        # aren't between mapping changes.
-        'versions': dict((v.get('version'), v.get('resource_uri')) for v in
-                         src.get('versions') if type(v) == dict),
-    })
-
-    if not data['public_stats']:
-        data['weekly_downloads'] = None
-
-    data['regions'] = RegionResource().dehydrate_objects(
-        map(REGIONS_CHOICES_ID_DICT.get,
-            app.get_region_ids(worldwide=True,
-                               excluded=obj.region_exclusions)))
-
-    if src.get('premium_type') in amo.ADDON_PREMIUMS:
-        acct = list(AddonPaymentAccount.objects.filter(addon=app))
-        if acct and acct.payment_account:
-            data['payment_account'] = AccountResource().get_resource_uri(
-                acct.payment_account)
+    if hasattr(app_or_langpack, 'current_version'):
+        data['version'] = app_or_langpack.current_version.version
+        data['release_notes'] = app_or_langpack.current_version.releasenotes
+        file_hash = app_or_langpack.current_version.all_files[0].hash
     else:
-        data['payment_account'] = None
+        # LangPacks have no version model, the version number is an attribute
+        # and they don't have release notes.
+        data['version'] = app_or_langpack.version
+        # File hash is not stored for langpacks, but file_version changes with
+        # every new upload so we can use that instead.
+        file_hash = unicode(app_or_langpack.file_version)
 
-    data['upsell'] = False
-    if hasattr(obj, 'upsell'):
-        exclusions = obj.upsell.get('region_exclusions')
-        if exclusions is not None and region not in exclusions:
-            data['upsell'] = obj.upsell
-            data['upsell']['resource_uri'] = AppResource().get_resource_uri(
-                Webapp(id=obj.upsell['id']))
+    for key in ['developer', 'icons', 'locales', 'name']:
+        if key in manifest:
+            data[key] = manifest[key]
 
-    data['price'] = data['price_locale'] = None
-    try:
-        price_tier = src.get('price_tier')
-        if price_tier:
-            price = Price.objects.get(name=price_tier)
-            if (data['upsell'] or payments_enabled(request)):
-                price_currency = price.get_price_currency(region=region)
-                if price_currency and price_currency.paid:
-                    data['price'] = price.get_price(region=region)
-                    data['price_locale'] = price.get_price_locale(
-                        region=region)
-            data['payment_required'] = bool(price.price)
-    except Price.DoesNotExist:
-        log.warning('Issue with price tier on app: {0}'.format(obj._id))
-        data['payment_required'] = True
-
-    # TODO: Let's get rid of these from the API to avoid db hits.
-    if profile and isinstance(profile, UserProfile):
-        data['user'] = {
-            'developed': AddonUser.objects.filter(addon=obj.id,
-                user=profile, role=amo.AUTHOR_ROLE_OWNER).exists(),
-            'installed': Installed.objects.filter(
-                user=profile, addon_id=obj.id).exists(),
-            'purchased': obj.id in profile.purchase_ids(),
-        }
-
-    return data
+    data = json.dumps(data, cls=JSONEncoder)
+    etag = hashlib.sha256()
+    etag.update(data)
+    if file_hash:
+        etag.update(file_hash)
+    rval = (data, etag.hexdigest())
+    cache.set(cache_key, rval, None)
+    return rval

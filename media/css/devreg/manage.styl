@@ -13,7 +13,7 @@
         width: 22%;
     }
     .edit-addon-nav {
-        background: rgba($orange,.02);
+        background: rgba($orange, .02);
     }
     .refinements {
         a {
@@ -182,9 +182,9 @@
     display: none;
 }
 
+#edit-addon-details #trans-homepage,
 #edit-addon-support #trans-support_email,
-#edit-addon-support #trans-support_url,
-#edit-addon-details #trans-homepage {
+#edit-addon-support #trans-support_url {
     input {
         width: 400px;
     }
@@ -336,8 +336,12 @@ form .char-count b {
 }
 
 .checkbox-choices:not(.regions) {
-    columns(3, 1.5em);
+    columns(2, 1.5em);
     margin-bottom: .5em;
+
+    li {
+        margin-top: .25em;
+    }
 }
 
 td .checkbox-choices:not(.regions) {
@@ -354,4 +358,12 @@ td .checkbox-choices:not(.regions) {
 
 .other-regions .devhub-form .hint {
     margin-top: 4px;
+}
+
+.island-error {
+    margin-bottom: 10px;
+}
+
+#transaction-lookup dd {
+    margin-top: 5px;
 }

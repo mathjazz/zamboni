@@ -9,58 +9,67 @@
     {{ reviewers_score_bar(types=point_types) }}
   </section>
 
-  <section class="island mobile-island">
-    <div class="featured" id="editors-stats-charts">
-      <div class="listing-header c">
-        <div class="editor-stats-title">
-          <a href="{{ url('reviewers.apps.queue_pending') }}">
-            {{ ngettext('{num} Pending App Review',
-                        '{num} Pending App Reviews',
-                        queue_counts['pending'])|f(num=queue_counts['pending']) }}
-          </a>
-        </div>
-        <div class="editor-stats-title">
-          <a href="{{ url('reviewers.apps.queue_rereview') }}">
-            {{ ngettext('{num} Re-review',
-                        '{num} Re-reviews',
-                        queue_counts['rereview'])|f(num=queue_counts['rereview']) }}
-          </a>
-        </div>
-        <div class="editor-stats-title">
-          <a href="{{ url('reviewers.apps.queue_updates') }}">
-            {{ ngettext('{num} Update Review',
-                        '{num} Update Reviews',
-                        queue_counts['updates'])|f(num=queue_counts['updates']) }}
-          </a>
-        </div>
-        <div class="editor-stats">
-          {% for type in ['pending', 'rereview', 'updates']: %}
-            <div class="editor-stats-table">
-              <div>
-                {{ ngettext("{c} unreviewed app submission this week.",
-                            "{c} unreviewed app submissions this week.",
-                            progress[type]['week'])|f(c=progress[type]['week']) }}
-              </div>
-              <div class="editor-stats-dark">
-                <strong>{{ _('Current waiting times:') }}</strong>
-                <div class="editor-waiting">
-                  {% for (d, duration) in durations: %}
-                  {% set total = progress[type][d] %}
-                  <div class="waiting_{{ d }} tooltip"
-                       data-delay="100"
-                       style="width:{{ percentage[type][d] }}%"
-                       title="{{ duration }} ::
-                              {{ ngettext('{0} app', '{0} apps', total)|f(total) }}
-                              &bull; {{ _('{0}%')|f(percentage[type][d]|round|int) }}"></div>
-                  {% endfor %}
+  {% if full_reviewer %}
+    <section class="island mobile-island">
+      <div class="featured" id="editors-stats-charts">
+        <div class="listing-header c">
+          <div class="editor-stats-title">
+            <a href="{{ url('reviewers.apps.queue_pending') }}">
+              {{ ngettext('{num} Pending App Review',
+                          '{num} Pending App Reviews',
+                          queue_counts['pending'])|f(num=queue_counts['pending']) }}
+            </a>
+          </div>
+          <div class="editor-stats-title">
+            <a href="{{ url('reviewers.apps.queue_rereview') }}">
+              {{ ngettext('{num} Re-review',
+                          '{num} Re-reviews',
+                          queue_counts['rereview'])|f(num=queue_counts['rereview']) }}
+            </a>
+          </div>
+          <div class="editor-stats-title">
+            <a href="{{ url('reviewers.apps.queue_updates') }}">
+              {{ ngettext('{num} Update Review',
+                          '{num} Update Reviews',
+                          queue_counts['updates'])|f(num=queue_counts['updates']) }}
+            </a>
+          </div>
+          <div class="editor-stats-title">
+            <a href="{{ url('reviewers.apps.queue_homescreen') }}">
+              {{ ngettext('{num} Homescreen Review',
+                          '{num} Homescreen Reviews',
+                          queue_counts['homescreen'])|f(num=queue_counts['homescreen']) }}
+            </a>
+          </div>
+          <div class="editor-stats">
+            {% for type in ['pending', 'rereview', 'updates', 'homescreen']: %}
+              <div class="editor-stats-table">
+                <div>
+                  {{ ngettext("{c} unreviewed app submission this week.",
+                              "{c} unreviewed app submissions this week.",
+                              progress[type]['week'])|f(c=progress[type]['week']) }}
+                </div>
+                <div class="editor-stats-dark">
+                  <strong>{{ _('Current waiting times:') }}</strong>
+                  <div class="editor-waiting">
+                    {% for (d, duration) in durations: %}
+                    {% set total = progress[type][d] %}
+                    <div class="waiting_{{ d }} tooltip"
+                         data-delay="100"
+                         style="width:{{ percentage[type][d] }}%"
+                         title="{{ duration }} ::
+                                {{ ngettext('{0} app', '{0} apps', total)|f(total) }}
+                                &bull; {{ '{0}%'|f(percentage[type][d]|round|int) }}"></div>
+                    {% endfor %}
+                  </div>
                 </div>
               </div>
-            </div>
-          {% endfor %}
+            {% endfor %}
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
+  {% endif %}
 
   <section class="island mobile-island c">
     <div class="featured" id="editors-stats">
@@ -75,7 +84,7 @@
             <table>
               {% for row in reviews_total %}
               <tr>
-                <td>{{ row['user__display_name']|d(row['user__username'], true) }}</td>
+                <td>{{ row['user__display_name']|d(row['user__email'], true) }}</td>
                 <td class="int">{{ row['approval_count']|numberfmt }}</td>
               </tr>
               {% endfor %}
@@ -87,7 +96,7 @@
             <table>
               {% for row in reviews_monthly %}
               <tr>
-                <td>{{ row['user__display_name']|d(row['user__username'], true) }}</td>
+                <td>{{ row['user__display_name']|d(row['user__email'], true) }}</td>
                 <td class="int">{{ row['approval_count']|numberfmt }}</td>
               </tr>
               {% endfor %}
@@ -100,11 +109,7 @@
             <table>
               {% for editors in new_editors %}
               <tr>
-                <td>
-                  <a href="{{ url('users.profile', editors['added']) }}">
-                    {{ editors['display_name'] }}
-                  </a>
-                </td>
+                <td>{{ editors['display_name'] }}</td>
                 <td class="date" title="{{ editors['created']|babel_datetime }}">
                   {{ editors['created']|timesince }}
                 </td>

@@ -4,38 +4,96 @@
 Communication
 =============
 
-API for communication between reviewers and developers.
+API for communication between reviewers and developers
+
+.. note:: Under development.
+
+App
+===
+
+.. http:get:: /api/v2/comm/app/(int:id|string:slug)/
+
+    .. note:: Requires authentication.
+
+    Returns all threads for the app.
+
+    **Request**
+
+    Takes an app slug.
+
+    The standard :ref:`list-query-params-label`.
+
+    **Response**
+
+    :status 200: successfully completed.
+    :status 403: not allowed to access this app.
+    :status 404: app not found.
+
+    :param meta: :ref:`meta-response-label`.
+    :type meta: object
+    :param objects: A :ref:`listing <objects-response-label>` of
+        :ref:`threads <thread-response-label>`.
+    :type objects: array
+
+    **?serializer=simple**
+
+    If you pass *simple* as a value to the *serializer* GET parameter, the
+    deserialized threads will consist only of the thread ID and the version
+    number for the app it is representing.
+
+    Example:
+
+    .. code-block:: json
+
+        {
+            "objects": [
+                {
+                    "id": 12345,
+                    "version": {
+                        "id": 444,
+                        "version": "1.2"
+                    }
+                },
+                {
+                    "id": 12348,
+                    "version": {
+                        "id": 474,
+                        "version": "1.3"
+                    }
+                }
+            ],
+        }
+
 
 Thread
 ======
 
-.. http:get:: /api/v1/comm/thread/
+.. http:get:: /api/v2/comm/thread/
 
     .. note:: Requires authentication.
 
-    Returns the list of threads where the user has posted a note to, has been CC'd or is an author of the addon that the thread is based on.
+    Returns a list of threads in which the user is involved in.
 
     **Request**
 
     The standard :ref:`list-query-params-label`.
 
-    For ordering params, see :ref:`list-ordering-params-label`.
-
-    :param app: id or slug of the app to filter the threads by.
-    :type app: int|string
-
     **Response**
 
     :param meta: :ref:`meta-response-label`.
     :type meta: object
-    :param objects: A :ref:`listing <objects-response-label>` of :ref:`threads <thread-response-label>`.
+    :param objects: A :ref:`listing <objects-response-label>` of
+         :ref:`threads <thread-response-label>`.
     :type objects: array
+
 
 .. _thread-response-label:
 
-.. http:get:: /api/v1/comm/thread/(int:id)/
+.. http:get:: /api/v2/comm/thread/(int:id)/
 
-    .. note:: Does not require authentication if the thread is public.
+    .. note:: Requires authentication.
+
+    View a thread object.
 
     **Response**
 
@@ -50,107 +108,64 @@ Thread
     .. code-block:: json
 
         {
-            "addon": 3,
-            "addon_meta": {
+            "app": {
+                "app_slug": "app-3",
+                "id": 5,
                 "name": "Test App (kinkajou3969)",
-                "slug": "app-3",
-                "thumbnail_url": "/media/img/icons/no-preview.png",
+                "review_url": "/reviewers/apps/review/test-app-kinkajou3969/",
+                "thumbnail_url": "/tmp/uploads/previews/thumbs/0/37.png?modified=1362762723",
                 "url": "/app/test-app-kinkajou3969/"
-                "review_url": "/reviewers/apps/review/test-app-kinkajou3969/"
             },
             "created": "2013-06-14T11:54:24",
             "id": 2,
             "modified": "2013-06-24T22:01:37",
             "notes_count": 47,
-            "recent_notes": [
-                {
-                    "author": 27,
-                    "author_meta": {
-                        "name": "someuser"
-                    },
-                    "body": "sometext",
-                    "created": "2013-06-24T22:01:37",
-                    "id": 119,
-                    "note_type": 0,
-                    "thread": 2
-                },
-                {
-                    "author": 27,
-                    "author_meta": {
-                        "name": "someuser2"
-                    },
-                    "body": "sometext",
-                    "created": "2013-06-24T21:31:56",
-                    "id": 118,
-                    "note_type": 0,
-                    "thread": 2
-                },
-                ...
-                ...
-            ],
-            "version": null
+            "version": {
+                "id": 45,
+                "version": "1.6",
+                "deleted": false
+            }
         }
 
     Notes on the response.
 
-    :param recent_notes: contain 5 recently created notes.
-    :type recent_notes: array
+    :param version.version: Version number noted from the app manifest.
+    :type version.version: string
+    :param version.deleted: whether the version of the app of the note is
+        out-of-date.
+    :type version.deleted: boolean
 
-.. _note-patch-label:
 
-.. http:patch:: /api/v1/comm/thread/(int:thread_id)/
+.. http:post:: /api/v2/comm/thread/
 
     .. note:: Requires authentication.
 
-    This endpoint can be used to mark all notes in a thread as read.
+    Create a thread from a new note for a version of an app.
 
     **Request**
 
-    :param is_read: set it to `true` to mark the note as read.
-    :type is_read: boolean
+    :param app: id or slug of the app to filter the threads by.
+    :type app: int|string
+    :param version: version number for the thread's :ref:`version <versions-label>` (e.g. 1.2).
+    :type version: string
+    :param note_type: a :ref:`note type label <note-type-label>`.
+    :type note_type: int
+    :param body: contents of the note.
+    :type body: string
 
     **Response**
 
-    :status code: 204 Thread is marked as read.
-    :status code: 403 There is an attempt to modify other fields or not allowed to access the object.
-    :status code: 400 Thread object not found.
+    A :ref:`note <note-response-label>` object.
 
-.. _thread-post-label:
-
-.. http:post:: /api/v1/comm/thread/
-
-    .. note:: Requires authentication.
-
-    **Request**
-
-    :param addon: the id of the addon.
-    :type addon: int
-    :param version: the id of the version of the addon.
-    :type version: int
-
-    **Response**
-
-    :param: A :ref:`thread <thread-response-label>`.
-    :status code: 201 successfully created.
-
-.. _thread-delete-label:
-
-.. http:delete:: /api/v1/comm/thread/(int:id)/
-
-    .. note:: Requires authentication.
-
-    **Response**
-
-    :status code: 204 successfully deleted.
 
 Note
 ====
 
-.. http:get:: /api/v1/comm/thread/(int:thread_id)/note/
+.. http:get:: /api/v2/comm/thread/(int:thread_id)/note/
 
-    .. note:: Does not require authentication if the thread is public.
+    .. note:: Requires authentication.
 
-    Returns the list of notes that the thread contains.
+    Returns the list of notes that a thread contains.
 
     **Request**
 
@@ -170,9 +185,11 @@ Note
 
 .. _note-response-label:
 
-.. http:get:: /api/v1/comm/thread/(int:thread_id)/note/(int:id)/
+.. http:get:: /api/v2/comm/thread/(int:thread_id)/note/(int:id)/
 
-    .. note:: Does not require authentication if the note is in a public thread.
+    .. note:: Requires authentication.
+
+    View a note.
 
     **Request**
 
@@ -180,86 +197,60 @@ Note
 
     **Response**
 
-    A thread object, see below for example.
+    A note object, see below for example.
 
     :status 200: successfully completed.
     :status 403: not allowed to access this object.
-    :status 404: not found.
-
-    Example:
+    :status 404: thread or note not found.
 
     .. code-block:: json
 
         {
+            "attachments": [{
+                "id": 1,
+                "created": "2013-06-14T11:54:48",
+                "display_name": "Screenshot of my app.",
+                "url": "http://marketplace.cdn.mozilla.net/someImage.jpg",
+            }],
             "author": 1,
             "author_meta": {
-                "name": "Landfill Admin"
+                "name": "Admin"
             },
             "body": "hi there",
             "created": "2013-06-14T11:54:48",
             "id": 2,
             "note_type": 0,
             "thread": 2,
-            "is_read": false
         }
 
     Notes on the response.
 
+    :param attachments: files attached to the note (often images).
+    :type attachments: array
     :param note_type: type of action taken with the note.
     :type note_type: int
-    :param is_read: Whether the note is read or unread.
-    :type is_read: boolean
 
 .. _note-type-label:
 
-    Note type values and associated actions -
+    Only "No Action", "Reviewer Comment", and "Developer Comment" note types
+    can be created through the Note API. Further, one must be a reviewer to
+    make a "Reviewer Comment". And one must be a developer of an app to make
+    a "Developer Comment" on an app's thread.
 
-    ..
+    All note types are listed in the `code <https://github.com/mozilla/zamboni/blob/master/mkt/constants/comm.py>`_
 
-        0 - No Action
-
-        1 - Approval
-
-        2 - Rejection
-
-        3 - Disabled
-
-        4 - MoreInfo
-
-        5 - Escalation
-
-        6 - Reviewer Comment
-
-        7 - Resubmission
-
-.. _note-patch-label:
-
-.. http:patch:: /api/v1/comm/thread/(int:thread_id)/note/(int:id)/
-
-    .. note:: Requires authentication.
-
-    This endpoint can be used to mark an unread note as read.
-
-    **Request**
-
-    :param is_read: set it to `true` to mark the note as read.
-    :type is_read: boolean
-
-    **Response**
-
-    :status code: 204 Note marked as read.
-    :status code: 403 There is an attempt to modify other fields or not allowed to access the object.
-    :status code: 400 Note object not found.
 
 .. _note-post-label:
 
-.. http:post:: /api/v1/comm/thread/(int:thread_id)/note/
+.. http:post:: /api/v2/comm/thread/(int:thread_id)/note/
 
     .. note:: Requires authentication.
 
+    Create a note on a thread.
+
     **Request**
 
-    :param author: the id of the addon.
+    :param author: the id of the author.
     :type author: int
     :param thread: the id of the thread to post to.
     :type thread: int
@@ -271,17 +262,9 @@ Note
     **Response**
 
     :param: A :ref:`note <note-response-label>`.
-    :status code: 201 successfully created.
-
-.. _note-delete-label:
-
-.. http:delete:: /api/v1/comm/thread/(int:thread_id)/note/(int:id)/
-
-    .. note:: Requires authentication.
-
-    **Response**
-
-    :status code: 204 successfully deleted.
+    :status: 201 successfully created.
+    :status: 400 bad request.
+    :status: 404 thread not found.
 
 
 .. _list-ordering-params-label:
@@ -298,3 +281,35 @@ Order results by created or modified times, by using `ordering` param.
 * *modified* - Earliest modified notes first.
 
 * *-modified* - Latest modified notes first.
+
+
+Attachment
+==========
+
+.. _attachment-post-label:
+
+.. http:post:: /api/v2/comm/note/(int:note_id)/attachment
+
+    .. note:: Requires authentication and the user to be the author of the note.
+
+    Create attachment(s) on a note.
+
+    **Request**
+
+    The request must be sent and encoded with the multipart/form-data Content-Type.
+
+    :param form-0-attachment: the first attachment file encoded with multipart/form-data.
+    :type form-0-attachment: multipart/form-data encoded file stream
+    :param form-0-description: description of the first attachment.
+    :type form-0-description: string
+    :param form-N-attachment: If sending multiple attachments, replace N with the number of the n-th attachment.
+    :type form-N-attachment: multipart/form-data encoded file stream
+    :param form-N-description: description of the n-th attachment.
+    :type form-N-description: string
+
+    **Response**
+
+    :param: The :ref:`note <note-response-label>` the attachment was attached to.
+    :status: 201 successfully created.
+    :status: 400 bad request (e.g. no attachments, more than 10 attachments).
+    :status: 403 permission denied if user isn't the author of the note.

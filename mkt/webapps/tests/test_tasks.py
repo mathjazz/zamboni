@@ -1,32 +1,37 @@
 # -*- coding: utf-8 -*-
 import datetime
+import hashlib
 import json
 import os
-import stat
+import tarfile
+from copy import deepcopy
+from tempfile import mkdtemp
 
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
 from django.core import mail
 from django.core.management import call_command
 from django.core.urlresolvers import reverse
 
 import mock
 from nose.tools import eq_, ok_
+from requests.exceptions import RequestException
 
-import amo
-import amo.tests
-from addons.models import Addon, AddonUser
-from amo.helpers import absolutify
-from devhub.models import ActivityLog
-from editors.models import RereviewQueue
-from files.models import File, FileUpload
-from users.models import UserProfile
-from versions.models import Version
-
+import mkt
+import mkt.site.tests
+from mkt.developers.models import ActivityLog
+from mkt.files.models import File, FileUpload
+from mkt.reviewers.models import RereviewQueue
 from mkt.site.fixtures import fixture
-from mkt.webapps.models import Webapp
-from mkt.webapps.tasks import (dump_app, notify_developers_of_failure,
-                               update_manifests, zip_apps)
+from mkt.site.helpers import absolutify
+from mkt.site.storage_utils import private_storage, public_storage
+from mkt.site.utils import app_factory
+from mkt.users.models import UserProfile
+from mkt.versions.models import Version
+from mkt.webapps.cron import dump_user_installs_cron
+from mkt.webapps.models import AddonUser, Webapp
+from mkt.webapps.tasks import (dump_app, export_data,
+                               notify_developers_of_failure, pre_generate_apk,
+                               PreGenAPKError, rm_directory, update_manifests)
 
 
 original = {
@@ -35,7 +40,7 @@ original = {
     "name": "MozillaBall",
     "description": "Exciting Open Web development action!",
     "icons": {
-        "16": "http://test.com/icon-16.png",
+        "32": "http://test.com/icon-32.png",
         "48": "http://test.com/icon-48.png",
         "128": "http://test.com/icon-128.png"
     },
@@ -59,7 +64,7 @@ new = {
     "name": "MozillaBall",
     "description": "Exciting Open Web development action!",
     "icons": {
-        "16": "http://test.com/icon-16.png",
+        "32": "http://test.com/icon-32.png",
         "48": "http://test.com/icon-48.png",
         "128": "http://test.com/icon-128.png"
     },
@@ -87,63 +92,58 @@ nhash = ('sha256:'
          '409fbe87dca5a4a7937e3dea27b69cb3a3d68caf39151585aef0c7ab46d8ee1e')
 
 
-class TestUpdateManifest(amo.tests.TestCase):
-    fixtures = ('base/platforms', 'base/users')
+class TestUpdateManifest(mkt.site.tests.TestCase):
+    fixtures = fixture('user_2519', 'user_999')
 
     def setUp(self):
-
         UserProfile.objects.get_or_create(id=settings.TASK_USER_ID)
 
         # Not using app factory since it creates translations with an invalid
         # locale of "en-us".
-        self.addon = Addon.objects.create(type=amo.ADDON_WEBAPP)
+        self.addon = Webapp.objects.create()
         self.version = Version.objects.create(addon=self.addon,
                                               _developer_name='Mozilla')
         self.file = File.objects.create(
-            version=self.version, hash=ohash, status=amo.STATUS_PUBLIC,
+            version=self.version, hash=ohash, status=mkt.STATUS_PUBLIC,
             filename='%s-%s' % (self.addon.id, self.version.id))
 
         self.addon.name = {
             'en-US': 'MozillaBall',
             'de': 'Mozilla Kugel',
         }
-        self.addon.status = amo.STATUS_PUBLIC
+        self.addon.status = mkt.STATUS_PUBLIC
         self.addon.manifest_url = 'http://nowhere.allizom.org/manifest.webapp'
         self.addon.save()
 
-        AddonUser.objects.create(addon=self.addon,
-                                 user=UserProfile.objects.get(pk=999))
+        self.addon.update_version()
 
-        ActivityLog.objects.all().delete()
+        self.addon.addonuser_set.create(user_id=999)
 
-        with storage.open(self.file.file_path, 'w') as fh:
+        with public_storage.open(self.file.file_path, 'w') as fh:
             fh.write(json.dumps(original))
 
         # This is the hash to set the get_content_hash to, for showing
         # that the webapp has been updated.
         self._hash = nhash
-        self.new = new.copy()
+        # Let's use deepcopy so nested dicts are copied as new objects.
+        self.new = deepcopy(new)
 
-        urlopen_patch = mock.patch('urllib2.urlopen')
-        self.urlopen_mock = urlopen_patch.start()
-        self.addCleanup(urlopen_patch.stop)
+        self.content_type = 'application/x-web-app-manifest+json'
 
-        self.response_mock = mock.Mock()
-        self.response_mock.getcode.return_value = 200
-        self.response_mock.read.return_value = self._data()
-        self.response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = self.response_mock
+        req_patcher = mock.patch('mkt.developers.tasks.requests.get')
+        self.req_mock = req_patcher.start()
+        self.addCleanup(req_patcher.stop)
 
-        p = mock.patch('mkt.webapps.tasks.validator')
-        self.validator = p.start()
+        self.response_mock = mock.Mock(status_code=200)
+        self.response_mock.iter_content.return_value = mock.Mock(
+            next=self._data)
+        self.response_mock.headers = {'content-type': self.content_type}
+        self.req_mock.return_value = self.response_mock
+
+        validator_patcher = mock.patch('mkt.webapps.tasks.validator')
+        self.validator = validator_patcher.start()
+        self.addCleanup(validator_patcher.stop)
         self.validator.return_value = {}
-        self.patches = [p]
-
-    def tearDown(self):
-        super(TestUpdateManifest, self).tearDown()
-        for p in self.patches:
-            p.stop()
 
     @mock.patch('mkt.webapps.tasks._get_content_hash')
     def _run(self, _get_content_hash, **kw):
@@ -163,61 +163,65 @@ class TestUpdateManifest(amo.tests.TestCase):
         old_file = self.addon.get_latest_file()
         self._run()
 
-        app = Webapp.objects.get(pk=self.addon.pk)
+        app = self.addon.reload()
         version = app.current_version
-        file = app.get_latest_file()
+        file_ = app.get_latest_file()
 
         # Test that our new version looks good.
         eq_(app.versions.count(), 1)
-        assert version == old_version, 'Version created'
-        assert file == old_file, 'File created'
+        eq_(version, old_version, 'Version created')
+        eq_(file_, old_file, 'File created')
 
         path = FileUpload.objects.all()[0].path
-        _copy_stored_file.assert_called_with(path,
-                                             os.path.join(version.path_prefix,
-                                                          file.filename))
-        _manifest_json.assert_called_with(file)
+        _copy_stored_file.assert_called_with(
+            path, os.path.join(version.path_prefix, file_.filename),
+            src_storage=private_storage, dst_storage=private_storage)
+        _manifest_json.assert_called_with(file_)
 
+    @mock.patch('mkt.developers.tasks.validator', lambda uid, **kw: None)
     def test_version_updated(self):
         self._run()
         self.new['version'] = '1.1'
-        self.response_mock.read.return_value = self._data()
+
         self._hash = 'foo'
         self._run()
 
-        app = Webapp.objects.get(pk=self.addon.pk)
+        app = self.addon.reload()
         eq_(app.versions.latest().version, '1.1')
 
     def test_not_log(self):
         self._hash = ohash
         self._run()
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 0)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 0)
 
     def test_log(self):
         self._run()
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 1)
-
-    @mock.patch('mkt.webapps.tasks._update_manifest')
-    def test_ignore_not_webapp(self, mock_):
-        self.addon.update(type=amo.ADDON_EXTENSION)
-        call_command('process_addons', task='update_manifests')
-        assert not mock_.called
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 1)
 
     @mock.patch('mkt.webapps.tasks._update_manifest')
     def test_pending(self, mock_):
-        self.addon.update(status=amo.STATUS_PENDING)
+        self.addon.update(status=mkt.STATUS_PENDING)
         call_command('process_addons', task='update_manifests')
         assert mock_.called
 
+    def test_pending_updates(self):
+        """
+        PENDING apps don't have a current version. This test makes sure
+        everything still works in this case.
+        """
+        self.addon.update(status=mkt.STATUS_PENDING)
+        self._run()
+        eq_(self.addon.latest_version.reload().version, '1.0')
+
     @mock.patch('mkt.webapps.tasks._update_manifest')
-    def test_waiting(self, mock_):
-        self.addon.update(status=amo.STATUS_PUBLIC_WAITING)
+    def test_approved(self, mock_):
+        self.addon.update(status=mkt.STATUS_APPROVED)
         call_command('process_addons', task='update_manifests')
         assert mock_.called
 
     @mock.patch('mkt.webapps.tasks._update_manifest')
     def test_ignore_disabled(self, mock_):
-        self.addon.update(status=amo.STATUS_DISABLED)
+        self.addon.update(status=mkt.STATUS_DISABLED)
         call_command('process_addons', task='update_manifests')
         assert not mock_.called
 
@@ -229,7 +233,7 @@ class TestUpdateManifest(amo.tests.TestCase):
 
     @mock.patch('mkt.webapps.tasks._update_manifest')
     def test_get_webapp(self, mock_):
-        eq_(self.addon.status, amo.STATUS_PUBLIC)
+        eq_(self.addon.status, mkt.STATUS_PUBLIC)
         call_command('process_addons', task='update_manifests')
         assert mock_.called
 
@@ -246,7 +250,7 @@ class TestUpdateManifest(amo.tests.TestCase):
         later = datetime.datetime.now() + datetime.timedelta(seconds=3600)
         fetch.side_effect = RuntimeError
         update_manifests(ids=(self.addon.pk,))
-        retry.assert_called()
+        eq_(retry.call_count, 1)
         # Not using assert_called_with b/c eta is a datetime.
         eq_(retry.call_args[1]['args'], ([self.addon.pk],))
         eq_(retry.call_args[1]['kwargs'], {'check_hash': True,
@@ -257,7 +261,7 @@ class TestUpdateManifest(amo.tests.TestCase):
 
     def test_notify_failure_lang(self):
         user1 = UserProfile.objects.get(pk=999)
-        user2 = UserProfile.objects.get(pk=10482)
+        user2 = UserProfile.objects.get(pk=2519)
         AddonUser.objects.create(addon=self.addon, user=user2)
         user1.update(lang='de')
         user2.update(lang='en')
@@ -267,13 +271,13 @@ class TestUpdateManifest(amo.tests.TestCase):
         ok_(u'MozillaBall' in mail.outbox[1].subject)
 
     def test_notify_failure_with_rereview(self):
-        RereviewQueue.flag(self.addon, amo.LOG.REREVIEW_MANIFEST_CHANGE,
+        RereviewQueue.flag(self.addon, mkt.LOG.REREVIEW_MANIFEST_CHANGE,
                            'This app is flagged!')
         notify_developers_of_failure(self.addon, 'blah')
         eq_(len(mail.outbox), 0)
 
     def test_notify_failure_not_public(self):
-        self.addon.update(status=amo.STATUS_PENDING)
+        self.addon.update(status=mkt.STATUS_PENDING)
         notify_developers_of_failure(self.addon, 'blah')
         eq_(len(mail.outbox), 0)
 
@@ -289,7 +293,7 @@ class TestUpdateManifest(amo.tests.TestCase):
         ok_(msg.subject.startswith('Issue with your app'))
         expected = u'Failed to get manifest from %s' % self.addon.manifest_url
         ok_(expected in msg.body)
-        ok_(settings.MKT_SUPPORT_EMAIL in msg.body)
+        ok_(settings.SUPPORT_GROUP in msg.body)
 
         # We should have scheduled a retry.
         assert retry.called
@@ -311,7 +315,8 @@ class TestUpdateManifest(amo.tests.TestCase):
         assert not retry.called
         assert RereviewQueue.objects.filter(addon=self.addon).exists()
 
-    def test_manifest_validation_failure(self):
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
+    def test_manifest_validation_failure(self, _iarc):
         # We are already mocking validator, but this test needs to make sure
         # it actually saves our custom validation result, so add that.
         def side_effect(upload_id, **kwargs):
@@ -350,133 +355,110 @@ class TestUpdateManifest(amo.tests.TestCase):
         ok_(msg.subject.startswith('Issue with your app'))
         ok_(validation_results['messages'][0]['message'] in msg.body)
         ok_(validation_url in msg.body)
+        ok_(not _iarc.called)
 
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_name_change_rereview(self, _manifest):
+    def test_manifest_name_change_rereview(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with name change.
         self.new['name'] = 'Mozilla Ball Ultimate Edition'
-        response_mock = mock.Mock()
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.getcode.return_value = 200
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
 
         eq_(RereviewQueue.objects.count(), 0)
         self._run()
         eq_(RereviewQueue.objects.count(), 1)
         # 2 logs: 1 for manifest update, 1 for re-review trigger.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 2)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 2)
+        ok_(_iarc.called)
 
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_locale_name_add_rereview(self, _manifest):
+    def test_manifest_locale_name_add_rereview(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with name change.
         self.new['locales'] = {'es': {'name': 'eso'}}
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
 
         eq_(RereviewQueue.objects.count(), 0)
         self._run()
         eq_(RereviewQueue.objects.count(), 1)
         # 2 logs: 1 for manifest update, 1 for re-review trigger.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 2)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 2)
         log = ActivityLog.objects.filter(
-            action=amo.LOG.REREVIEW_MANIFEST_CHANGE.id)[0]
+            action=mkt.LOG.REREVIEW_MANIFEST_CHANGE.id)[0]
         eq_(log.details.get('comments'),
             u'Locales added: "eso" (es).')
+        ok_(not _iarc.called)
 
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_locale_name_change_rereview(self, _manifest):
+    def test_manifest_locale_name_change_rereview(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with name change.
         self.new['locales'] = {'de': {'name': 'Bippity Bop'}}
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
 
         eq_(RereviewQueue.objects.count(), 0)
         self._run()
         eq_(RereviewQueue.objects.count(), 1)
         # 2 logs: 1 for manifest update, 1 for re-review trigger.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 2)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 2)
         log = ActivityLog.objects.filter(
-            action=amo.LOG.REREVIEW_MANIFEST_CHANGE.id)[0]
+            action=mkt.LOG.REREVIEW_MANIFEST_CHANGE.id)[0]
         eq_(log.details.get('comments'),
             u'Locales updated: "Mozilla Kugel" -> "Bippity Bop" (de).')
+        ok_(not _iarc.called)
 
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_default_locale_change(self, _manifest):
+    def test_manifest_default_locale_change(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with name change.
         self.new['name'] = u'Mozilla Balón'
         self.new['default_locale'] = 'es'
         self.new['locales'] = {'en-US': {'name': 'MozillaBall'}}
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
 
         eq_(RereviewQueue.objects.count(), 0)
         self._run()
         eq_(RereviewQueue.objects.count(), 1)
         eq_(self.addon.reload().default_locale, 'es')
         # 2 logs: 1 for manifest update, 1 for re-review trigger.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 2)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 2)
         log = ActivityLog.objects.filter(
-            action=amo.LOG.REREVIEW_MANIFEST_CHANGE.id)[0]
+            action=mkt.LOG.REREVIEW_MANIFEST_CHANGE.id)[0]
         eq_(log.details.get('comments'),
             u'Manifest name changed from "MozillaBall" to "Mozilla Balón". '
             u'Default locale changed from "en-US" to "es". '
             u'Locales added: "Mozilla Balón" (es).')
+        ok_(_iarc.called)
 
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_locale_name_removal_no_rereview(self, _manifest):
+    def test_manifest_locale_name_removal_no_rereview(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with name change.
         # Note: Not using `del` b/c copy doesn't copy nested structures.
         self.new['locales'] = {
-            'fr': {'description': 'Testing name-less locale'}}
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
+            'fr': {'description': 'Testing name-less locale'}
+        }
 
         eq_(RereviewQueue.objects.count(), 0)
         self._run()
         eq_(RereviewQueue.objects.count(), 0)
         # Log for manifest update.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 1)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 1)
+        ok_(not _iarc.called)
 
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_force_rereview(self, _manifest):
+    def test_force_rereview(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with name change.
         self.new['name'] = 'Mozilla Ball Ultimate Edition'
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
 
         # We're setting the hash to the same value.
         self.file.update(hash=nhash)
@@ -488,37 +470,36 @@ class TestUpdateManifest(amo.tests.TestCase):
         eq_(RereviewQueue.objects.count(), 1)
 
         # 2 logs: 1 for manifest update, 1 for re-review trigger.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 2)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 2)
 
+        ok_(_iarc.called)
+
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_support_locales_change(self, _manifest):
-        # Mock original manifest file lookup.
-        _manifest.return_value = original
-        # Mock new manifest with name change.
-        self.new['locales'].update({'es': {'name': u'Mozilla Balón'}})
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
+    def test_manifest_support_locales_change(self, _manifest, _iarc):
+        """
+        Test both PUBLIC and PENDING to catch apps w/o `current_version`.
+        """
+        for status in (mkt.STATUS_PUBLIC, mkt.STATUS_PENDING):
+            self.addon.update(status=status)
 
-        self._run()
-        ver = self.version.reload()
-        eq_(ver.supported_locales, 'de,es,fr')
+            # Mock original manifest file lookup.
+            _manifest.return_value = original
+            # Mock new manifest with name change.
+            self.new['locales'].update({'es': {'name': u'Mozilla Balón'}})
 
+            self._run()
+            ver = self.version.reload()
+            eq_(ver.supported_locales, 'de,es,fr')
+            ok_(not _iarc.called)
+
+    @mock.patch('mkt.webapps.models.Webapp.set_iarc_storefront_data')
     @mock.patch('mkt.webapps.models.Webapp.get_manifest_json')
-    def test_manifest_support_developer_change(self, _manifest):
+    def test_manifest_support_developer_change(self, _manifest, _iarc):
         # Mock original manifest file lookup.
         _manifest.return_value = original
         # Mock new manifest with developer name change.
         self.new['developer']['name'] = 'Allizom'
-        response_mock = mock.Mock()
-        response_mock.getcode.return_value = 200
-        response_mock.read.return_value = json.dumps(self.new)
-        response_mock.headers = {
-            'Content-Type': 'application/x-web-app-manifest+json'}
-        self.urlopen_mock.return_value = response_mock
 
         self._run()
         ver = self.version.reload()
@@ -527,92 +508,201 @@ class TestUpdateManifest(amo.tests.TestCase):
         # We should get a re-review because of the developer name change.
         eq_(RereviewQueue.objects.count(), 1)
         # 2 logs: 1 for manifest update, 1 for re-review trigger.
-        eq_(ActivityLog.objects.for_apps(self.addon).count(), 2)
+        eq_(ActivityLog.objects.for_apps([self.addon]).count(), 2)
+
+        ok_(_iarc.called)
 
 
-class TestDumpApps(amo.tests.TestCase):
+class TestDumpApps(mkt.site.tests.TestCase):
     fixtures = fixture('webapp_337141')
 
     def test_dump_app(self):
-        fn = dump_app(337141)
-        result = json.load(open(fn, 'r'))
-        eq_(result['id'], str(337141))
+        path = dump_app(337141)
+        with private_storage.open(path, 'r') as fd:
+            result = json.load(fd)
+        eq_(result['id'], 337141)
 
-    def test_zip_apps(self):
-        dump_app(337141)
-        fn = zip_apps()
-        for f in ['license.txt', 'readme.txt']:
-            ok_(os.path.exists(os.path.join(settings.DUMPED_APPS_PATH, f)))
-        ok_(os.stat(fn)[stat.ST_SIZE])
+
+class TestDumpUserInstalls(mkt.site.tests.TestCase):
+    fixtures = fixture('user_2519', 'webapp_337141')
+
+    def setUp(self):
+        super(TestDumpUserInstalls, self).setUp()
+        # Create a user install.
+        self.app = Webapp.objects.get(pk=337141)
+        self.user = UserProfile.objects.get(pk=2519)
+        self.app.installed.create(user=self.user)
+        self.export_directory = mkdtemp()
+        self.hash = hashlib.sha256('%s%s' % (str(self.user.pk),
+                                             settings.SECRET_KEY)).hexdigest()
+        self.path = os.path.join('users', self.hash[0], '%s.json' % self.hash)
+        self.tarfile = None
+        self.tarfile_file = None
+
+    def tearDown(self):
+        rm_directory(self.export_directory)
+        if self.tarfile:
+            self.tarfile.close()
+        if self.tarfile_file:
+            self.tarfile_file.close()
+        super(TestDumpUserInstalls, self).tearDown()
+
+    def _test_export_is_created(self):
+        expected_files = [
+            'license.txt',
+            'readme.txt',
+        ]
+        actual_files = self.tarfile.getnames()
+        for expected_file in expected_files:
+            assert expected_file in actual_files, expected_file
+
+    def create_export(self):
+        date = datetime.datetime.today().strftime('%Y-%m-%d')
+        with self.settings(DUMPED_USERS_PATH=self.export_directory):
+            dump_user_installs_cron()
+        tarball_path = os.path.join(self.export_directory,
+                                    'tarballs',
+                                    date + '.tgz')
+        self.tarfile_file = private_storage.open(tarball_path)
+        self.tarfile = tarfile.open(fileobj=self.tarfile_file)
+        return self.tarfile
+
+    def dump_and_load(self):
+        self.create_export()
+        self._test_export_is_created()
+        return json.load(self.tarfile.extractfile(self.path))
+
+    def test_dump_user_installs(self):
+        data = self.dump_and_load()
+        eq_(data['user'], self.hash)
+        eq_(data['region'], self.user.region)
+        eq_(data['lang'], self.user.lang)
+        installed = data['installed_apps'][0]
+        eq_(installed['id'], self.app.id)
+        eq_(installed['slug'], self.app.app_slug)
+        self.assertCloseToNow(
+            datetime.datetime.strptime(installed['installed'],
+                                       '%Y-%m-%dT%H:%M:%S'),
+            datetime.datetime.utcnow())
+
+    def test_dump_exludes_deleted(self):
+        """We can't recommend deleted apps, so don't include them."""
+        app = app_factory()
+        app.installed.create(user=self.user)
+        app.delete()
+
+        data = self.dump_and_load()
+        eq_(len(data['installed_apps']), 1)
+        installed = data['installed_apps'][0]
+        eq_(installed['id'], self.app.id)
+
+    def test_dump_recommendation_opt_out(self):
+        self.user.update(enable_recommendations=False)
+        with self.assertRaises(KeyError):
+            # File shouldn't exist b/c we didn't write it.
+            self.dump_and_load()
+
+
+@mock.patch('mkt.webapps.tasks.requests')
+class TestPreGenAPKs(mkt.site.tests.WebappTestCase):
+
+    def setUp(self):
+        super(TestPreGenAPKs, self).setUp()
+        self.manifest_url = u'http://some-âpp.net/manifest.webapp'
+        self.app.update(manifest_url=self.manifest_url)
+
+    def test_get(self, req):
+        res = mock.Mock()
+        req.get.return_value = res
+        pre_generate_apk.delay(self.app.id)
+        assert req.get.called, 'APK requested from factory'
+        assert req.get.mock_calls[0].startswith(
+            settings.PRE_GENERATE_APK_URL), req.get.mock_calls
+        assert res.raise_for_status.called, 'raise on bad status codes'
+
+    def test_get_packaged(self, req):
+        self.app.update(manifest_url=None, is_packaged=True)
+        # Make sure this doesn't raise an exception.
+        pre_generate_apk.delay(self.app.id)
+        assert req.get.called, 'APK requested from factory'
+
+    def test_no_manifest(self, req):
+        self.app.update(manifest_url=None)
+        with self.assertRaises(PreGenAPKError):
+            pre_generate_apk.delay(self.app.id)
+
+    def test_error_getting(self, req):
+        req.get.side_effect = RequestException
+        with self.assertRaises(PreGenAPKError):
+            pre_generate_apk.delay(self.app.id)
+
+
+class TestExportData(mkt.site.tests.TestCase):
+    fixtures = fixture('webapp_337141')
+
+    def setUp(self):
+        self.export_directory = mkdtemp()
+        self.existing_tarball = os.path.join(
+            self.export_directory, 'tarballs', '2004-08-15')
+        with public_storage.open(self.existing_tarball, 'w') as fd:
+            fd.write('.')
+        self.app_path = 'apps/337/337141.json'
+        self.tarfile_file = None
+        self.tarfile = None
+
+    def tearDown(self):
+        rm_directory(self.export_directory)
+        if self.tarfile:
+            self.tarfile.close()
+        if self.tarfile_file:
+            self.tarfile_file.close()
+        super(TestExportData, self).tearDown()
+
+    def create_export(self, name):
+        with self.settings(DUMPED_APPS_PATH=self.export_directory):
+            export_data(name=name)
+        tarball_path = os.path.join(self.export_directory,
+                                    'tarballs',
+                                    name + '.tgz')
+        self.tarfile_file = public_storage.open(tarball_path)
+        self.tarfile = tarfile.open(fileobj=self.tarfile_file)
+        return self.tarfile
+
+    def test_export_is_created(self):
+        expected_files = [
+            self.app_path,
+            'license.txt',
+            'readme.txt',
+        ]
+        tarball = self.create_export('tarball-name')
+        actual_files = tarball.getnames()
+        for expected_file in expected_files:
+            assert expected_file in actual_files, expected_file
+
+        # Make sure we didn't touch old tarballs by accident.
+        assert public_storage.exists(self.existing_tarball)
 
     @mock.patch('mkt.webapps.tasks.dump_app')
     def test_not_public(self, dump_app):
-        app = Addon.objects.get(pk=337141)
-        app.update(status=amo.STATUS_PENDING)
-        call_command('process_addons', task='dump_apps')
+        app = Webapp.objects.get(pk=337141)
+        app.update(status=mkt.STATUS_PENDING)
+        self.create_export('tarball-name')
         assert not dump_app.called
 
     def test_removed(self):
         # At least one public app must exist for dump_apps to run.
-        amo.tests.app_factory(name="second app", status=amo.STATUS_PUBLIC)
-        app_path = os.path.join(settings.DUMPED_APPS_PATH, 'apps', '337',
-                                '337141.json')
-        app = Addon.objects.get(pk=337141)
-        app.update(status=amo.STATUS_PUBLIC)
-        call_command('process_addons', task='dump_apps')
-        assert os.path.exists(app_path)
+        app_factory(name='second app', status=mkt.STATUS_PUBLIC)
+        app_path = os.path.join(self.export_directory, self.app_path)
+        app = Webapp.objects.get(pk=337141)
+        app.update(status=mkt.STATUS_PUBLIC)
+        self.create_export('tarball-name')
+        assert private_storage.exists(app_path)
 
-        app.update(status=amo.STATUS_PENDING)
-        call_command('process_addons', task='dump_apps')
-        assert not os.path.exists(app_path)
+        app.update(status=mkt.STATUS_PENDING)
+        self.create_export('tarball-name')
+        assert not private_storage.exists(app_path)
 
     @mock.patch('mkt.webapps.tasks.dump_app')
     def test_public(self, dump_app):
-        call_command('process_addons', task='dump_apps')
+        self.create_export('tarball-name')
         assert dump_app.called
-
-
-class TestFixMissingIcons(amo.tests.TestCase):
-    fixtures = fixture('webapp_337141')
-
-    def setUp(self):
-        self.app = Webapp.objects.get(pk=337141)
-
-    @mock.patch('mkt.webapps.tasks._fix_missing_icons')
-    def test_ignore_not_webapp(self, mock_):
-        self.app.update(type=amo.ADDON_EXTENSION)
-        call_command('process_addons', task='fix_missing_icons')
-        assert not mock_.called
-
-    @mock.patch('mkt.webapps.tasks._fix_missing_icons')
-    def test_pending(self, mock_):
-        self.app.update(status=amo.STATUS_PENDING)
-        call_command('process_addons', task='fix_missing_icons')
-        assert mock_.called
-
-    @mock.patch('mkt.webapps.tasks._fix_missing_icons')
-    def test_public_waiting(self, mock_):
-        self.app.update(status=amo.STATUS_PUBLIC_WAITING)
-        call_command('process_addons', task='fix_missing_icons')
-        assert mock_.called
-
-    @mock.patch('mkt.webapps.tasks._fix_missing_icons')
-    def test_ignore_disabled(self, mock_):
-        self.app.update(status=amo.STATUS_DISABLED)
-        call_command('process_addons', task='fix_missing_icons')
-        assert not mock_.called
-
-    @mock.patch('mkt.webapps.tasks.fetch_icon')
-    @mock.patch('mkt.webapps.tasks._log')
-    @mock.patch('mkt.webapps.tasks.storage.exists')
-    def test_for_missing_size(self, exists, _log, fetch_icon):
-        exists.return_value = False
-        call_command('process_addons', task='fix_missing_icons')
-
-        # We are checking two sizes, but since the 64 has already failed for
-        # this app, we should only have called exists() once, and we should
-        # never have logged that the 128 icon is missing.
-        eq_(exists.call_count, 1)
-        assert _log.any_call(337141, 'Webapp is missing icon size 64')
-        assert _log.any_call(337141, 'Webapp is missing icon size 128')
-        assert fetch_icon.called

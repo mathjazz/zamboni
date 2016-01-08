@@ -1,41 +1,39 @@
 import datetime
 import os
-from collections import defaultdict
 
 from django import forms
 from django.conf import settings
+from django.utils.safestring import mark_safe
 
 import basket
 import happyforms
-import waffle
-from tower import ugettext as _, ugettext_lazy as _lazy
+from django.utils.translation import ugettext as _, ugettext_lazy as _lazy
 
-import amo
-from addons.models import Addon, AddonUpsell, BlacklistedSlug, Webapp
-from amo.utils import slug_validator
-from apps.users.models import UserNotification
-from apps.users.notifications import app_surveys
-from editors.models import RereviewQueue
-from files.models import FileUpload
-from files.utils import parse_addon
-from market.models import AddonPremium, Price
-from translations.fields import TransField
-from translations.forms import TranslationFormMixin
-from translations.widgets import TransInput, TransTextarea
-
-from mkt.constants import APP_FEATURES, FREE_PLATFORMS, PAID_PLATFORMS
-from mkt.site.forms import AddonChoiceField, APP_PUBLIC_CHOICES
-from mkt.webapps.models import AppFeatures
-from mkt.developers.forms import verify_app_domain
+import mkt
+from mkt.comm.utils import create_comm_note
+from mkt.constants import APP_FEATURES, comm, FREE_PLATFORMS, PAID_PLATFORMS
+from mkt.developers.forms import AppSupportFormMixin, verify_app_domain
+from mkt.files.models import FileUpload
+from mkt.files.utils import parse_addon
+from mkt.reviewers.models import RereviewQueue
+from mkt.site.utils import slug_validator
+from mkt.tags.models import Tag
+from mkt.tags.utils import clean_tags
+from mkt.translations.fields import TransField
+from mkt.translations.forms import TranslationFormMixin
+from mkt.translations.widgets import TransInput, TransTextarea
+from mkt.users.models import UserNotification
+from mkt.users.notifications import app_surveys
+from mkt.webapps.models import AppFeatures, BlockedSlug, Webapp
 
 
 def mark_for_rereview(addon, added_devices, removed_devices):
     msg = _(u'Device(s) changed: {0}').format(', '.join(
-        [_(u'Added {0}').format(unicode(amo.DEVICE_TYPES[d].name))
+        [_(u'Added {0}').format(unicode(mkt.DEVICE_TYPES[d].name))
          for d in added_devices] +
-        [_(u'Removed {0}').format(unicode(amo.DEVICE_TYPES[d].name))
+        [_(u'Removed {0}').format(unicode(mkt.DEVICE_TYPES[d].name))
          for d in removed_devices]))
-    RereviewQueue.flag(addon, amo.LOG.REREVIEW_DEVICES_ADDED, msg)
+    RereviewQueue.flag(addon, mkt.LOG.REREVIEW_DEVICES_ADDED, msg)
 
 
 def mark_for_rereview_features_change(addon, added_features, removed_features):
@@ -43,15 +41,13 @@ def mark_for_rereview_features_change(addon, added_features, removed_features):
     msg = _(u'Requirements changed: {0}').format(', '.join(
         [_(u'Added {0}').format(f) for f in added_features] +
         [_(u'Removed {0}').format(f) for f in removed_features]))
-    RereviewQueue.flag(addon, amo.LOG.REREVIEW_FEATURES_CHANGED, msg)
+    RereviewQueue.flag(addon, mkt.LOG.REREVIEW_FEATURES_CHANGED, msg)
 
 
 class DeviceTypeForm(happyforms.Form):
     ERRORS = {
         'both': _lazy(u'Cannot be free and paid.'),
         'none': _lazy(u'Please select a device.'),
-        'packaged': _lazy(u'Packaged apps are not yet supported for those '
-                          u'platforms.'),
     }
 
     free_platforms = forms.MultipleChoiceField(
@@ -65,7 +61,7 @@ class DeviceTypeForm(happyforms.Form):
         submitted_data = self.get_devices(t.split('-', 1)[1] for t in data)
 
         new_types = set(dev.id for dev in submitted_data)
-        old_types = set(amo.DEVICE_TYPES[x.id].id for x in addon.device_types)
+        old_types = set(mkt.DEVICE_TYPES[x.id].id for x in addon.device_types)
 
         added_devices = new_types - old_types
         removed_devices = old_types - new_types
@@ -76,7 +72,7 @@ class DeviceTypeForm(happyforms.Form):
             addon.addondevicetype_set.filter(device_type=d).delete()
 
         # Send app to re-review queue if public and new devices are added.
-        if added_devices and addon.status in amo.WEBAPPS_APPROVED_STATUSES:
+        if added_devices and addon.status in mkt.WEBAPPS_APPROVED_STATUSES:
             mark_for_rereview(addon, added_devices, removed_devices)
 
     def _add_error(self, msg):
@@ -87,21 +83,6 @@ class DeviceTypeForm(happyforms.Form):
         devices = (self.cleaned_data.get('free_platforms', []) +
                    self.cleaned_data.get('paid_platforms', []))
         return set(d.split('-', 1)[1] for d in devices)
-
-    def _set_packaged_errors(self):
-        """Add packaged-app submission errors for incompatible platforms."""
-        devices = self._get_combined()
-        bad_android = (
-            not waffle.flag_is_active(self.request, 'android-packaged') and
-            ('android-mobile' in devices or 'android-tablet' in devices)
-        )
-        bad_desktop = (
-            not waffle.flag_is_active(self.request, 'desktop-packaged') and
-            'desktop' in devices
-        )
-        if bad_android or bad_desktop:
-            self._errors['free_platforms'] = self._errors['paid_platforms'] = (
-                self.ERRORS['packaged'])
 
     def clean(self):
         data = self.cleaned_data
@@ -124,12 +105,7 @@ class DeviceTypeForm(happyforms.Form):
         """Returns a device based on the requested free or paid."""
         if source is None:
             source = self._get_combined()
-
-        platforms = {'firefoxos': amo.DEVICE_GAIA,
-                     'desktop': amo.DEVICE_DESKTOP,
-                     'android-mobile': amo.DEVICE_MOBILE,
-                     'android-tablet': amo.DEVICE_TABLET}
-        return map(platforms.get, source)
+        return map(mkt.DEVICE_LOOKUP.get, source)
 
     def is_paid(self):
         return bool(self.cleaned_data.get('paid_platforms', False))
@@ -140,7 +116,7 @@ class DeviceTypeForm(happyforms.Form):
 
         """
 
-        return amo.ADDON_PREMIUM if self.is_paid() else amo.ADDON_FREE
+        return mkt.ADDON_PREMIUM if self.is_paid() else mkt.ADDON_FREE
 
 
 class DevAgreementForm(happyforms.Form):
@@ -151,17 +127,21 @@ class DevAgreementForm(happyforms.Form):
 
     def __init__(self, *args, **kw):
         self.instance = kw.pop('instance')
+        self.request = kw.pop('request')
         super(DevAgreementForm, self).__init__(*args, **kw)
 
     def save(self):
         self.instance.read_dev_agreement = datetime.datetime.now()
         self.instance.save()
         if self.cleaned_data.get('newsletter'):
-            UserNotification.update_or_create(user=self.instance,
+            UserNotification.update_or_create(
+                user=self.instance,
                 notification_id=app_surveys.id, update={'enabled': True})
             basket.subscribe(self.instance.email,
                              'app-dev',
                              format='H',
+                             country=self.request.REGION.slug,
+                             lang=self.request.LANG,
                              source_url=os.path.join(settings.SITE_URL,
                                                      'developers/submit'))
 
@@ -169,19 +149,17 @@ class DevAgreementForm(happyforms.Form):
 class NewWebappVersionForm(happyforms.Form):
     upload_error = _lazy(u'There was an error with your upload. '
                          u'Please try again.')
-    upload = forms.ModelChoiceField(widget=forms.HiddenInput,
+    upload = forms.ModelChoiceField(
+        widget=forms.HiddenInput,
         queryset=FileUpload.objects.filter(valid=True),
         error_messages={'invalid_choice': upload_error})
 
     def __init__(self, *args, **kw):
-        request = kw.pop('request', None)
+        kw.pop('request', None)
         self.addon = kw.pop('addon', None)
         self._is_packaged = kw.pop('is_packaged', False)
+        self.is_homescreen = False
         super(NewWebappVersionForm, self).__init__(*args, **kw)
-
-        if (not waffle.flag_is_active(request, 'allow-b2g-paid-submission')
-            and 'paid_platforms' in self.fields):
-            del self.fields['paid_platforms']
 
     def clean(self):
         data = self.cleaned_data
@@ -192,28 +170,37 @@ class NewWebappVersionForm(happyforms.Form):
         if self.is_packaged():
             # Now run the packaged app check, done in clean, because
             # clean_packaged needs to be processed first.
+
             try:
                 pkg = parse_addon(data['upload'], self.addon)
             except forms.ValidationError, e:
                 self._errors['upload'] = self.error_class(e.messages)
                 return
 
+            # Collect validation errors so we can display them at once.
+            errors = []
+
             ver = pkg.get('version')
             if (ver and self.addon and
-                self.addon.versions.filter(version=ver).exists()):
-                self._errors['upload'] = _(u'Version %s already exists') % ver
-                return
+                    self.addon.versions.filter(version=ver).exists()):
+                errors.append(_(u'Version %s already exists.') % ver)
 
             origin = pkg.get('origin')
             if origin:
                 try:
-                    origin = verify_app_domain(origin, packaged=True,
-                                               exclude=self.addon)
+                    verify_app_domain(origin, packaged=True,
+                                      exclude=self.addon)
                 except forms.ValidationError, e:
-                    self._errors['upload'] = self.error_class(e.messages)
-                    return
-                if origin:
-                    data['origin'] = origin
+                    errors.append(e.message)
+
+                if self.addon and origin != self.addon.app_domain:
+                    errors.append(_('Changes to "origin" are not allowed.'))
+
+            self.is_homescreen = pkg.get('role') == 'homescreen'
+
+            if errors:
+                self._errors['upload'] = self.error_class(errors)
+                return
 
         else:
             # Throw an error if this is a dupe.
@@ -231,7 +218,12 @@ class NewWebappVersionForm(happyforms.Form):
 
 
 class NewWebappForm(DeviceTypeForm, NewWebappVersionForm):
-    upload = forms.ModelChoiceField(widget=forms.HiddenInput,
+    ERRORS = DeviceTypeForm.ERRORS.copy()
+    ERRORS['user'] = _lazy('User submitting validation does not match.')
+    ERRORS['homescreen'] = _lazy('Homescreens can only be submitted for '
+                                 'Firefox OS.')
+    upload = forms.ModelChoiceField(
+        widget=forms.HiddenInput,
         queryset=FileUpload.objects.filter(valid=True),
         error_messages={'invalid_choice': _lazy(
             u'There was an error with your upload. Please try again.')})
@@ -253,149 +245,118 @@ class NewWebappForm(DeviceTypeForm, NewWebappVersionForm):
         if not data:
             return
 
-        if self.is_packaged():
-            self._set_packaged_errors()
-            if self._errors.get('free_platforms'):
-                return
+        upload = data.get('upload')
+        if self.request and upload:
+            if not (upload.user and upload.user.pk == self.request.user.pk):
+                self._add_error('user')
 
+            if self.is_homescreen and self.get_devices() != [mkt.DEVICE_GAIA]:
+                self._add_error('homescreen')
         return data
 
     def is_packaged(self):
         return self._is_packaged or self.cleaned_data.get('packaged', False)
 
 
-class UpsellForm(happyforms.Form):
-    price = forms.ModelChoiceField(queryset=Price.objects.active(),
-                                   label=_lazy(u'App Price'),
-                                   empty_label=None,
-                                   required=True)
-    make_public = forms.TypedChoiceField(choices=APP_PUBLIC_CHOICES,
-                                    widget=forms.RadioSelect(),
-                                    label=_lazy(u'When should your app be '
-                                                 'made available for sale?'),
-                                    coerce=int,
-                                    required=False)
-    free = AddonChoiceField(queryset=Addon.objects.none(),
-        required=False, empty_label='',
-        # L10n: "App" is a paid version of this app. "from" is this app.
-        label=_lazy(u'App to upgrade from'),
-        widget=forms.Select())
-
-    def __init__(self, *args, **kw):
-        self.extra = kw.pop('extra')
-        self.request = kw.pop('request')
-        self.addon = self.extra['addon']
-
-        if 'initial' not in kw:
-            kw['initial'] = {}
-
-        kw['initial']['make_public'] = amo.PUBLIC_IMMEDIATELY
-        if self.addon.premium:
-            kw['initial']['price'] = self.addon.premium.price
-
-        super(UpsellForm, self).__init__(*args, **kw)
-        self.fields['free'].queryset = (self.extra['amo_user'].addons
-                                    .exclude(pk=self.addon.pk)
-                                    .filter(premium_type__in=amo.ADDON_FREES,
-                                            status__in=amo.VALID_STATUSES,
-                                            type=self.addon.type))
-
-        if len(self.fields['price'].choices) > 1:
-            # Tier 0 (Free) should not be the default selection.
-            self.initial['price'] = (Price.objects.active()
-                                     .exclude(price='0.00')[0])
-
-    def clean_make_public(self):
-        return (amo.PUBLIC_WAIT if self.cleaned_data.get('make_public')
-                                else None)
-
-    def save(self):
-        if 'price' in self.cleaned_data:
-            premium = self.addon.premium
-            if not premium:
-                premium = AddonPremium()
-                premium.addon = self.addon
-            premium.price = self.cleaned_data['price']
-            premium.save()
-
-        upsell = self.addon.upsold
-        if self.cleaned_data['free']:
-
-            # Check if this app was already a premium version for another app.
-            if upsell and upsell.free != self.cleaned_data['free']:
-                upsell.delete()
-
-            if not upsell:
-                upsell = AddonUpsell(premium=self.addon)
-            upsell.free = self.cleaned_data['free']
-            upsell.save()
-        elif upsell:
-            upsell.delete()
-
-        self.addon.update(make_public=self.cleaned_data['make_public'])
-
-
-class AppDetailsBasicForm(TranslationFormMixin, happyforms.ModelForm):
+class AppDetailsBasicForm(AppSupportFormMixin, TranslationFormMixin,
+                          happyforms.ModelForm):
     """Form for "Details" submission step."""
+    PRIVACY_MDN_URL = (
+        'https://developer.mozilla.org/Marketplace/'
+        'Publishing/Policies_and_Guidelines/Privacy_policies')
+
+    PUBLISH_CHOICES = (
+        (mkt.PUBLISH_IMMEDIATE,
+         _lazy(u'Publish my app and make it visible to everyone in the '
+               u'Marketplace and include it in search results.')),
+        (mkt.PUBLISH_PRIVATE,
+         _lazy(u'Do not publish my app. Notify me and I will adjust app '
+               u'visibility after it is approved.')),
+    )
 
     app_slug = forms.CharField(max_length=30,
-                           widget=forms.TextInput(attrs={'class': 'm'}))
-    description = TransField(required=True,
+                               widget=forms.TextInput(attrs={'class': 'm'}))
+    description = TransField(
         label=_lazy(u'Description:'),
-        help_text=_lazy(u'This description will appear on the details page.'),
+        help_text=_lazy(u'The app description is one of the fields used to '
+                        u'return search results in the Firefox Marketplace. '
+                        u'The app description also appears on the app\'s '
+                        u'detail page. Be sure to include a description that '
+                        u'accurately represents your app.'),
         widget=TransTextarea(attrs={'rows': 4}))
-    privacy_policy = TransField(widget=TransTextarea(attrs={'rows': 6}),
+    tags = forms.CharField(
+        label=_lazy(u'Search Keywords:'), required=False,
+        widget=forms.Textarea(attrs={'rows': 3}),
+        help_text=_lazy(
+            u'The search keywords are used to return search results in the '
+            u'Firefox Marketplace. Be sure to include a keywords that '
+            u'accurately reflect your app.'))
+    privacy_policy = TransField(
         label=_lazy(u'Privacy Policy:'),
-        help_text=_lazy(u"A privacy policy that explains what "
-                         "data is transmitted from a user's computer and how "
-                         "it is used is required."))
-    homepage = TransField.adapt(forms.URLField)(required=False,
-        label=_lazy(u'Homepage:'),
-        help_text=_lazy(u'If your app has another homepage, enter its address '
-                         'here.'),
-        widget=TransInput(attrs={'class': 'full'}))
-    support_url = TransField.adapt(forms.URLField)(required=False,
-        label=_lazy(u'Support Website:'),
-        help_text=_lazy(u'If your app has a support website or forum, enter '
-                         'its address here.'),
-        widget=TransInput(attrs={'class': 'full'}))
+        widget=TransTextarea(attrs={'rows': 6}),
+        help_text=_lazy(
+            u'A privacy policy explains how you handle data received '
+            u'through your app. For example: what data do you receive? '
+            u'How do you use it? Who do you share it with? Do you '
+            u'receive personal information? Do you take steps to make '
+            u'it anonymous? What choices do users have to control what '
+            u'data you and others receive? Enter your privacy policy '
+            u'link or text above.  If you don\'t have a privacy '
+            u'policy, <a href="{url}" target="_blank">learn more on how to '
+            u'write one.</a>'))
+    homepage = TransField.adapt(forms.URLField)(
+        label=_lazy(u'Homepage:'), required=False,
+        widget=TransInput(attrs={'class': 'full'}),
+        help_text=_lazy(
+            u'If your app has another homepage, enter its address here.'))
+    support_url = TransField.adapt(forms.URLField)(
+        label=_lazy(u'Website:'), required=False,
+        widget=TransInput(attrs={'class': 'full'}),
+        help_text=_lazy(
+            u'If your app has a support website or forum, enter its address '
+            u'here.'))
     support_email = TransField.adapt(forms.EmailField)(
-        label=_lazy(u'Support Email:'),
-        help_text=_lazy(u'The email address used by end users to contact you '
-                         'with support issues and refund requests.'),
-        widget=TransInput(attrs={'class': 'full'}))
-    flash = forms.TypedChoiceField(required=False,
-        coerce=lambda x: bool(int(x)),
-        label=_lazy(u'Does your app require Flash support?'),
-        initial=0,
-        choices=(
-            (1, _lazy(u'Yes')),
-            (0, _lazy(u'No')),
-        ),
-        widget=forms.RadioSelect)
-    publish = forms.BooleanField(required=False, initial=1,
-        label=_lazy(u"Publish my app in the Firefox Marketplace as soon as "
-                     "it's reviewed."),
-        help_text=_lazy(u"If selected your app will be published immediately "
-                         "following its approval by reviewers.  If you don't "
-                         "select this option you will be notified via email "
-                         "about your app's approval and you will need to log "
-                         "in and manually publish it."))
+        label=_lazy(u'Email:'), required=False,
+        widget=TransInput(attrs={'class': 'full'}),
+        help_text=_lazy(
+            u'This email address will be listed publicly on the Marketplace '
+            u'and used by end users to contact you with support issues. This '
+            u'email address will be listed publicly on your app details page.'
+            ))
+    notes = forms.CharField(
+        label=_lazy(u'Your comments for reviewers:'), required=False,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        help_text=_lazy(
+            u'Your app will be reviewed by Mozilla before it becomes publicly '
+            u'listed on the Marketplace. Enter any special instructions for '
+            u'the app reviewers here.'))
+    publish_type = forms.TypedChoiceField(
+        label=_lazy(u'Once your app is approved, choose a publishing option:'),
+        choices=PUBLISH_CHOICES, initial=mkt.PUBLISH_IMMEDIATE,
+        widget=forms.RadioSelect())
+    is_offline = forms.BooleanField(
+        label=_lazy(u'My app works without an Internet connection.'),
+        required=False)
 
     class Meta:
-        model = Addon
+        model = Webapp
         fields = ('app_slug', 'description', 'privacy_policy', 'homepage',
-                  'support_url', 'support_email')
+                  'support_url', 'support_email', 'publish_type', 'is_offline')
 
-    def __init__(self, *args, **kw):
-        self.request = kw.pop('request')
-        kw.setdefault('initial', {})
+    def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop('request')
 
-        # Prefill support email.
-        locale = self.base_fields['support_email'].default_locale.lower()
-        kw['initial']['support_email'] = {locale: self.request.amo_user.email}
+        # TODO: remove this and put it in the field definition above.
+        # See https://bugzilla.mozilla.org/show_bug.cgi?id=1072513
+        privacy_field = self.base_fields['privacy_policy']
+        privacy_field.help_text = mark_safe(privacy_field.help_text.format(
+            url=self.PRIVACY_MDN_URL))
 
-        super(AppDetailsBasicForm, self).__init__(*args, **kw)
+        if 'instance' in kwargs:
+            instance = kwargs['instance']
+            instance.is_offline = instance.guess_is_offline()
+
+        super(AppDetailsBasicForm, self).__init__(*args, **kwargs)
 
     def clean_app_slug(self):
         slug = self.cleaned_data['app_slug']
@@ -406,23 +367,27 @@ class AppDetailsBasicForm(TranslationFormMixin, happyforms.ModelForm):
                 raise forms.ValidationError(
                     _('This slug is already in use. Please choose another.'))
 
-            if BlacklistedSlug.blocked(slug):
+            if BlockedSlug.blocked(slug):
                 raise forms.ValidationError(
                     _('The slug cannot be "%s". Please choose another.'
                       % slug))
 
         return slug.lower()
 
+    def clean_tags(self):
+        return clean_tags(self.request, self.cleaned_data['tags'])
+
     def save(self, *args, **kw):
-        uses_flash = self.cleaned_data.get('flash')
-        af = self.instance.get_latest_file()
-        if af is not None:
-            af.update(uses_flash=bool(uses_flash))
+        if self.data['notes']:
+            create_comm_note(self.instance, self.instance.versions.latest(),
+                             self.request.user, self.data['notes'],
+                             note_type=comm.SUBMISSION)
+        self.instance = super(AppDetailsBasicForm, self).save(commit=True)
 
-        form = super(AppDetailsBasicForm, self).save(commit=False)
-        form.save()
+        for tag_text in self.cleaned_data['tags']:
+            Tag(tag_text=tag_text).save_tag(self.instance)
 
-        return form
+        return self.instance
 
 
 class AppFeaturesForm(happyforms.ModelForm):
@@ -433,9 +398,9 @@ class AppFeaturesForm(happyforms.ModelForm):
     def __init__(self, *args, **kwargs):
         super(AppFeaturesForm, self).__init__(*args, **kwargs)
         if self.instance:
-            self.initial_features = sorted(self.instance.to_keys())
+            self.initial_feature_keys = sorted(self.instance.to_keys())
         else:
-            self.initial_features = None
+            self.initial_feature_keys = None
 
     def all_fields(self):
         """
@@ -456,11 +421,10 @@ class AppFeaturesForm(happyforms.ModelForm):
         return (unicode(APP_FEATURES[field_id].get('description') or '') if
                 field_id in APP_FEATURES else None)
 
-    def _changed_features(self):
-        old_features = defaultdict.fromkeys(self.initial_features, True)
-        old_features = set(unicode(f) for f
-                           in AppFeatures(**old_features).to_list())
-        new_features = set(unicode(f) for f in self.instance.to_list())
+    def get_changed_features(self):
+        old_features = dict.fromkeys(self.initial_feature_keys, True)
+        old_features = set(AppFeatures(**old_features).to_names())
+        new_features = set(self.instance.to_names())
 
         added_features = new_features - old_features
         removed_features = old_features - new_features
@@ -470,10 +434,13 @@ class AppFeaturesForm(happyforms.ModelForm):
         mark_for_rereview = kwargs.pop('mark_for_rereview', True)
         addon = self.instance.version.addon
         rval = super(AppFeaturesForm, self).save(*args, **kwargs)
+        # Also save the addon to update modified date and trigger a reindex.
+        addon.save(update_fields=['modified'])
+        # Trigger a re-review if necessary.
         if (self.instance and mark_for_rereview and
-                addon.status in amo.WEBAPPS_APPROVED_STATUSES and
-                sorted(self.instance.to_keys()) != self.initial_features):
-            added_features, removed_features = self._changed_features()
+                addon.status in mkt.WEBAPPS_APPROVED_STATUSES and
+                self.changed_data):
+            added_features, removed_features = self.get_changed_features()
             mark_for_rereview_features_change(addon,
                                               added_features,
                                               removed_features)

@@ -2,25 +2,34 @@ import string
 from urllib import urlencode
 
 from django.http import HttpResponse, HttpResponseRedirect
-from django.views.decorators.csrf import csrf_view_exempt
+from django.shortcuts import render
+from django.views.decorators.csrf import csrf_exempt
 
 import commonware.log
-import jingo
 from oauthlib import oauth1
 from oauthlib.common import safe_string_equals
+from jingo.helpers import urlparams
 
-from amo.decorators import login_required
-from amo.utils import urlparams
 from mkt.api.models import Access, Nonce, Token, REQUEST_TOKEN, ACCESS_TOKEN
+from mkt.site.decorators import login_required
+
 
 DUMMY_CLIENT_KEY = u'DummyOAuthClientKeyString'
-DUMMY_TOKEN = u'DummyOAuthToken'
+DUMMY_REQUEST_TOKEN = u'DummyOAuthRequestToken'
+DUMMY_ACCESS_TOKEN = u'DummyOAuthAccessToken'
 DUMMY_SECRET = u'DummyOAuthSecret'
 
 log = commonware.log.getLogger('z.api')
 
 
-class OAuthServer(oauth1.Server):
+def get_request_headers(request):
+    return {
+        'Authorization': request.META.get('HTTP_AUTHORIZATION'),
+        'Content-Type': request.META.get('CONTENT_TYPE', '')
+    }
+
+
+class MarketplaceOAuthRequestValidator(oauth1.RequestValidator):
     safe_characters = set(string.printable)
     nonce_length = (7, 128)
     access_token_length = (8, 128)
@@ -29,11 +38,11 @@ class OAuthServer(oauth1.Server):
     client_key_length = (8, 128)
     enforce_ssl = False  # SSL enforcement is handled by ops. :-)
 
-    def validate_client_key(self, key):
-        self.attempted_key = key
+    def validate_client_key(self, key, request):
+        request.attempted_key = key
         return Access.objects.filter(key=key).exists()
 
-    def get_client_secret(self, key):
+    def get_client_secret(self, key, request):
         # This method returns a dummy secret on failure so that auth
         # success and failure take a codepath with the same run time,
         # to prevent timing attacks.
@@ -49,14 +58,18 @@ class OAuthServer(oauth1.Server):
 
     @property
     def dummy_request_token(self):
-        return DUMMY_TOKEN
+        return DUMMY_REQUEST_TOKEN
 
     @property
     def dummy_access_token(self):
-        return DUMMY_TOKEN
+        return DUMMY_ACCESS_TOKEN
+
+    def get_default_realms(self, client_key, request):
+        return []
 
     def validate_timestamp_and_nonce(self, client_key, timestamp, nonce,
-                                     request_token=None, access_token=None):
+                                     request, request_token=None,
+                                     access_token=None):
         n, created = Nonce.objects.safer_get_or_create(
             defaults={'client_key': client_key},
             nonce=nonce, timestamp=timestamp,
@@ -64,31 +77,31 @@ class OAuthServer(oauth1.Server):
             access_token=access_token)
         return created
 
-    def validate_requested_realm(self, client_key, realm):
+    def validate_requested_realms(self, client_key, realms, request):
         return True
 
-    def validate_realm(self, client_key, access_token, uri=None,
-                       required_realm=None):
+    def validate_realms(self, client_key, token, request, uri=None,
+                        realms=None):
         return True
 
-    def validate_redirect_uri(self, client_key, redirect_uri):
+    def validate_redirect_uri(self, client_key, redirect_uri, request):
         return True
 
-    def validate_request_token(self, client_key, request_token):
+    def validate_request_token(self, client_key, request_token, request):
         # This method must take the same amount of time/db lookups for
         # success and failure to prevent timing attacks.
         return Token.objects.filter(token_type=REQUEST_TOKEN,
                                     creds__key=client_key,
                                     key=request_token).exists()
 
-    def validate_access_token(self, client_key, access_token):
+    def validate_access_token(self, client_key, access_token, request):
         # This method must take the same amount of time/db lookups for
         # success and failure to prevent timing attacks.
         return Token.objects.filter(token_type=ACCESS_TOKEN,
                                     creds__key=client_key,
                                     key=access_token).exists()
 
-    def validate_verifier(self, client_key, request_token, verifier):
+    def validate_verifier(self, client_key, request_token, verifier, request):
         # This method must take the same amount of time/db lookups for
         # success and failure to prevent timing attacks.
         try:
@@ -98,7 +111,7 @@ class OAuthServer(oauth1.Server):
             candidate = ''
         return safe_string_equals(candidate, verifier)
 
-    def get_request_token_secret(self, client_key, request_token):
+    def get_request_token_secret(self, client_key, request_token, request):
         # This method must take the same amount of time/db lookups for
         # success and failure to prevent timing attacks.
         try:
@@ -108,7 +121,7 @@ class OAuthServer(oauth1.Server):
         except Token.DoesNotExist:
             return DUMMY_SECRET
 
-    def get_access_token_secret(self, client_key, request_token):
+    def get_access_token_secret(self, client_key, request_token, request):
         # This method must take the same amount of time/db lookups for
         # success and failure to prevent timing attacks.
         try:
@@ -120,23 +133,23 @@ class OAuthServer(oauth1.Server):
         return t.secret
 
 
-@csrf_view_exempt
+validator = MarketplaceOAuthRequestValidator()
+server = oauth1.WebApplicationServer(validator)
+
+
+@csrf_exempt
 def access_request(request):
-    oa = OAuthServer()
     try:
-        valid, oauth_request = oa.verify_access_token_request(
-            request.build_absolute_uri(),
-            request.method,
-            request.body,
-            {'Authorization': request.META.get('HTTP_AUTHORIZATION'),
-             'Content-Type':  request.META.get('CONTENT_TYPE')
-             })
+        oauth_req = server._create_request(request.build_absolute_uri(),
+                                           request.method, request.body,
+                                           get_request_headers(request))
+        valid, oauth_req = server.validate_access_token_request(oauth_req)
     except ValueError:
         valid = False
     if valid:
         req_t = Token.objects.get(
             token_type=REQUEST_TOKEN,
-            key=oauth_request.resource_owner_key)
+            key=oauth_req.resource_owner_key)
         t = Token.generate_new(
             token_type=ACCESS_TOKEN,
             creds=req_t.creds,
@@ -152,21 +165,17 @@ def access_request(request):
         return HttpResponse(status=401)
 
 
-@csrf_view_exempt
+@csrf_exempt
 def token_request(request):
-    oa = OAuthServer()
     try:
-        valid, oauth_request = oa.verify_request_token_request(
-            request.build_absolute_uri(),
-            request.method,
-            request.body,
-            {'Authorization': request.META.get('HTTP_AUTHORIZATION'),
-             'Content-Type':  request.META.get('CONTENT_TYPE')
-             })
+        oauth_req = server._create_request(request.build_absolute_uri(),
+                                           request.method, request.body,
+                                           get_request_headers(request))
+        valid, oauth_req = server.validate_request_token_request(oauth_req)
     except ValueError:
         valid = False
     if valid:
-        consumer = Access.objects.get(key=oauth_request.client_key)
+        consumer = Access.objects.get(key=oauth_req.client_key)
         t = Token.generate_new(token_type=REQUEST_TOKEN, creds=consumer)
         return HttpResponse(
             urlencode({'oauth_token': t.key,
@@ -178,7 +187,7 @@ def token_request(request):
         return HttpResponse(status=401)
 
 
-@csrf_view_exempt
+@csrf_exempt
 @login_required
 def authorize(request):
     if request.method == 'GET' and 'oauth_token' in request.GET:
@@ -188,9 +197,9 @@ def authorize(request):
         except Token.DoesNotExist:
             log.error('Invalid OAuth request for obtaining user authorization')
             return HttpResponse(status=401)
-        return jingo.render(request, 'developers/oauth_authorize.html',
-                            {'app_name': t.creds.app_name,
-                             'oauth_token': request.GET['oauth_token']})
+        return render(request, 'developers/oauth_authorize.html',
+                      {'app_name': t.creds.app_name,
+                       'oauth_token': request.GET['oauth_token']})
     elif request.method == 'POST':
         token = request.POST.get('oauth_token')
         try:

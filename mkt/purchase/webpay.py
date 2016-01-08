@@ -1,143 +1,76 @@
-import calendar
-import hashlib
 import sys
-import time
 import urlparse
 import uuid
 from decimal import Decimal
-from urllib import urlencode
 
 from django import http
-from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
-import bleach
 import commonware.log
-from tower import ugettext as _
 
-from addons.decorators import addon_view_factory, can_be_purchased
-import amo
-from amo.decorators import json_view, login_required, post_required, write
-from amo.helpers import absolutify
-from amo.urlresolvers import reverse
+import mkt
 from lib.cef_loggers import app_pay_cef
-from lib.crypto.webpay import (InvalidSender, parse_from_webpay,
-                               sign_webpay_jwt)
+from lib.crypto.webpay import InvalidSender, parse_from_webpay
+from lib.metrics import record_action
+from lib.pay_server import client as solitude
 from mkt.api.exceptions import AlreadyPurchased
+from mkt.purchase.decorators import can_be_purchased
+from mkt.purchase.models import Contribution
+from mkt.site.decorators import json_view, login_required, use_master
+from mkt.site.utils import log_cef
+from mkt.users.models import UserProfile
+from mkt.webapps.decorators import app_view_factory
 from mkt.webapps.models import Webapp
-from stats.models import ClientData, Contribution
+from mkt.webpay.webpay_jwt import get_product_jwt, WebAppProduct
 
-from . import webpay_tasks as tasks
+from . import tasks
 
 log = commonware.log.getLogger('z.purchase')
-addon_view = addon_view_factory(qs=Webapp.objects.valid)
-
-
-def start_purchase(request, addon):
-    log.debug('Starting purchase of app: %s by user: %s'
-              % (addon.pk, request.amo_user.pk))
-    amount = addon.get_price(region=request.REGION.id)
-    uuid_ = hashlib.md5(str(uuid.uuid4())).hexdigest()
-    # L10n: {0} is the addon name.
-    contrib_for = (_(u'Firefox Marketplace purchase of {0}')
-                   .format(addon.name))
-
-    currency = request.REGION.default_currency
-    return amount, currency, uuid_, contrib_for
-
-
-def make_ext_id(addon_pk):
-    """
-    Generates a webpay/solitude external ID for this addon's primary key.
-    """
-    # This namespace is currently necessary because app products
-    # are mixed into an application's own in-app products.
-    # Maybe we can fix that.
-    # Also, we may use various dev/stage servers with the same
-    # Bango test API.
-    domain = getattr(settings, 'DOMAIN', None)
-    if not domain:
-        domain = 'marketplace-dev'
-    ext_id = domain.split('.')[0]
-    return '%s:%s' % (ext_id, addon_pk)
+app_view = app_view_factory(qs=Webapp.objects.valid)
 
 
 @login_required
-@addon_view
-@write
-@post_required
+@app_view
+@use_master
+@require_POST
 @json_view
+@can_be_purchased
 def prepare_pay(request, addon):
+    if addon.is_premium() and addon.has_purchased(request.user):
+        log.info('Already purchased: %d' % addon.pk)
+        raise AlreadyPurchased
     return _prepare_pay(request, addon)
 
 
-@can_be_purchased
 def _prepare_pay(request, addon):
-    """Prepare a JWT to pass into navigator.pay()"""
-    if addon.is_premium() and addon.has_purchased(request.amo_user):
-        log.info('Already purchased: %d' % addon.pk)
-        raise AlreadyPurchased
-
-    amount, currency, uuid_, contrib_for = start_purchase(request, addon)
-    log.debug('Storing contrib for uuid: %s' % uuid_)
-    Contribution.objects.create(addon_id=addon.id, amount=amount,
-                                source=request.REQUEST.get('src', ''),
-                                source_locale=request.LANG,
-                                uuid=str(uuid_), type=amo.CONTRIB_PENDING,
-                                paykey=None, user=request.amo_user,
-                                price_tier=addon.premium.price,
-                                client_data=ClientData.get_or_create(request))
-
-    # Until atob() supports encoded HTML we are stripping all tags.
-    # See bug 831524
-    app_description = bleach.clean(unicode(addon.description), strip=True,
-                                   tags=[])
-
-    acct = addon.app_payment_account.payment_account
-    seller_uuid = acct.solitude_seller.uuid
-    application_size = addon.current_version.all_files[0].size
-    issued_at = calendar.timegm(time.gmtime())
-    icons = {}
-    for size in amo.ADDON_ICON_SIZES:
-        icons[str(size)] = absolutify(addon.get_icon_url(size))
-    req = {
-        'iss': settings.APP_PURCHASE_KEY,
-        'typ': settings.APP_PURCHASE_TYP,
-        'aud': settings.APP_PURCHASE_AUD,
-        'iat': issued_at,
-        'exp': issued_at + 3600,  # expires in 1 hour
-        'request': {
-            'name': unicode(addon.name),
-            'description': app_description,
-            'pricePoint': addon.premium.price.name,
-            'id': make_ext_id(addon.pk),
-            'postbackURL': absolutify(reverse('webpay.postback')),
-            'chargebackURL': absolutify(reverse('webpay.chargeback')),
-            'productData': urlencode({'contrib_uuid': uuid_,
-                                      'seller_uuid': seller_uuid,
-                                      'addon_id': addon.pk,
-                                      'application_size': application_size}),
-            'icons': icons,
-        }
-    }
-
-    jwt_ = sign_webpay_jwt(req)
-    log.debug('Preparing webpay JWT for addon %s: %s' % (addon, jwt_))
     app_pay_cef.log(request, 'Preparing JWT', 'preparing_jwt',
                     'Preparing JWT for: %s' % (addon.pk), severity=3)
 
-    if request.API:
-        url = reverse('api_dispatch_detail', kwargs={
-            'resource_name': 'status', 'api_name': 'webpay',
-            'uuid': uuid_})
-    else:
-        url = reverse('webpay.pay_status', args=[addon.app_slug, uuid_])
-    return {'webpayJWT': jwt_, 'contribStatusURL': url}
+    log.debug('Starting purchase of app: {0} by user: {1}'.format(
+        addon.pk, request.user))
+
+    contribution = Contribution.objects.create(
+        addon_id=addon.pk,
+        amount=addon.get_price(region=request.REGION.id),
+        paykey=None,
+        price_tier=addon.premium.price,
+        source=request.GET.get('src', ''),
+        source_locale=request.LANG,
+        type=mkt.CONTRIB_PENDING,
+        user=request.user,
+        uuid=str(uuid.uuid4()),
+    )
+
+    log.debug('Storing contrib for uuid: {0}'.format(contribution.uuid))
+
+    return get_product_jwt(WebAppProduct(addon), contribution)
 
 
 @login_required
-@addon_view
-@write
+@app_view
+@use_master
 @json_view
 def pay_status(request, addon, contrib_uuid):
     """
@@ -148,16 +81,35 @@ def pay_status(request, addon, contrib_uuid):
     JWT postback. After that the UI is free to call app/purchase/record
     to generate a receipt.
     """
-    au = request.amo_user
     qs = Contribution.objects.filter(uuid=contrib_uuid,
-                                     addon__addonpurchase__user=au,
-                                     type=amo.CONTRIB_PURCHASE)
+                                     addon__addonpurchase__user=request.user,
+                                     type=mkt.CONTRIB_PURCHASE)
     return {'status': 'complete' if qs.exists() else 'incomplete'}
 
 
+def _get_user_profile(request, buyer_email):
+    user_profile = UserProfile.objects.filter(email=buyer_email)
+
+    if user_profile.exists():
+        user_profile = user_profile.get()
+    else:
+        source = mkt.LOGIN_SOURCE_WEBPAY
+        user_profile = UserProfile.objects.create(
+            email=buyer_email,
+            is_verified=True,
+            source=source)
+
+        log_cef('New Account', 5, request, username=buyer_email,
+                signature='AUTHNOTICE',
+                msg='A new account was created from Webpay (using FxA)')
+        record_action('new-user', request)
+
+    return user_profile
+
+
 @csrf_exempt
-@write
-@post_required
+@use_master
+@require_POST
 def postback(request):
     """Verify signature and set contribution to paid."""
     signed_jwt = request.POST.get('notice', '')
@@ -183,6 +135,9 @@ def postback(request):
 
     trans_id = data['response']['transactionID']
 
+    if contrib.is_inapp_simulation():
+        return simulated_postback(contrib, trans_id)
+
     if contrib.transaction_id is not None:
         if contrib.transaction_id == trans_id:
             app_pay_cef.log(request, 'Repeat postback', 'repeat_postback',
@@ -195,29 +150,99 @@ def postback(request):
                             'Postback sent again for: %s, but with new '
                             'trans_id: %s' % (contrib.addon.pk, trans_id),
                             severity=7)
-            raise LookupError('JWT (iss:%s, aud:%s) for trans_id %s is for '
-                              'contrib %s that is already paid and has '
-                              'existing differnet trans_id: %s'
-                              % (data['iss'], data['aud'],
-                                 data['response']['transactionID'],
-                                 contrib_uuid, contrib.transaction_id))
+            raise LookupError(
+                'JWT (iss:{iss}, aud:{aud}) for trans_id {jwt_trans} is '
+                'for contrib {contrib_uuid} that is already paid and has '
+                'a different trans_id: {contrib_trans}'
+                .format(iss=data['iss'], aud=data['aud'],
+                        jwt_trans=data['response']['transactionID'],
+                        contrib_uuid=contrib_uuid,
+                        contrib_trans=contrib.transaction_id))
 
-    log.info('webpay postback: fulfilling purchase for contrib %s with '
-             'transaction %s' % (contrib, trans_id))
+    # Special-case free in-app products.
+    if data.get('request', {}).get('pricePoint') == '0':
+        solitude_buyer_uuid = data['response']['solitude_buyer_uuid']
+
+        try:
+            buyer = (solitude.api.generic
+                                 .buyer
+                                 .get_object_or_404)(uuid=solitude_buyer_uuid)
+        except ObjectDoesNotExist:
+            raise LookupError(
+                'Unable to look up buyer: {uuid} in Solitude'
+                .format(uuid=solitude_buyer_uuid))
+        user_profile = _get_user_profile(request, buyer.get('email'))
+        return free_postback(request, contrib, trans_id, user_profile)
+    try:
+        transaction_data = (solitude.api.generic
+                                        .transaction
+                                        .get_object_or_404)(uuid=trans_id)
+    except ObjectDoesNotExist:
+        raise LookupError(
+            'Unable to look up transaction: {trans_id} in Solitude'
+            .format(trans_id=trans_id))
+
+    buyer_uri = transaction_data['buyer']
+
+    try:
+        buyer_data = solitude.api.by_url(buyer_uri).get_object_or_404()
+    except ObjectDoesNotExist:
+        raise LookupError(
+            'Unable to look up buyer: {buyer_uri} in Solitude'
+            .format(buyer_uri=buyer_uri))
+
+    buyer_email = buyer_data['email']
+
+    user_profile = _get_user_profile(request, buyer_email)
+
+    log.info(u'webpay postback: fulfilling purchase for contrib {c} with '
+             u'transaction {t}'.format(c=contrib, t=trans_id))
     app_pay_cef.log(request, 'Purchase complete', 'purchase_complete',
                     'Purchase complete for: %s' % (contrib.addon.pk),
                     severity=3)
-    contrib.update(transaction_id=trans_id, type=amo.CONTRIB_PURCHASE,
+
+    contrib.update(transaction_id=trans_id,
+                   type=mkt.CONTRIB_PURCHASE,
+                   user=user_profile,
                    amount=Decimal(data['response']['price']['amount']),
                    currency=data['response']['price']['currency'])
 
+    tasks.send_purchase_receipt.delay(contrib.pk)
+
+    return http.HttpResponse(trans_id)
+
+
+def simulated_postback(contrib, trans_id):
+    simulate = contrib.inapp_product.simulate_data()
+    log.info(u'Got simulated payment postback; contrib={c}; '
+             u'trans={t}; simulate={s}'.format(c=contrib, t=trans_id,
+                                               s=simulate))
+    if simulate['result'] != 'postback':
+        raise NotImplementedError(
+            'Not sure how exactly to update contibutions for '
+            'non-successful simulations')
+
+    contrib.update(transaction_id=trans_id, type=mkt.CONTRIB_PURCHASE)
+    return http.HttpResponse(trans_id)
+
+
+def free_postback(request, contrib, trans_id, user_profile):
+    log.info(u'Got free product postback: fulfilling purchase for '
+             u'contrib={c}; trans={t}; user={u}'.format(
+                 c=contrib, t=trans_id, u=user_profile))
+    app_pay_cef.log(request, 'Purchase complete', 'purchase_complete',
+                    'Purchase complete for: %s' % (contrib.addon.pk),
+                    severity=3)
+    contrib.update(transaction_id=trans_id,
+                   type=mkt.CONTRIB_PURCHASE,
+                   user=user_profile)
     tasks.send_purchase_receipt.delay(contrib.pk)
     return http.HttpResponse(trans_id)
 
 
 @csrf_exempt
-@write
-@post_required
+@use_master
+@require_POST
 def chargeback(request):
     """
     Verify signature from and create a refund contribution tied

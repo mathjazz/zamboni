@@ -4,13 +4,14 @@ import os
 import tempfile
 
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
 from django.db import transaction
 
-from celeryutils import task
+from celery import task
 import requests
 
-from amo.utils import ImageCheck, resize_image
+from mkt.site.utils import ImageCheck, resize_image
+from mkt.site.storage_utils import (copy_stored_file, public_storage,
+                                    local_storage)
 
 from .models import ProductIcon
 
@@ -18,7 +19,7 @@ log = logging.getLogger('z.webpay.tasks')
 
 
 @task
-@transaction.commit_on_success
+@transaction.atomic
 def fetch_product_icon(url, ext_size, size, read_size=100000, **kw):
     """
     Fetch and store a webpay product icon.
@@ -53,6 +54,7 @@ def fetch_product_icon(url, ext_size, size, read_size=100000, **kw):
         return
 
     tmp_dest = tempfile.NamedTemporaryFile(delete=False)
+    tmp_dst_path = tmp_dest.name
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
@@ -73,7 +75,7 @@ def fetch_product_icon(url, ext_size, size, read_size=100000, **kw):
         if valid:
             if resize:
                 log.info('resizing in-app image for URL %s' % url)
-                tmp_dest = _resize_image(tmp_dest, size)
+                tmp_dst_path = _resize_image(tmp_dest, size)
 
             # Save the image to the db.
             attr = dict(ext_size=ext_size, size=size, ext_url=url,
@@ -83,9 +85,11 @@ def fetch_product_icon(url, ext_size, size, read_size=100000, **kw):
             else:
                 cached_im = ProductIcon.objects.create(**attr)
             log.info('saving image from URL %s' % url)
-            _store_image(tmp_dest, cached_im, read_size)
+            copy_stored_file(tmp_dst_path, cached_im.storage_path(),
+                             src_storage=local_storage,
+                             dst_storage=public_storage)
     finally:
-        os.unlink(tmp_dest.name)
+        os.unlink(tmp_dst_path)
 
 
 def _check_image(im_path, abs_url):
@@ -105,18 +109,7 @@ def _check_image(im_path, abs_url):
 
 
 def _resize_image(old_im, size):
-    new_dest = tempfile.NamedTemporaryFile()
-    new_dest.close()
-    resize_image(old_im.name, new_dest.name, locally=True)
+    new_dest = tempfile.mktemp()
+    resize_image(old_im.name, new_dest, src_storage=local_storage,
+                 dst_storage=local_storage)
     return new_dest
-
-
-def _store_image(im_src, product_icon, read_size):
-    with open(im_src.name, 'rb') as src:
-        with storage.open(product_icon.storage_path(), 'wb') as fp:
-            while True:
-                chunk = src.read(read_size)
-                if not chunk:
-                    break
-                else:
-                    fp.write(chunk)

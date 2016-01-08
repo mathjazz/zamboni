@@ -3,8 +3,9 @@ import os
 from django.conf import settings
 from django.db import models
 
-from amo.helpers import absolutify
-from amo.models import ModelBase
+from lib.utils import static_url
+from mkt.site.helpers import absolutify
+from mkt.site.models import ModelBase
 
 
 class ProductIcon(ModelBase):
@@ -20,13 +21,13 @@ class ProductIcon(ModelBase):
         return os.path.join(settings.PRODUCT_ICON_PATH, self._base_path())
 
     def url(self):
-        return absolutify(os.path.join(settings.PRODUCT_ICON_URL,
+        return absolutify(os.path.join(static_url('PRODUCT_ICON_URL'),
                                        self._base_path()))
 
     def _base_path(self):
         ext = self.format.lower()
         if ext == 'jpeg':
-            # The CDN only whitelists this extension.
+            # The CDN only allows this extension.
             ext = 'jpg'
         # This creates an intermediate directory to avoid too-many-links
         # errors on Linux, etc

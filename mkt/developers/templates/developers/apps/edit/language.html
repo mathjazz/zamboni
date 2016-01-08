@@ -2,15 +2,15 @@
 <div class="item island">
   <table>
     {# L10n: {0} is an add-on name. #}
-    <caption>{{ _('Country and Language Details for {0}')|f(addon.name) }}</caption>
+    <caption>{{ _('Country and Language Details for {0}')|fe(addon.name) }}</caption>
     <tbody>
       <tr>
         <th>
           <span class="label">{{ _('Country') }}</span>
         </th>
         <td>
-          {% for region in addon.get_region_ids(worldwide=True) %}
-            {{ mkt.regions.REGIONS_CHOICES_ID_DICT.get(region).name }}
+          {% for region in addon.get_regions(sort_by='name') %}
+            {{- region.name -}}
             {{- ', ' if not loop.last -}}
           {% endfor %}
           <small>

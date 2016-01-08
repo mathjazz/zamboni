@@ -1,0 +1,68 @@
+{% from 'reviewers/includes/macros.html' import app_flags with context %}
+
+{% macro additional_review_table(table_class="additional-review-queue",
+                                 app_detail_src="additional-review-queue",
+                                 approve_text=None,
+                                 reject_text=None,
+                                 can_sort_by_name=True,
+                                 comments=False) %}
+  {# table_class (optional): The class name for the table, defaults to "additional-review".
+     app_detail_src (optional): The name of this page for linking to the app page, defaults to "additional-review".
+     approve_text (optional): The text to put in the approve button, defaults to _("Approve").
+     reject_text (optional): The text to put in the reject button, defaults to _("Reject"). #}
+  <table id="addon-queue" class="data-grid items {{ table_class }}">
+    <thead>
+      <tr class="listing-header">
+        <th>
+            {% if can_sort_by_name %}
+                {{ sort_link(_('App'), 'name')|safe }}
+            {% else %}
+                {{ _('App') }}
+            {% endif %}
+        </th>
+        <th>{{ _('Flags') }}</th>
+        <th class="waiting-time">{{ sort_link(_('Waiting Time'), date_sort or 'created')|safe }}</th>
+        <th>{{ _('Devices') }}</th>
+        <th class="payments">{{ _('Payments') }}</th>
+        {% if not comments %}
+          <th class="action">&nbsp;</th>
+        {% endif%}
+      </tr>
+    </thead>
+    <tbody>
+    {% for qa in addons %}
+      {% set row_class=loop.cycle('odd', 'even') %}
+      <tr id="addon-{{ qa.app.id }}" class="addon-row {{ row_class }}"
+          data-addon="{{ qa.app.id }}" data-action-url="{{ qa.action_url }}">
+        <td class="app-name">
+          <a href="{{ qa.app.get_url_path(src=app_detail_src) }}" target="_blank">
+            {{ qa.app.name }}
+          </a>
+        </td>
+        <td class="flags">{{ app_flags(qa.app) }}</td>
+        <td class="waiting-time">{{ qa.date_field|timelabel }}</td>
+        <td>{{ device_list(qa.app) }}</td>
+        <td class="payments">{{ mkt.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}</td>
+        {% if not comments %}
+          <td class="action">
+            <a class="button approve" data-action="approve">{{ approve_text or _("Approve") }}</a>
+            <a class="button reject" data-action="reject">{{ reject_text or _("Reject") }}</a>
+          </td>
+        {% endif %}
+      </tr>
+      {% if comments %}
+        <tr class="addon-row additional-review-comments {{ row_class }}"
+            data-addon-selector="#addon-{{ qa.app.id }}">
+          <td colspan="5">
+            <span>
+              <input type="text" name="comment" placeholder="Comments">
+              <a class="button approve" data-action="approve">{{ approve_text or _("Approve") }}</a>
+              <a class="button reject" data-action="reject">{{ reject_text or _("Reject") }}</a>
+            </span>
+          </td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}

@@ -11,15 +11,16 @@ change in conjunction with the Fireplace client.
 App
 ===
 
-.. http:get:: /api/v1/fireplace/app/
+.. http:get:: /api/v2/fireplace/app/
 
-    A copy of :ref:`the app API <app-response-label>`.
+    A copy of :ref:`the app API <app-response-label>`. The response only
+    contains the specific subset of fields Fireplace needs.
 
 
 Error reporter
 ==============
 
-.. http:post:: /api/v1/fireplace/report_error
+.. http:post:: /api/v2/fireplace/report_error
 
     An entry point for reporting client-side errors via Sentry.
 
@@ -59,3 +60,55 @@ Error reporter
     **Response**
 
     :status 204: Message sent.
+
+Search
+======
+
+.. http:get:: /api/v2/fireplace/search/
+
+    A copy of :ref:`the search API <search-api>`. Like the App API above, the
+    response only contains the specific subset of fields Fireplace needs.
+
+Featured Search
+===============
+
+.. http:get:: /api/v2/fireplace/search/featured/
+
+    A copy of :ref:`the search API <search-api>`. Like the App API above, the
+    response contains the specific subset of fields Fireplace needs.
+
+    Only kept for backwards-compatibility purposes, don't use in new code.
+
+Multi Search
+============
+
+.. http:get:: /api/v2/fireplace/multi-search/
+
+    A copy of :ref:`the multi-search API <multi-search-api>`. Like the App API
+    above, the response only contains the specific subset of fields Fireplace
+    needs.
+
+
+Consumer Information
+====================
+
+.. http:get:: /api/v2/fireplace/consumer-info/
+
+    Return information about the client making the request.
+
+    **Response**
+
+    :param region: The region slug for this client.
+    :type region: string
+
+    If user authentication information is passed to the request, the following
+    will also be added to the response:
+
+    :param apps.developed: IDs of apps the user has developed.
+    :type apps.developed: array
+    :param apps.installed: IDs of apps the user has installed.
+    :type apps.installed: array
+    :param apps.purchased: IDs of apps the user has purchased.
+    :type apps.purchased: array
+    :param enable_recommenations: A boolean if we should show app recommendations.
+    :type enable_recommendations: boolean

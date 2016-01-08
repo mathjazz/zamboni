@@ -1,37 +1,37 @@
 # -*- coding: utf-8 -*-
 import codecs
-import collections
 import json
 import os
 import tempfile
 
 from django import forms
-from django.core.files.storage import default_storage as storage
+from django.core.urlresolvers import reverse
+from django.test.client import RequestFactory
 
-from mock import Mock, patch
+from mock import patch
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
-import amo
-import amo.tests
-from amo.tests.test_helpers import get_image_path
-from amo.urlresolvers import reverse
-from files.helpers import copyfileobj
-from files.models import FileUpload
-from files.tests.test_models import UploadTest as BaseUploadTest
-from files.utils import WebAppParser
+from mkt.developers.views import standalone_hosted_upload, trap_duplicate
+from mkt.files.models import FileUpload
+from mkt.files.tests.test_models import UploadTest as BaseUploadTest
+from mkt.files.utils import WebAppParser
+from mkt.site.fixtures import fixture
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage, storage_is_remote)
+from mkt.site.tests import MktPaths, TestCase
+from mkt.site.tests.test_utils_ import get_image_path
+from mkt.submit.tests.test_views import BaseWebAppTest
+from mkt.users.models import UserProfile
 
-from mkt.developers.views import standalone_hosted_upload
 
-
-class TestWebApps(amo.tests.TestCase, amo.tests.AMOPaths):
+class TestWebApps(TestCase, MktPaths):
 
     def setUp(self):
         self.webapp_path = tempfile.mktemp(suffix='.webapp')
-        with storage.open(self.webapp_path, 'wb') as f:
-            copyfileobj(open(os.path.join(os.path.dirname(__file__),
-                                          'addons', 'mozball.webapp')),
-                        f)
+        copy_stored_file(
+            self.manifest_path('mozball.webapp'), self.webapp_path,
+            src_storage=local_storage, dst_storage=private_storage)
         self.tmp_files = []
         self.manifest = dict(name=u'Ivan Krsti\u0107', version=u'1.0',
                              description=u'summary',
@@ -39,20 +39,20 @@ class TestWebApps(amo.tests.TestCase, amo.tests.AMOPaths):
 
     def tearDown(self):
         for tmp in self.tmp_files:
-            storage.delete(tmp)
+            private_storage.delete(tmp)
 
     def webapp(self, data=None, contents='', suffix='.webapp'):
         tmp = tempfile.mktemp(suffix=suffix)
         self.tmp_files.append(tmp)
-        with storage.open(tmp, 'wb') as f:
+        with private_storage.open(tmp, 'wb') as f:
             f.write(json.dumps(data) if data else contents)
-        return tmp
+        return private_storage.open(tmp)
 
     def test_parse(self):
-        wp = WebAppParser().parse(self.webapp_path)
+        wp = WebAppParser().parse(private_storage.open(self.webapp_path))
         eq_(wp['guid'], None)
-        eq_(wp['type'], amo.ADDON_WEBAPP)
-        eq_(wp['description']['en-US'], u'Exciting Open Web development action!')
+        eq_(wp['description']['en-US'],
+            u'Exciting Open Web development action!')
         # UTF-8 byte string decoded to unicode.
         eq_(wp['description']['es'],
             u'\xa1Acci\xf3n abierta emocionante del desarrollo del Web!')
@@ -62,11 +62,15 @@ class TestWebApps(amo.tests.TestCase, amo.tests.AMOPaths):
         eq_(wp['default_locale'], 'en-US')
 
     def test_parse_packaged(self):
-        wp = WebAppParser().parse(self.packaged_app_path('mozball.zip'))
+        path = self.packaged_app_path('mozball.zip')
+        if storage_is_remote():
+            copy_stored_file(path, path, src_storage=local_storage,
+                             dst_storage=private_storage)
+        wp = WebAppParser().parse(private_storage.open(path))
         eq_(wp['guid'], None)
-        eq_(wp['type'], amo.ADDON_WEBAPP)
         eq_(wp['name']['en-US'], u'Packaged MozillaBall ょ')
-        eq_(wp['description']['en-US'], u'Exciting Open Web development action!')
+        eq_(wp['description']['en-US'],
+            u'Exciting Open Web development action!')
         eq_(wp['description']['es'],
             u'¡Acción abierta emocionante del desarrollo del Web!')
         eq_(wp['description']['it'],
@@ -75,9 +79,12 @@ class TestWebApps(amo.tests.TestCase, amo.tests.AMOPaths):
         eq_(wp['default_locale'], 'en-US')
 
     def test_parse_packaged_BOM(self):
-        wp = WebAppParser().parse(self.packaged_app_path('mozBOM.zip'))
+        path = self.packaged_app_path('mozBOM.zip')
+        if storage_is_remote():
+            copy_stored_file(path, path, src_storage=local_storage,
+                             dst_storage=private_storage)
+        wp = WebAppParser().parse(private_storage.open(path))
         eq_(wp['guid'], None)
-        eq_(wp['type'], amo.ADDON_WEBAPP)
         eq_(wp['name']['en-US'], u'Packaged MozBOM ょ')
         eq_(wp['description']['en-US'], u'Exciting BOM action!')
         eq_(wp['description']['es'], u'¡Acción BOM!')
@@ -86,23 +93,25 @@ class TestWebApps(amo.tests.TestCase, amo.tests.AMOPaths):
         eq_(wp['default_locale'], 'en-US')
 
     def test_no_manifest_at_root(self):
+        path = self.packaged_app_path('no-manifest-at-root.zip')
+        if storage_is_remote():
+            copy_stored_file(path, path, src_storage=local_storage,
+                             dst_storage=private_storage)
         with self.assertRaises(forms.ValidationError) as exc:
-            WebAppParser().parse(
-                self.packaged_app_path('no-manifest-at-root.zip'))
+            WebAppParser().parse(private_storage.open(path))
         m = exc.exception.messages[0]
         assert m.startswith('The file "manifest.webapp" was not found'), (
             'Unexpected: %s' % m)
 
     def test_no_locales(self):
-        wp = WebAppParser().parse(self.webapp(dict(name='foo', version='1.0',
-                                                   description='description',
-                                                   developer=dict(name='bar'))))
+        wp = WebAppParser().parse(self.webapp(
+            dict(name='foo', version='1.0', description='description',
+                 developer=dict(name='bar'))))
         eq_(wp['description']['en-US'], u'description')
 
     def test_no_description(self):
-        wp = WebAppParser().parse(self.webapp(dict(name='foo',
-                                                   version='1.0',
-                                                   developer=dict(name='bar'))))
+        wp = WebAppParser().parse(self.webapp(
+            dict(name='foo', version='1.0', developer=dict(name='bar'))))
         eq_(wp['description'], {})
 
     def test_syntax_error(self):
@@ -124,25 +133,33 @@ class TestWebApps(amo.tests.TestCase, amo.tests.AMOPaths):
         wp = WebAppParser().parse(self.webapp(contents=wm))
         eq_(wp['name'], {'en-US': u'まつもとゆきひろ'})
 
+
+class TestTrapDuplicate(BaseWebAppTest):
+
+    def setUp(self):
+        super(TestTrapDuplicate, self).setUp()
+        self.create_switch('webapps-unique-by-domain')
+        self.req = RequestFactory().get('/')
+        self.req.user = UserProfile.objects.get(pk=999)
+
     @patch('mkt.developers.views.trap_duplicate')
     def test_trap_duplicate_skipped_on_standalone(self, trap_duplicate_mock):
-        self.create_switch('webapps-unique-by-domain')
-        request = Mock()
-        request.method = 'POST'
-        request.POST = {'manifest': ''}
-        request.return_value = collections.namedtuple('FakeResponse',
-                                                      'status_code content')
-        standalone_hosted_upload(request)
+        self.post()
+        standalone_hosted_upload(self.req)
         assert not trap_duplicate_mock.called
+
+    def test_trap_duplicate(self):
+        self.post_addon()
+        standalone_hosted_upload(self.req)
+        assert trap_duplicate(self.req, 'http://allizom.org/mozball.webapp')
 
 
 class TestStandaloneValidation(BaseUploadTest):
-    fixtures = ['base/users']
+    fixtures = fixture('user_999')
 
     def setUp(self):
         super(TestStandaloneValidation, self).setUp()
-        assert self.client.login(username='regular@mozilla.com',
-                                 password='password')
+        self.login('regular@mozilla.com')
 
         # Upload URLs
         self.hosted_upload = reverse(
@@ -162,7 +179,7 @@ class TestStandaloneValidation(BaseUploadTest):
         return reverse('mkt.developers.upload_detail', args=[uuid])
 
     def test_context(self):
-        res = self.client.get(reverse('mkt.developers.validate_addon'))
+        res = self.client.get(reverse('mkt.developers.validate_app'))
         eq_(res.status_code, 200)
         doc = pq(res.content)
         eq_(doc('#upload-webapp-url').attr('data-upload-url'),
@@ -199,6 +216,7 @@ class TestStandaloneValidation(BaseUploadTest):
 
         uuid = json.loads(res.content)['upload']
         upload = FileUpload.objects.get(uuid=uuid)
+        eq_(upload.user.pk, 999)
         self.detail_view(self.hosted_detail, upload)
 
     def test_packaged_detail(self):

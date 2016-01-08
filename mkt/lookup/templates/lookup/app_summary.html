@@ -1,5 +1,7 @@
 {% extends 'lookup/base.html' %}
 
+{% from 'lookup/includes/promo_img_form.html' import promo_img_upload %}
+
 {% block breadcrumbs %}
 {% endblock %}
 
@@ -9,7 +11,7 @@
                       ('last_7_days', _('last 7 days')),
                       ('alltime', _('all time'))) %}
 
-  <section class="island c">
+  <section class="island c transaction-lookup">
     {{ app_header(app, 'summary') }}
 
     <section class="column-b">
@@ -17,8 +19,8 @@
         <dt>{{ _('Authors') }}</dt>
         <dd>
           <ol>
-            {% for usr in authors %}
-              <li><b>{{ usr.name }}</b> {{ emaillink(usr.email) }}</li>
+            {% for author in authors %}
+              <li><a href="{{ url('lookup.user_summary', author.id) }}">{{ author.name }}</a></li>
             {% endfor %}
           </ol>
         </dd>
@@ -30,32 +32,26 @@
             {{ _('None') }}
           {% endif %}
         </dd>
-        {% if app.is_webapp() %}
-          <dt>{{ _('Manifest') }}</dt>
-          <dd>
-              {% set manifest = app.get_manifest_url() %}
-              <a target="_blank" href="{{ manifest }}">{{ manifest }}</a>
-              <a href="#" id="view-manifest" data-manifest="{{ manifest }}"
-                 data-url="{{ url('reviewers.apps.review.manifest', app.app_slug) }}">
-                <b>{{ _('View') }}</b></a>
-          </dd>
-        {% endif %}
+        <dt>{{ _('Manifest') }}</dt>
+        <dd>
+            {% set manifest = app.get_manifest_url() %}
+            <a target="_blank" href="{{ manifest }}">{{ manifest }}</a>
+            <a href="#" id="view-manifest" data-manifest="{{ manifest }}"
+               data-url="{{ url('reviewers.apps.review.manifest', app.app_slug) }}">
+              <b>{{ _('View') }}</b></a>
+        </dd>
         <dt>{{ _('Type') }}</dt>
         <dd>
-          {% if app.is_webapp() %}
-            {% if app.is_packaged %}
-              {% if app.latest_version.is_privileged %}
-                {{ _('Privileged Packaged app') }};
-              {% else %}
-                {{ _('Packaged app') }};
-              {% endif %}
+          {% if app.is_packaged %}
+            {% if app.latest_version.is_privileged %}
+              {{ _('Privileged Packaged app') }};
             {% else %}
-              {{ _('Hosted app') }};
+              {{ _('Packaged app') }};
             {% endif %}
           {% else %}
-            {{ amo.ADDON_TYPE[app.type] }};
+            {{ _('Hosted app') }};
           {% endif %}
-          {{ amo.ADDON_PREMIUM_TYPES[app.premium_type] }}
+          {{ mkt.ADDON_PREMIUM_TYPES[app.premium_type] }}
           {% if price %}
             ({{ price.tier_locale() }})
           {% endif %}
@@ -63,18 +59,60 @@
         <dt>{{ _('Submitted') }}</dt>
         <dd>{{ app.created|babel_datetime }}</dd>
         <dt>{{ _('Status') }}</dt>
-        <dd>{{ amo.STATUS_CHOICES[app.status] }}</dd>
+        <dd>
+          <form method="post">
+            {{ csrf() }}
+            {% if app.disabled_by_user %}
+              <p class="status-disabled">App is <b>disabled by user</b>.</p>
+            {% else %}
+              {% if action_allowed('Admin', '%') %}
+                <div class="change-status">
+                  {{ status_form.status }}
+                  <button data-api-url="{{ url('app-status-detail', pk=app.pk) }}" class="button disabled">{{ _('OK') }}</button>
+                </div>
+              {% else %}
+                {{ mkt.STATUS_CHOICES[app.status] }}
+              {% endif %}
+            {% endif %}
+            {% if app.priority_review %}
+              <button class="button disabled" name="prioritize">{{ _('Review Prioritized') }}</button>
+            {% else %}
+              <button class="button" type="submit" name="prioritize" value="true">{{ _('Prioritize Review?') }}</button>
+            {% endif %}
+          </form>
+        </dd>
+        <dt>{{ _('Tarako Status') }}</dt>
+        <dd>
+          {% if is_tarako %}
+            {{ _('Tarako enabled') }}
+          {% else %}
+            {{ _('Tarako not enabled') }} |
+            {% if not tarako_review or tarako_review.passed %}
+              {{ _('Review not requested') }}
+            {% else %}
+              {% if tarako_review.pending %}
+                {{ _('Review pending') }}
+              {% elif tarako_review.failed %}
+                {{ _('Review failed') }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        </dd>
         <dt>{{ _('Abuse Reports') }}</dt>
         <dd>{{ abuse_reports }}</dd>
         <dt>{{ _('Permissions') }}</dt>
-        <dd>TBD: permissions not supported yet</dd>
-        <dt>{{ _('Downloads') }}</dt>
-        <dd class="pretty-list">
-          {% for key, heading in summaries %}
-            <div>{{ heading }}: {{ downloads[key] }}</div>
-          {% endfor %}
+        <dd>
+          <ul>
+            {% for perm, desc in permissions.items() %}
+              <li>{{ perm }}: {{ desc.description or _('No reason given') }}</li>
+            {% else %}
+              <li>{{ _('No permissions requested') }}</li>
+            {% endfor %}
+          </ul>
         </dd>
       </dl>
+
+      {{ promo_img_upload(app, promo_img_form, csrf()) }}
     </section>
 
     <section class="column-c">
@@ -102,10 +140,7 @@
           {# L10n: number of refunds. #}
           <div>{{ _('{0} rejected')|f(refunds['rejected']) }}</div>
         </dd>
-        {% if payment_account and waffle.switch('bango-portal') %}
-          <dt>{{ _('Bango portal') }}:</dt>
-          <dd><a href="{{ payment_account.get_lookup_portal_url() }}">{{ _('View transactions') }}</a></dd>
-        {% endif %}
+        {% include 'lookup/includes/provider_portals.html' %}
       </dl>
     </section>
 
@@ -122,20 +157,28 @@
             </tr>
           </thead>
           <tbody>
-          {% for v in app.versions.all().order_by('-created') %}
+          {% for v in versions %}
             <tr>
               <td>{{ v.created|datetime }}</td>
-              <td>{{ v.version }} ({{ v.id }})</td>
+              <td>{{ v.version }} ({{ v.pk }})</td>
               {% with file = v.files.latest() %}
                 <td><a href="{{ v.all_files[0].get_url_path('') }}" class="download">
                   {{ file.filename }} ({{ file.id }}, {{ file.size|filesizeformat }})</a></td>
-                <td>{{ amo.STATUS_CHOICES[file.status] }}</td>
+                <td>
+                  {% if action_allowed('Admin', '%') %}
+                    <div class="change-status">
+                      {{ version_status_forms[v.pk].status }}
+                      <button data-api-url="{{ url('version-status', pk=v.pk) }}" class="button disabled">{{ _('OK') }}</button>
+                    </div>
+                  {% else %}
+                    {{ mkt.STATUS_CHOICES[file.status] }}
+                  {% endif %}
+                </td>
               {% endwith %}
             </tr>
           {% endfor %}
         </table>
       </section>
     {% endif %}
-
   </section>
 {% endblock %}

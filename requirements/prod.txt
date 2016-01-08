@@ -1,120 +1,143 @@
-amqp==1.0.13
+# include compiled.txt
+-r compiled.txt
+# amgp is required by kombu
+amqp==1.4.8
+# anyjson is required by kombu
 anyjson==0.3.3
-argparse==1.2.1
-babel==0.9.6
-basket-client==0.3.7
-billiard==2.7.3.34
-bleach==1.1.5
-boto==2.9.6
+# argparse is required by app-validator, translate-toolkit, curling, receipts
+argparse==1.4.0
+babel==2.1.1
+basket-client==0.3.11
+# billiard is required by celery
+billiard==3.3.0.22
+bleach==1.4.2
+# blessings is used by dennis
+blessings==1.6
+boto==2.38.0
+# cef is required by heka-py-cef
 cef==0.5
-celery==3.0.24
-celery-tasktree==0.3.2
-certifi==0.0.8
-chardet==1.0.1
-cssutils==0.9.7b3
-curling==0.2.6
-Django==1.4.8
-dj-database-url==0.2.2
-django-aesfield==0.1
-django-browserid==0.8
-django-cache-machine==0.8
-django-celery==3.0.23
+celery==3.1.19
+certifi==2015.11.20.1
+chardet==2.3.0
+# click is required by dennis
+click==4.0
+commonware==0.4.3
+# cookies is required by responses
+cookies==2.2.1
+# contextlib2 is used by raven
+contextlib2==0.4.0
+# cssselect is required by pyquery
+cssselect==0.9.1
+# cssutils is required by app-validator
+cssutils==1.0.1
+curling==0.5.1
+# defusedxml is required by djangorestframework
+defusedxml==0.4.1
+dennis==0.7
+Django==1.7.10
+dj-database-url==0.3.0
+django-aesfield==0.2
+django-cache-nuggets==0.1.1
+django-celery==3.1.17
 django-cronjobs==0.2.3
-django_csp==1.0.2
-django-extensions==1.2.1
-django-filter==0.7
-django-memcached-pool==0.4.1
-django-multidb-router==0.5
-django-mysql-pool==0.2
-django-mysql-pymysql==0.1
-django-nose==1.2
-django-picklefield==0.2.1
-django-quieter-formset==0.3
-django-raven-metlog==0.2
-django-ratelimit==0.1
-django-recaptcha-mozilla==0.0.1
-djangorestframework==2.3.8
-#django-session-csrf==0.6
-django-statsd-mozilla==0.3.8.6
-django-storages==1.1.8
-django-tastypie==0.9.11
-django-waffle==0.9.1
-easy-thumbnails==1.3
-elasticutils==0.8.1
-email-reply-parser==0.1.9
+django_csp==2.0.3
+django-environ==0.4.0
+django-extensions==1.6.1
+django-filter==0.11.0
+django-multidb-router==0.6
+django-nose==1.4.2
+django-quieter-formset==0.4
+djangorestframework==3.3.2
+django-secure==1.0.1
+django-statsd-mozilla==0.3.16
+django-storages-redux==1.3
+django-waffle==0.11
+drf-nested-routers==0.11.1
+easy-thumbnails==2.3
+elasticsearch==1.4.0
+email-reply-parser==0.3.0
+# enum34 is required by cryptography
+enum34==1.1.2
+# fastchardet is required by app-validator
 fastchardet==0.2.0
-feedparser==5.1.3
-fudge==1.0.3
+feedparser==5.2.1
 GitPython==0.1.7
-google-api-python-client==1.0
-gunicorn==0.17.4
-hera==0.1.2
-html5lib==0.90
-httplib2==0.8.0
+google-api-python-client==1.4.2
+# html5lib is required by bleach
+html5lib==0.9999999
+# httplib2 is required by curling, google-api-python-client
+httplib2==0.9.2
+# idna is required by cryptography
+idna==2.0
 importlib-no-failure==1.0.2
-kombu==2.5.16
-metlog-py==0.9.10
-metlog-cef==0.2
-metlog-raven==0.5
-python-mimeparse==0.1.4
-mock==1.0.1
+# ipaddress is required by cryptography
+ipaddress==1.0.16
+jingo==0.8.1
+# kombu is required by celery
+kombu==3.0.32
+heka-py==0.30.3
+heka-py-cef==0.3.1
+langid==1.1.5
+marketplace-constants==0.14.0
 monolith.client==0.9
-moz-addon-packager==1.0.1
+mozilla-logger==0.2
 mozpay==2.0.0
+# m2secret is required by django-aesfield
 m2secret==0.1.1
+# ndg-httpsclient is required by app-validator
+ndg-httpsclient==0.4.0
+newrelic==2.60.0.46
 nose==1.3.0
-newrelic==2.4.0.4
-oauth2==1.5.211
-oauthlib==0.4.0
-ordereddict==1.1
+oauthlib==0.7.2
+# polib is required by dennis
+polib==1.0.7
+# protobuf is required by heka-py
+protobuf==2.5.0
+puente==0.4.1
+# pyasn1 is required by app-validator, cryptography
+pyasn1==0.1.9
 PyBrowserID==0.6
-pyelasticsearch==0.6
-pyes==0.16.0
-PyJWT-mozilla==0.1.4.2
-PyMySQL==0.5
-pyquery==0.4
+# pycparser is required by cffi
+pycparser==2.14
+pydenticon==0.2
+pyjwkest==1.0.9
+PyJWT-mozilla==0.1.5
+pyquery==1.2.9
 python-dateutil==1.5
 python-gflags==2.0
-python-memcached==1.53
-pytz==2013b
-raven==3.1.16
-rdflib==3.0.0
-recaptcha-client==1.0.5
-receipts==0.2.6
-redis==2.7.6
-requests==1.2.0
-schematic==0.2
-#signing_clients==0.1.7
-six==1.3.0
-slumber==0.5.3
+python-memcached==1.57
+pytz==2015.7
+raven==5.9.2
+receipts==0.2.10
+redis==2.10.5
+# requests is required by responses, basket-client
+requests==2.9.1
+requests_oauthlib==0.4.1
+signing_clients==0.1.14
+# six is required by cryptography, django-extensions, easy-thumbnails, pip-tools, sphinxcontrib-httpdomain, translate-toolkit, html5lib, elasticsearch-dsl, bleach, pyOpenSSL, responses
+six==1.10.0
+# slumber is required by curling
+slumber==0.7.1
 SQLAlchemy==0.7.5
-statsd==1.0.0
-suds==0.3.9
-tastypie-services==0.2.2
+sqlparse==0.1.18
+statsd==3.2.1
+suds==0.4
+responses==0.5.0
+# urllib3 is required by elasticsearch
+urllib3==1.13.1
 
 ## Not on pypi.
--e git+https://github.com/mozilla/amo-validator.git@6fbb2598dd0f85f29ed0f31fe52e058cc68e5743#egg=amo-validator
--e git+https://github.com/mozilla/app-validator.git@9ce687a48803e819b9e86d12b19f81958b151400#egg=app-validator
--e git+https://github.com/jsocol/commonware.git@27646ecaca40a89024cc581c3ecf5eb0fa87ee11#egg=commonware
--e git+https://github.com/jbalogh/django-queryset-transform@a1ba6ae41bd86f5bb9ff66fb56614e0fafe6e022#egg=django-queryset-transform
--e git+https://github.com/miracle2k/django-tables.git@546f339308103880c823b2056830fcdc9220edd0#egg=django-tables
+-e git+https://github.com/mozilla/app-validator.git@c924b7876b0dcba64b52824cf8a9763cbc83f37b#egg=app-validator
 -e git+https://github.com/mozilla/happyforms.git@729612c2a824a7e8283d416d2084bf506c671e24#egg=happyforms
 
-# Temporary fork.
--e git+https://github.com/jsocol/jingo-minify.git@cb911038e20a399aeff871e199c8bc2be12b5cee#egg=jingo-minify
--e git+https://github.com/mozilla/nuggets.git@96e80a64aa4bfcfef4f43fc3ab6966450ccd7325#egg=nuggets
--e git+https://github.com/jbalogh/test-utils.git@ce5136a257cd44a1c663319124a255c1d10a9834#egg=test-utils
--e git+https://github.com/fwenzel/django-mozilla-product-details.git@36ef06539d6b34c4f345fd0d3e16937d0db9a752#egg=django-mozilla-product-details
--e git+https://github.com/mozilla/signing-clients@a8bd730b202391c080113d224d223463e03088e9#egg=signing-clients
+## Temporary fork.
+-e git+https://github.com/jsocol/jingo-minify.git@b7405d3f93628190bf83cc43b0ff44e2fbb8b3c0#egg=jingo_minify
 -e git+https://github.com/mozilla/django-session-csrf@f00ad913c62e139d36078e8a7e07dab65a021386#egg=django-session-csrf
+-e git+https://github.com/washort/django-browserid.git@5a6ebfa#egg=django-browserid
+-e git+https://github.com/ngokevin/elasticsearch-dsl-py.git@886c4e77655ded24e6a208fed28e984d3ad51218#egg=elasticsearch-dsl
 
 ## Forked.
--e git+https://github.com/andymckay/django-piston-oauth2.git@fa28ee#egg=django-piston-oauth2
--e git+https://github.com/kumar303/django-qunit.git@b0f468dcf33439488158c845df37ef3261852b55#egg=django-qunit
 -e git+https://github.com/andymckay/django-uuidfield.git@029dd1263794ec36c327617cd6c2346da81c8c33#egg=django-uuidfield
 
-
-## Out of date or not sure on pypi.
--e git+https://github.com/jbalogh/django-mobility.git@e2b60a1f96e4c4aed736395c01bf707e969d8e83#egg=django-mobility
--e git+https://github.com/jbalogh/jingo.git@b4ecca1066bcd1eac87358b4c82902442d4eedc4#egg=jingo
--e git+https://github.com/clouserw/tower.git@ce2eba049a5146918fa5239d827bdde9e36eadb7#egg=tower-dev
+## moved for 2014/04/02 deployment expediency
+MySQL-python==1.2.5

@@ -1,17 +1,19 @@
 import os
+import fabdeploytools.envs
+import deploysettings as settings
 from os.path import join as pjoin
-
 from fabric.api import (env, execute, lcd, local, parallel,
                         run, roles, task)
-
 from fabdeploytools import helpers
-import fabdeploytools.envs
 
-import deploysettings as settings
-
+os.environ['DJANGO_SETTINGS_MODULE'] = 'settings_local_mkt'
 
 env.key_filename = settings.SSH_KEY
 fabdeploytools.envs.loadenv(settings.CLUSTER)
+
+SCL_NAME = getattr(settings, 'SCL_NAME', False)
+if SCL_NAME:
+    helpers.scl_enable(SCL_NAME)
 
 ROOT, ZAMBONI = helpers.get_app_dirs(__file__)
 
@@ -37,7 +39,7 @@ def create_virtualenv(update_on_change=False):
 @task
 def update_locales():
     with lcd(pjoin(ZAMBONI, 'locale')):
-        local("./compile-mo.sh .")
+        local("VENV=%s ./compile-mo.sh ." % VIRTUALENV)
 
 
 @task
@@ -50,20 +52,8 @@ def loadtest(repo=''):
 
 
 @task
-def update_products():
-    managecmd('update_product_details')
-
-
-@task
 def compress_assets(arg=''):
     managecmd('compress_assets -t %s' % arg)
-
-
-@task
-def schematic():
-    with lcd(ZAMBONI):
-        local("%s %s/bin/schematic migrations" %
-              (PYTHON, VIRTUALENV))
 
 
 @task
@@ -97,21 +87,6 @@ def install_cron(installed_dir):
 
 
 @task
-@roles('web')
-@parallel
-def restart_workers():
-    for gservice in settings.GUNICORN:
-        run("/sbin/service %s graceful" % gservice)
-    restarts = []
-    for g in settings.MULTI_GUNICORN:
-        restarts.append('( supervisorctl restart {0}-a; '
-                        'supervisorctl restart {0}-b )&'.format(g))
-
-    if restarts:
-        run('%s wait' % ' '.join(restarts))
-
-
-@task
 @roles('celery')
 @parallel
 def update_celery():
@@ -119,11 +94,11 @@ def update_celery():
     if getattr(settings, 'CELERY_SERVICE_PREFIX', False):
         restarts.extend(['supervisorctl restart {0}{1} &'.format(
                          settings.CELERY_SERVICE_PREFIX, x)
-                         for x in ('', '-devhub', '-priority')])
+                         for x in ('', '-devhub', '-priority', '-limited')])
     if getattr(settings, 'CELERY_SERVICE_MKT_PREFIX', False):
         restarts.extend(['supervisorctl restart {0}{1} &'.format(
                          settings.CELERY_SERVICE_MKT_PREFIX, x)
-                         for x in ('', '-devhub', '-priority')])
+                         for x in ('', '-devhub', '-priority', '-limited')])
 
     if restarts:
         run('%s wait' % ' '.join(restarts))
@@ -131,33 +106,22 @@ def update_celery():
 
 @task
 def deploy():
+    package_dirs = ['zamboni', 'venv']
+    if os.path.isdir(os.path.join(ROOT, 'aeskeys')):
+        package_dirs.append('aeskeys')
+
     rpmbuild = helpers.deploy(name='zamboni',
                               env=settings.ENV,
                               cluster=settings.CLUSTER,
                               domain=settings.DOMAIN,
                               root=ROOT,
                               deploy_roles=['web', 'celery'],
-                              package_dirs=['zamboni', 'venv'])
+                              package_dirs=package_dirs)
 
-    execute(restart_workers)
     helpers.restart_uwsgi(getattr(settings, 'UWSGI', []))
     execute(update_celery)
     execute(install_cron, rpmbuild.install_to)
     managecmd('cron cleanup_validation_results')
-
-
-@task
-def deploy_web():
-    rpmbuild = helpers.deploy(name='zamboni',
-                              env=settings.ENV,
-                              cluster=settings.CLUSTER,
-                              domain=settings.DOMAIN,
-                              root=ROOT,
-                              use_yum=False,
-                              package_dirs=['zamboni', 'venv'])
-
-    execute(restart_workers)
-    helpers.restart_uwsgi(getattr(settings, 'UWSGI', []))
 
 
 @task
@@ -169,14 +133,49 @@ def pre_update(ref=settings.UPDATE_REF):
 
 
 @task
+def build():
+    execute(create_virtualenv, getattr(settings, 'DEV', False))
+    execute(update_locales)
+    execute(compress_assets, arg='--settings=settings_local_mkt')
+    managecmd('statsd_ping --key=build')
+
+
+@task
+def deploy_jenkins():
+    package_dirs = ['zamboni', 'venv']
+    if os.path.isdir(os.path.join(ROOT, 'aeskeys')):
+        package_dirs.append('aeskeys')
+
+    rpm = helpers.build_rpm(name='zamboni',
+                            env=settings.ENV,
+                            cluster=settings.CLUSTER,
+                            domain=settings.DOMAIN,
+                            root=ROOT,
+                            package_dirs=package_dirs)
+
+    execute(disable_cron)
+
+    rpm.local_install()
+
+    managecmd('migrate --noinput')
+
+    rpm.remote_install(['web', 'celery'])
+
+    helpers.restart_uwsgi(getattr(settings, 'UWSGI', []))
+    execute(update_celery)
+    execute(install_cron, rpm.install_to)
+
+    managecmd('cron cleanup_validation_results')
+
+    rpm.clean()
+
+
+@task
 def update():
     execute(create_virtualenv, getattr(settings, 'DEV', False))
     execute(update_locales)
-    execute(update_products)
-    execute(compress_assets)
     execute(compress_assets, arg='--settings=settings_local_mkt')
-    execute(schematic)
-    managecmd('dump_apps')
+    managecmd('migrate --noinput')
     managecmd('statsd_ping --key=update')
 
 

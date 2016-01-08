@@ -3,7 +3,7 @@ from django.conf import settings
 from django.http import HttpRequest
 
 from cef import log_cef as _log_cef
-metlog = settings.METLOG
+heka = settings.HEKA
 
 
 class CEFLogger:
@@ -50,7 +50,7 @@ class CEFLogger:
                                            'CEF_DEVICE_VERSION',
                                            '0'),
              'cef.file': getattr(settings, 'CEF_FILE', 'syslog'), }
-        user = getattr(environ, 'amo_user', None)
+        user = getattr(environ, 'user', None)
         # Sometimes app is a string, eg: "unknown". Boo!
         try:
             app_str = app.pk
@@ -75,12 +75,12 @@ class CEFLogger:
         if isinstance(environ, HttpRequest):
             environ = environ.META.copy()
 
-        if settings.USE_METLOG_FOR_CEF:
-            return metlog.cef('%s %s' % (self.msg_prefix, msg), severity,
+        if settings.USE_HEKA_FOR_CEF:
+            return heka.cef('%s %s' % (self.msg_prefix, msg), severity,
                             environ, **kwargs)
         else:
             return _log_cef('%s %s' % (self.msg_prefix, msg),
-                     severity, environ, **kwargs)
+                            severity, environ, **kwargs)
 
 
 class ReceiptCEFLogger(CEFLogger):

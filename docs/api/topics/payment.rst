@@ -16,7 +16,7 @@ Payment accounts can be added and listed.
 
 .. note:: Authentication is required.
 
-.. http:post:: /api/v1/payments/account/
+.. http:post:: /api/v2/payments/account/
 
     **Request**
 
@@ -71,16 +71,14 @@ Payment accounts can be added and listed.
 
     **Response**
 
-    :status code: 201 successfully created.
+    :status: 201 successfully created.
 
-.. http:put:: /api/v1/payments/account/(int:id)/
+.. http:put:: /api/v2/payments/account/(int:id)/
 
     **Request**
 
     :param account_name: Account name.
     :type  account_name: string
-    :param companyName: Company name.
-    :type companyName: string
     :param vendorName: Vendor name.
     :type vendorName: string
     :param financeEmailAddress: Financial email.
@@ -106,7 +104,7 @@ Payment accounts can be added and listed.
 
     :status 204: successfully updated.
 
-.. http:delete:: /api/v1/payments/account/(int:id)/
+.. http:delete:: /api/v2/payments/account/(int:id)/
 
     .. warning:: This can potentially remove all your apps from sale.
 
@@ -120,7 +118,7 @@ Payment accounts can be added and listed.
     :status 204: successfully deleted.
     :status 409: shared accounts cannot be deleted whilst apps are using them.
 
-.. http:get:: /api/v1/payments/account/
+.. http:get:: /api/v2/payments/account/
 
     **Request**
 
@@ -135,7 +133,7 @@ Payment accounts can be added and listed.
 
 .. _payment-account-response-label:
 
-.. http:get:: /api/v1/payments/account/(int:id)/
+.. http:get:: /api/v2/payments/account/(int:id)/
 
     **Response**
 
@@ -159,7 +157,7 @@ Payment accounts can be added and listed.
              "countryIso": "BRA",
              "currencyIso": "EUR",
              "financeEmailAddress": "apps_accounts@example.com",
-             "resource_uri": "/api/v1/payments/account/175/",
+             "resource_uri": "/api/v2/payments/account/175/",
              "supportEmailAddress": "apps_support@example.com",
              "vendorName": "vendor"
         }
@@ -167,7 +165,7 @@ Payment accounts can be added and listed.
 Upsell
 ======
 
-.. http:post:: /api/v1/payments/upsell/
+.. http:post:: /api/v2/payments/upsell/
 
     Creates an upsell relationship between two apps, a free and premium one.
     Send the URLs for both apps in the post to create the relationship.
@@ -185,21 +183,21 @@ Upsell
 
 .. _upsell-response-label:
 
-.. http:get:: /api/v1/payments/upsell/(int:id)/
+.. http:get:: /api/v2/payments/upsell/(int:id)/
 
     **Response**
 
     .. code-block:: json
 
-        {"free": "/api/v1/apps/app/1/",
-         "premium": "/api/v1/apps/app/2/"}
+        {"free": "/api/v2/apps/app/1/",
+         "premium": "/api/v2/apps/app/2/"}
 
     :param free: URL to the free app.
     :type free: string
     :param premium: URL to the premium app.
     :type premium: string
 
-.. http:patch:: /api/v1/payments/upsell/(int:id)/
+.. http:patch:: /api/v2/payments/upsell/(int:id)/
 
     Alter the upsell from free to premium by passing in new free and premiums.
 
@@ -214,7 +212,7 @@ Upsell
 
     :status 200: sucessfully altered.
 
-.. http:delete:: /api/v1/payments/upsell/(int:id)/
+.. http:delete:: /api/v2/payments/upsell/(int:id)/
 
     To delete the upsell relationship.
 
@@ -222,57 +220,225 @@ Upsell
 
     :status 204: sucessfully deleted.
 
-Payment accounts
-================
 
-.. http:post:: /api/v1/payments/app/
+In-app products
+===============
 
-    Creates a relationship between the payment account and the app.
+In-app products are used for setting up in-app payments without the need to
+host your own JWT signer. This API is for managing your in-app products for use
+with the in-app payment service.
 
-    **Request**
+The **origin** refers to the
+`origin <https://developer.mozilla.org/en-US/Apps/Build/Manifest#origin>`_ of the
+packaged app. For example: ``app://foo-app.com``.
 
-    :param app: URL to the premium app.
-    :type app: string
-    :param account: URL to the account.
-    :type account: string
+.. note:: Feature not complete.
 
-    Once created, the app is not changeable.
+.. http:post:: /api/v2/payments/(string:origin)/in-app/
 
-    **Response**
+    .. note:: Authentication is required.
 
-    :status 201: sucessfully created.
-    :param app: URL to the premium app.
-    :type app: string
-    :param account: URL to the account.
-    :type account: string
-
-.. http:patch:: /api/v1/payments/app/(int:id)/
-
-    Alter the payment account being used.
+    Creates a new in-app product for sale.
 
     **Request**
 
-    :param app: URL to the premium app. Must be unchanged.
-    :type app: string
-    :param account: URL to the account.
-    :type account: string
+    :param name:
+
+        Product names as an object of localizations, serialized to JSON.
+        Example::
+
+            {"en-us": "English product name",
+             "pl": "polska nazwa produktu"}
+
+        The object keys must be lower case codes in the
+        `IETF language tag`_ format.
+
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
 
     **Response**
 
-    :status 200: sucessfully updated.
-    :param app: URL to the premium app.
+    :status 201: successfully created.
+    :param guid: A globally unique ID for this in-app product.
+    :type guid: string
+    :param app: The slug for the app.
     :type app: string
-    :param account: URL to the account.
-    :type account: string
+    :param name: The name for the in-app product.
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
+
+.. http:get:: /api/v2/payments/(string:origin)/in-app/
+
+    List the in-app products for this app.
+
+    **Request**
+
+    None
+
+    **Response**
+
+    :status 200: successfully completed.
+    :param guid: The in-app product ID.
+    :type guid: string
+    :param app: The slug for the app.
+    :type app: string
+    :param name: The name for the in-app product.
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
+
+.. http:get:: /api/v2/payments/(string:origin)/in-app/(string:id)/
+
+    Details of an in-app product.
+
+    **Request**
+
+    :param active: include active products, if ignored all in-app products are
+        returned. Value should be one of `0` or `1`.
+    :type active: string
+
+    **Response**
+
+    :status 200: successfully completed.
+    :param guid: The in-app product ID.
+    :type guid: string
+    :param app: The slug for the app.
+    :type app: string
+    :param name: The name for the in-app product.
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
+
+.. http:put:: /api/v2/payments/(string:origin)/in-app/(string:id)/
+
+    .. note:: Authentication is required.
+
+    Update an in-app product.
+
+    **Request**
+
+    :param name:
+
+        Product names as an object of localizations, serialized to JSON.
+        Example::
+
+            {"en-us": "English product name",
+             "pl": "polska nazwa produktu"}
+
+        The object keys must be lower case codes in the
+        `IETF language tag`_ format.
+
+        **IMPORTANT**: Any string for a new locale will not
+        overwrite strings in existing locales. If you want
+        to delete an older locale, you need to set it to ``null``
+        like ``{"en-us": null, "pl": "..."}``.
+
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
+
+    **Response**
+
+    :status 200: successfully completed.
+    :param guid: The in-app product ID.
+    :type guid: string
+    :param app: The slug for the app.
+    :type app: string
+    :param name: The name for the in-app product.
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
+
+.. http:get:: /api/v2/payments/stub-in-app-products/
+
+    List some stub in-app products that can be used for testing.
+    These products can only be purchased in simulation mode.
+
+    **Request**
+
+    None
+
+    **Response**
+
+    .. code-block:: json
+
+        {
+            "meta": {
+                "limit": 25,
+                "next": null,
+                "offset": 0,
+                "previous": null,
+                "total_count": 2
+            },
+            "objects": [
+                {
+                    "app": null,
+                    "guid": "d3182953-feed-44dd-a3be-e17ae7fe6a2c",
+                    "logo_url": "https://marketplace.cdn.mozilla.net/media/img/developers/simulated-kiwi.png",
+                    "name": "Kiwi",
+                    "price_id": 237
+                },
+                {
+                    "app": null,
+                    "guid": "8b3fa156-354a-47a9-b862-0f02b56d0e3d",
+                    "logo_url": "https://marketplace.cdn.mozilla.net/media/img/mkt/icons/rocket-64.png",
+                    "name": "Rocket",
+                    "price_id": 238
+                }
+            ]
+        }
+
+    :status 200: successfully completed.
+    :objects: list of stub products.
+        See :ref:`get stub product <get-stub-product>`.
+
+.. _get-stub-product:
+
+.. http:get:: /api/v2/payments/stub-in-app-products/(string:guid)/
+
+    Get detailed info for a specific stub product.
+
+    **Request**
+
+    None
+
+    **Response**
+
+    :status 200: successfully completed.
+    :param guid: The in-app product ID.
+    :type guid: string
+    :param name: The name for the in-app product.
+    :type name: string
+    :param logo_url: URL to a logo for the product.
+    :type logo_url: string
+    :param price_id: ID for the :ref:`price tier <price-tiers>`.
+    :type price_id: int
+
+.. _`IETF language tag`: http://en.wikipedia.org/wiki/IETF_language_tag
+
 
 Preparing payment
 =================
 
-Produces the JWT that is passed to `navigator.mozPay`_.
+Produces the JWT for purchasing an app that is passed to `navigator.mozPay`_.
 
 .. note:: Authentication is required.
 
-.. http:post:: /api/v1/webpay/prepare/
+.. http:post:: /api/v2/webpay/prepare/
 
     **Request**
 
@@ -284,7 +450,7 @@ Produces the JWT that is passed to `navigator.mozPay`_.
 
         {
             "app": "337141: Something Something Steamcube!",
-            "contribStatusURL": "https://marketplace.firefox.com/api/v1/webpay/status/123/",
+            "contribStatusURL": "https://marketplace.firefox.com/api/v2/webpay/status/123/",
             "resource_uri": "",
             "webpayJWT": "eyJhbGciOiAiSFMy... [truncated]",
         }
@@ -296,9 +462,42 @@ Produces the JWT that is passed to `navigator.mozPay`_.
     :type contribStatusURL: string
 
     :status 201: successfully completed.
+    :status 400: app not found.
     :status 401: not authenticated.
     :status 403: app cannot be purchased.
     :status 409: app already purchased.
+
+
+Produces the JWT for purchasing an in-app product that is passed to `navigator.mozPay`_.
+
+.. note:: Feature not complete.
+
+.. note:: Authentication is not required or supported.
+
+.. http:post:: /api/v2/webpay/inapp/prepare/
+
+    **Request**
+
+    :param string inapp: the guid the in-app product to be purchased.
+
+    **Response**
+
+    .. code-block:: json
+
+        {
+            "contribStatusURL": "https://marketplace.firefox.com/api/v2/webpay/status/123/",
+            "webpayJWT": "eyJhbGciOiAiSFMy... [truncated]",
+        }
+
+    :param webpayJWT: the JWT to pass to `navigator.mozPay`_
+    :type webpayJWT: string
+    :param contribStatusURL: the URL to poll for
+        :ref:`payment-status-label`.
+    :type contribStatusURL: string
+
+    :status 201: successfully completed.
+    :status 400: in-app product not found.
+
 
 Signature Check
 ===============
@@ -307,7 +506,7 @@ Retrieve a JWT that can be used to check the signature for making payments.
 This is intended for system health checks and requires no authorization.
 You can pass the retrieved JWT to the `WebPay`_ API to verify its signature.
 
-.. http:post:: /api/v1/webpay/sig_check/
+.. http:post:: /api/v2/webpay/sig_check/
 
     **Request**
 
@@ -331,9 +530,7 @@ You can pass the retrieved JWT to the `WebPay`_ API to verify its signature.
 Payment status
 ==============
 
-.. note:: Authentication is required.
-
-.. http:get:: /api/v1/webpay/status/(string:uuid)/
+.. http:get:: /api/v2/webpay/status/(string:uuid)/
 
     **Request**
 
@@ -345,10 +542,26 @@ Payment status
 
     :param status: ``complete`` or ``incomplete``
     :type status: string
+    :param receipt: for in-app purchases only, a `Web application receipt`_
+    :type status: string
+
+    Example:
+
+    .. code:: json
+
+        {"status": "complete",
+         "receipt": null}
+
+    In-app purchases will include a receipt:
+
+    .. code:: json
+
+        {"status": "complete",
+         "receipt": "eyJhbGciOiAiUlM1MTI...0Xg0EQfUfH121U7b_tqAYaY"}
 
     :status 200: request processed, check status for value.
-    :status 401: not authenticated.
-    :status 403: not authorized to view details on that transaction.
+
+.. _`Web application receipt`: https://wiki.mozilla.org/Apps/WebApplicationReceipt
 
 Installing
 ==========
@@ -359,7 +572,7 @@ record the install.
 Free apps
 ---------
 
-.. http:post:: /api/v1/installs/record/
+.. http:post:: /api/v2/installs/record/
 
     **Request**:
 
@@ -368,10 +581,10 @@ Free apps
 
     **Response**:
 
-    :statuscode 201: successfully completed.
-    :statuscode 202: an install was already recorded for this user and app, so
+    :status 201: successfully completed.
+    :status 202: an install was already recorded for this user and app, so
         we didn't bother creating another one.
-    :statuscode 403: app is not public, install not allowed.
+    :status 403: app is not public, install not allowed.
 
 
 Premium apps
@@ -379,7 +592,7 @@ Premium apps
 
 .. note:: Authentication is required.
 
-.. http:post:: /api/v1/receipts/install/
+.. http:post:: /api/v2/receipts/install/
 
     Returns a receipt if the app is paid and a receipt should be installed.
 
@@ -394,10 +607,10 @@ Premium apps
 
         {"receipt": "eyJhbGciOiAiUlM1MT...[truncated]"}
 
-    :statuscode 201: successfully completed.
-    :statuscode 401: not authenticated.
-    :statuscode 402: payment required.
-    :statuscode 403: app is not public, install not allowed.
+    :status 201: successfully completed.
+    :status 401: not authenticated.
+    :status 402: payment required.
+    :status 403: app is not public, install not allowed.
 
 Developers
 ~~~~~~~~~~
@@ -405,18 +618,20 @@ Developers
 Developers of the app will get a special developer receipt that is valid for
 24 hours and does not require payment. See also `Test Receipts`_.
 
+.. _`Test Receipts`: https://developer.mozilla.org/en-US/Marketplace/Monetization/Validating_a_receipt#Test_receipts
+
 Reviewers
 ~~~~~~~~~
 
 Reviewers should not use this API.
 
-Test Receipts
-=============
+Receipt Testing
+===============
 
 Returns test receipts for use during testing or development. The returned
 receipt will have type `test-receipt`. Only works for hosted apps.
 
-.. http:post:: /api/v1/receipts/test/
+.. http:post:: /api/v2/receipts/test/
 
     Returns a receipt suitable for testing your app.
 
@@ -439,28 +654,59 @@ receipt will have type `test-receipt`. Only works for hosted apps.
 Receipt reissue
 ===============
 
-This is currently not implemented `awaiting bug <https://bugzilla.mozilla.org/show_bug.cgi?id=757226>`_. It will
-be used for `replacing receipts <https://wiki.mozilla.org/Apps/WebApplicationReceiptRefresh>`_.
+Takes an expired receipt and returns a reissued receipt with updated expiry
+times.
 
-.. http:post:: /api/v1/receipts/reissue/
+.. http:post:: /api/v2/receipts/reissue/
+
+    **Request**
+
+    :param: the body of the request must contain the receipt, in the same way
+        that the `receipt verification`_ endpoint does.
 
     **Response**:
 
+    For a good response:
+
     .. code-block:: json
 
-        {"receipt": "", "status": "not-implemented"}
+        {
+            "reason": "",
+            "receipt": "eyJhbGciOiAiUlM1MT...[truncated]",
+            "status": "expired"
+        }
 
+    For a failed response:
+
+    .. code-block:: json
+
+        {
+            "reason": "NO_PURCHASE",
+            "receipt": "",
+            "status": "invalid"
+        }
+
+    :param reason: only present if the request failed, contains the reason
+        for failure, see `receipt verification`_ docs.
+    :type reason: string
     :param receipt: the receipt, currently blank.
     :type receipt: string
-    :param status: one of ``not-implemented``.
+    :param status: one of ``ok``, ``expired``, ``invalid``, ``pending``,
+        ``refunded``
     :type status: string
+
     :status 200: successfully completed.
+    :status 400: the receipt was not valid or not in an expired state, examine
+        the response to see the cause. The messages and the causes are the
+        same as for `receipt verification`_.
+
+.. _price-tiers:
 
 
-Pay Tiers
-==========
+Price Tiers
+===========
 
-.. http:get:: /api/v1/webpay/prices/
+.. http:get:: /api/v2/webpay/prices/
 
     Gets a list of pay tiers from the Marketplace.
 
@@ -475,13 +721,15 @@ Pay Tiers
 
     :param meta: :ref:`meta-response-label`.
     :type meta: object
-    :param objects: A :ref:`listing <objects-response-label>` of :ref:`apps <pay-tier-response-label>`.
+    :param objects: A :ref:`listing <objects-response-label>` of :ref:`pay tiers <pay-tier-response-label>`.
     :type objects: array
-    :statuscode 200: successfully completed.
+    :status 200: successfully completed.
 
 .. _pay-tier-response-label:
 
-.. http:get:: /api/v1/webpay/prices/(int:id)/
+.. http:get:: /api/v2/webpay/prices/(int:id)/
+
+    Returns a specific pay tier.
 
     **Response**
 
@@ -512,7 +760,7 @@ Pay Tiers
                 "paid": true
             }],
             "localized": {},
-            "resource_uri": "/api/v1/webpay/prices/1/",
+            "resource_uri": "/api/v2/webpay/prices/1/",
             "created": "2011-09-29T14:15:08",
             "modified": "2013-05-02T14:43:58"
         }
@@ -525,9 +773,9 @@ Pay Tiers
     :type localized: object
     :param tier: the id of the tier.
     :type tier: int
-    :param method: the payment method.
+    :param method: the :ref:`payment method <payment-methods-label>`.
     :type method: int
-    :param provider: payment provider, currently only ``1`` is supported.
+    :param provider: the :ref:`payment provider <provider-label>`.
     :type provider: int
     :param pricePoint: this is the value used for in-app payments.
     :type pricePoint: string
@@ -536,8 +784,25 @@ Pay Tiers
     :type dev: boolean
     :param paid: if ``true`` this tier can be used for payments by users.
     :type paid: boolean
-    :statuscode 200: successfully completed.
+    :status 200: successfully completed.
 
+.. _payment-methods-label:
+
+Payment methods:
+
+* ``0`` Carrier billing only
+* ``1`` Credit card only
+* ``2`` Both carrier billing and credit card
+
+.. _provider-label:
+
+Provider:
+
+* ``0`` Paypal, not currently supported
+* ``1`` Bango
+* ``2`` `Reference implementation`_, not currently supported outside of
+  development instances
+* ``3`` Boku
 
 .. _localized-tier-label:
 
@@ -606,7 +871,7 @@ safe way. This API lets WebPay cache and later retrieve icon URLs.
     ``ProductIcon:Create``  permission.
 
 
-.. http:get:: /api/v1/webpay/product/icon/
+.. http:get:: /api/v2/webpay/product/icon/
 
     Gets a list of cached product icons.
 
@@ -626,11 +891,11 @@ safe way. This API lets WebPay cache and later retrieve icon URLs.
     :type meta: object
     :param objects: A :ref:`listing <objects-response-label>` of :ref:`product icons <product-icon-response-label>`.
     :type objects: array
-    :statuscode 200: successfully completed.
+    :status 200: successfully completed.
 
 .. _product-icon-response-label:
 
-.. http:get:: /api/v1/webpay/product/icon/(int:id)/
+.. http:get:: /api/v2/webpay/product/icon/(int:id)/
 
     **Response**
 
@@ -638,7 +903,7 @@ safe way. This API lets WebPay cache and later retrieve icon URLs.
 
         {
             "url": "http://marketplace-cdn/product-icons/0/1.png",
-            "resource_uri": "/api/v1/webpay/product/icon/1/",
+            "resource_uri": "/api/v2/webpay/product/icon/1/",
             "ext_url": "http://appserver/media/icon.png",
             "ext_size": 64,
             "size": 64
@@ -646,9 +911,9 @@ safe way. This API lets WebPay cache and later retrieve icon URLs.
 
     :param url: Absolute URL of the cached product icon.
     :type url: string
-    :statuscode 200: successfully completed.
+    :status 200: successfully completed.
 
-.. http:post:: /api/v1/webpay/product/icon/
+.. http:post:: /api/v2/webpay/product/icon/
 
     Post a new product icon URL that should be cached.
     This schedules an icon to be processed but does not return any object data.
@@ -664,9 +929,9 @@ safe way. This API lets WebPay cache and later retrieve icon URLs.
 
     **Response**
 
-    :statuscode 202: New icon accepted. Deferred processing will begin.
-    :statuscode 400: Some required fields were missing or invalid.
-    :statuscode 401: The API user is unauthorized to cache product icons.
+    :status 202: New icon accepted. Deferred processing will begin.
+    :status 400: Some required fields were missing or invalid.
+    :status 401: The API user is unauthorized to cache product icons.
 
 
 Transaction failure
@@ -675,7 +940,7 @@ Transaction failure
 .. note:: Requires authenticated users to have the Transaction:NotifyFailure
     permission. This API is used by internal clients such as WebPay_.
 
-.. http:patch:: /api/v1/webpay/failure/(int:transaction_id)/
+.. http:patch:: /api/v2/webpay/failure/(int:transaction_id)/
 
     Notify the app developers that our attempts to call the postback or
     chargebacks URLs from `In-app Payments`_ failed. This will send an
@@ -684,9 +949,11 @@ Transaction failure
     **Response**
 
     :status 202: Notification will be sent.
-    :statuscode 401: The API user is not authorized to report failures.
+    :status 403: The API user is not authorized to report failures.
 
 .. _CORS: https://developer.mozilla.org/en-US/docs/HTTP/Access_control_CORS
 .. _WebPay: https://github.com/mozilla/webpay
 .. _In-app Payments: https://developer.mozilla.org/en-US/docs/Apps/Publishing/In-app_payments
 .. _navigator.mozPay: https://wiki.mozilla.org/WebAPI/WebPayment
+.. _Reference Implementation: http://zippypayments.readthedocs.org/en/latest/
+.. _receipt verification: https://wiki.mozilla.org/Apps/WebApplicationReceipt#Interaction_with_the_verify_URL

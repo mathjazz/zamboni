@@ -14,10 +14,10 @@
 
 <header class="c">
   <h1 class="addon"{{ product.name|locale_html }}>
-    <img src="{{ product.icon_url }}" class="icon">
+    <img src="{{ product.get_icon_url(32) }}" class="icon">
     <span>{{ product.name }}</span>
   </h1>
-  <p class="author">{{ _('by') }} {{ users_list(product.listed_authors) }}</p>
+  <p class="author">{{ _('by') }} {{ product.listed_authors|join(', ', attribute='email') }}</p>
 </header>
 
 <div id="scroll_sidebar_parent">
@@ -26,13 +26,20 @@
       <li class="currently_viewing_warning"></li>
       <li>
         <ul>
-          <li><b>{{ _('Status') }}</b>: {{ amo.STATUS_CHOICES[product.status] }}</li>
+          <li><b>{{ _('Status') }}</b>: {{ mkt.STATUS_CHOICES[product.status] }}</li>
           {% if product.in_rereview_queue() %}
             <li>&middot; <b id="queue-rereview">{{ _('In re-review queue') }}</b></li>
           {% endif %}
           {% if product.in_escalation_queue() %}
             <li>&middot; <b id="queue-escalation">{{ _('In escalation queue') }}</b></li>
           {% endif %}
+          {% if product.in_tarako_queue() %}
+            <li>&middot; <b id="queue-tarako">{{ _('In Tarako queue') }}</b></li>
+          {% endif %}
+          {% if product.in_china_queue() %}
+            <li>&middot; <b id="queue-china">{{ _('In China queue') }}</b></li>
+          {% endif %}
+
         </ul>
       </li>
     </ul>
@@ -49,7 +56,7 @@
       </li>
       <li><a href="{{ product.get_detail_url() }}" class="button">
         {{ _('View Listing') }}</a></li>
-      {% if is_admin %}
+      {% if is_admin and not product.is_deleted %}
         <li><a href="{{ product.get_dev_url() }}" class="button manage">
           {{ _('Edit Listing') }}</a></li>
       {% endif %}
@@ -63,141 +70,34 @@
   </div>
 </div>
 
-<div id="addon" data-id="{{ product.id }}" data-url="{{ url('editors.review_viewing') }}">
+<div id="addon" data-id="{{ product.id }}" data-url="{{ url('reviewers.review_viewing') }}">
 
 <section class="island alpha summary">
-  {% if DESKTOP %}
+  <div class="reviewers-desktop">
     {% include 'reviewers/includes/details.html' %}
-  {% else %}
+  </div>
+  <div class="reviewers-mobile">
     {% include 'reviewers/includes/mobile_details.html' %}
-  {% endif %}
+  </div>
 </section>
 
-  <div id="history" class="island alpha c">
-    <div id="review-files-header">
-      <h3>
-        {{ _('App History') }}
-      </h3>
-    </div>
-    <table id="review-files" class="item-history">
-      {% for i in range(pager.object_list.count(), 0, -1) %}
-      {% set version = pager.object_list[i-1] %}
-      <tr class="listing-header">
-        <th colspan="2">
-          {% trans version = version.version, created = version.created|datetime, version_status = version_status(product, version), developer_name = version.developer_name %}
-          Version {{ version }} &middot; {{ developer_name }} &middot; {{ created }} <span class="light">&middot; {{ version_status }}</span>
-          {% endtrans %}
-        </th>
-      </tr>
-      <tr class="listing-body">
-        {% if product.is_packaged %}
-          <td class="files">
-            {% set version_files = version.all_files %}
-            {% if version_files %}
-              <div><strong>{{ _('Files in this version:') }}</strong></div>
-              <ul>
-              {% for file in version_files %}
-              <li class="file-info">
-                <span class="light">
-                  <div>
-                    {{ file_review_status(product, file) }}
-                  </div>
-                  <a href="{{ url('mkt.developers.apps.file_validation', product.app_slug, file) }}">{{ _('Validation') }}</a>
-                  &middot;
-                  <a href="{{ url('mkt.files.list', file) }}">{{ _('Contents') }}</a>
-                  {% if show_diff and version == product.latest_version %}
-                    &middot;
-                    <a class="compare" href="{{ url('mkt.files.compare', file, file_compare(file, show_diff)) }}">{{ _('Compare') }}</a>
-                  {% endif %}
-                </span>
-              </li>
-              {% endfor %}
-              </ul>
-            {% endif %}
-          </td>
-        {% endif %}
-        <td>
-          <table class="activity">
-            {% if version.releasenotes %}
-            <tr>
-              <th>{{ _('Version Notes') }}</th>
-              <td class="activity_version">
-                <div class="history-notes">
-                  {{ version.releasenotes|nl2br }}
-                </div>
-              </td>
-            </tr>
-            {% endif %}
-            {% if version.approvalnotes %}
-            <tr>
-              <th>{{ _('Notes for Reviewers') }}</th>
-              <td class="activity_approval">
-                <div class="history-notes">
-                  {{ version.approvalnotes|nl2br|urlize(100) }}
-                </div>
-              </td>
-            </tr>
-            {% endif %}
-            {% set records = version.all_activity %}
-            {% for record_version in records %}
-              {% set record = record_version.activity_log %}
-              <tr>
-                <th>
-                  {{ record.log.short }}
-                </th>
-                <td>
-                  {% trans user=record.user|user_link,
-                           date=record.created|babel_datetime %}
-                    <div>By {{ user }} on {{ date }}</div>
-                  {% endtrans %}
-                  {% if record.details %}
-                    <div class="log-group log-comments">{{ record.details.comments|nl2br }}</div>
-                  {% endif %}
-                  {% set attachments = record.activitylogattachment_set.all() %}
-                  {% if attachments %}
-                    <div class="log-group log-attachments">
-                      <strong>Attachments</strong>
-                      <ul>
-                        {% for attachment in attachments %}
-                          <li{% if attachment.is_image() %} class="image"{% endif %}>
-                            <a href="{{ attachment.get_absolute_url() }}">{{ attachment.display_name() }}</a>
-                          </li>
-                        {% endfor %}
-                      </ul>
-                    </div>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-            {% if not version.releasenotes and not version.approvalnotes and not records %}
-            <tr>
-              <td class="no-activity">
-                {{ _('This version has not been reviewed.') }}
-              </td>
-            </tr>
-            {% endif %}
-          </table>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
+{% include 'reviewers/includes/review_history.html' %}
 
 <form method="POST" enctype="multipart/form-data">
   {{ csrf() }}
   {{ attachment_formset.management_form }}
+  {{ testedon_formset.management_form }}
   {# form #}
   <div id="review-actions" class="review-actions">
     <div class="action_nav">
       <ul>
-        {% set unrated = waffle.switch('iarc') and not product.is_rated() %}
+        {% set incomplete = product.has_incomplete_status() %}
         {% for (setting, action) in form.fields.action.choices %}
-          {% set unrated_no_approve = unrated and setting == 'public' %}
-          <li{% if unrated_no_approve %} class="disabled"{% endif %}>
+          <li{% if setting == 'public' and incomplete %} class="disabled"{% endif %}>
             <label for>
               <input type="radio" name="action" value="{{ setting }}">
-              {% if unrated_no_approve %}
-                {{ _('App not rated') }}
+              {% if setting == 'public' and incomplete %}
+                {{ _('App submission incomplete') }}
               {% else %}
                 {{ action }}
               {% endif %}
@@ -207,6 +107,7 @@
       </ul>
       {{ form.action.errors }}
       {{ attachment_formset.non_form_errors() }}
+      {{ testedon_formset.non_form_errors() }}
     </div>
 
     <div id="review-actions-form">
@@ -228,22 +129,37 @@
         {{ form.canned_response }}
       </div>
 
-      <div class="review-actions-section review-actions-tested data-toggle"
-           data-value="{{ actions_minimal|join("|") }}">
-        <strong>{{ _('Tested with:') }}</strong>
-        <label for="{{ form.device_types.auto_id }}">
-          {{ _('Device Types:') }}
-        </label>
-        {{ form.device_types }}
-        <label for="{{ form.browsers.auto_id }}">
-          {{ _('Browsers:') }}
-        </label>
-        {{ form.browsers }}
-        {{ form.device_types.errors }}
-        {{ form.browsers.errors }}
+      <div class="review-actions-section review-actions-testedon">
+        <strong>{{ _('Tested on:') }}</strong>
+        {% for testedon_form_errors in testedon_formset.errors %}
+          {% for error in testedon_form_errors.values() %}
+            {{ error }}
+          {% endfor %}
+        {% endfor %}
+        {% set testedon_forms = testedon_formset.forms + [testedon_formset.empty_form] %}
+        {% for testedon_form in testedon_forms %}
+          <div class="formset{% if loop.last %} empty hidden{% endif %}">
+            <label for="{{ testedon_form.device_type.auto_id }}">
+              {{ testedon_form.device_type.label }}
+            </label>
+            {{ testedon_form.device_type }}
+            {{ testedon_form.device_type.errors }}
+            <label for="{{ testedon_form.device.auto_id }}">
+              {{ testedon_form.device.label }}
+            </label>
+            {{ testedon_form.device }}
+            {{ testedon_form.device.errors }}
+            <label for="{{ testedon_form.version.auto_id }}">
+              {{ testedon_form.version.label }}
+            </label>
+            {{ testedon_form.version }}
+            {{ testedon_form.version.errors }}
+          </div>
+        {% endfor %}
+        <a href="#" class="add-row">{{ _('Add device') }}</a>
       </div>
-      <div class="review-actions-section review-actions-attachments hidden">
-      <div class="review-actions-section review-actions-attachments">
+
+      <div class="review-actions-section review-actions-attachments filesystem-only">
         {% set max_attachment_size = attachment_formset[0].max_upload_size|filesizeformat %}
         <strong>{{ _('Attach a screenshot or log file (max {0})'|f(max_attachment_size)) }}</strong>
         {% for attachment_form_errors in attachment_formset.errors %}
@@ -276,6 +192,13 @@
         {{ form.device_override }}
         {{ form.device_override.errors}}
       </div>
+      <div class="review-actions-section">
+        {{ form.is_showcase }}
+        <label for="id_is_showcase">
+          {{ form.is_showcase.label }}
+        </label>
+        {{ form.is_showcase.errors }}
+      </div>
       {% if appfeatures_form %}
       <div class="review-actions-section review-actions-options review-actions-features-override data-toggle" data-value="public">
         <strong>{{ _('Minimum Requirements Override:') }}</strong>
@@ -286,20 +209,6 @@
         </ul>
       </div>
       {% endif %}
-      {% if waffle.switch('comm-dashboard') %}
-      <div data-default-visibility="{{ default_visibility|json }}" class="review-actions-section review-actions-options review-actions-visibility">
-        <strong>{{ _('Make this action visible to') }}</strong>
-        {{ form.action_visibility }}
-        {{ form.action_visibility.errors }}
-      </div>
-      {% endif %}
-      <div class="review-actions-section">
-        {{ form.notify }}
-        <label for="id_notify">
-          {{ form.notify.label }}
-        </label>
-        {{ form.notify.errors }}
-      </div>
       <div class="review-actions-section review-actions-save">
         <span class="currently_viewing_warning">
           {% trans %}

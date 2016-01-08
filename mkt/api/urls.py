@@ -1,71 +1,53 @@
+"""
+API URL versioning goes here.
+
+The "current" version should be marked via the empty pattern. Each other
+version's URLs should be loaded in this way, with the most recent versions
+first:
+
+    url('^v2/', include('mkt.api.v2.urls')),
+    url('^v1/', include('mkt.api.v1.urls')),
+
+Each version's URLs should live in its own submodule, and should inherit from
+the previous version's patterns. Example:
+
+    from mkt.api.v1.urls import urlpatterns as v1_urls
+
+    router = SimpleRouter()
+    router.register(r'widgets', WidgetViewSet, base_name='widget')
+
+    urlpatterns = patterns('',
+        url(r'^widgets/', include(feed.urls)),
+    ) + v1_urls
+
+Strategies for deprecating and removing endpoints are currently being discussed
+in bug 942934.
+"""
+
 from django.conf import settings
 from django.conf.urls import include, patterns, url
 
-from rest_framework.routers import SimpleRouter
-from tastypie.api import Api
-from tastypie_services.services import (ErrorResource, SettingsResource)
 
-from mkt.submit.api import PreviewResource, StatusResource, ValidationResource
-from mkt.api.base import AppRouter, handle_500, SlugRouter
-from mkt.api.resources import (AppResource, CarrierResource, CategoryViewSet,
-                               ConfigResource, error_reporter,
-                               PriceTierViewSet, PriceCurrencyViewSet,
-                               RefreshManifestViewSet, RegionResource)
-from mkt.collections.views import CollectionImageViewSet, CollectionViewSet
-from mkt.features.views import AppFeaturesList
-from mkt.ratings.resources import RatingResource
-from mkt.search.api import SearchResource, SuggestionsResource
+def include_version(version):
+    """
+    Returns an include statement containing URL patterns for the passed API
+    version. Adds a namespace if that version does not match
+    `settings.API_CURRENT_VERSION`, to ensure that reversed URLs always use the
+    current version.
+    """
+    kwargs = {}
+    if version != settings.API_CURRENT_VERSION:
+        kwargs['namespace'] = 'api-v%d' % version
+    return include('mkt.api.v%d.urls' % version, **kwargs)
 
 
-api = Api(api_name='apps')
-api.register(ValidationResource())
-api.register(AppResource())
-api.register(PreviewResource())
-api.register(SearchResource())
-api.register(SuggestionsResource())
-api.register(StatusResource())
-api.register(RatingResource())
+urlpatterns = patterns(
+    '',
+    url('^v2/', include_version(2)),
+    url('^v1/', include_version(1)),
 
-
-rocketfuel = SimpleRouter()
-rocketfuel.register(r'collections', CollectionViewSet,
-                    base_name='collections')
-subcollections = AppRouter()
-subcollections.register('image', CollectionImageViewSet,
-                        base_name='collection-image')
-
-apps = SlugRouter()
-apps.register(r'category', CategoryViewSet, base_name='app-category')
-subapps = AppRouter()
-subapps.register('refresh-manifest', RefreshManifestViewSet,
-                 base_name='app-refresh-manifest')
-
-services = Api(api_name='services')
-services.register(ConfigResource())
-services.register(RegionResource())
-services.register(CarrierResource())
-
-if settings.ALLOW_TASTYPIE_SERVICES:
-    services.register(ErrorResource(set_handler=handle_500))
-    if getattr(settings, 'CLEANSED_SETTINGS_ACCESS', False):
-        services.register(SettingsResource())
-
-svcs = SimpleRouter()
-svcs.register(r'price-tier', PriceTierViewSet,
-              base_name='price-tier')
-svcs.register(r'price-currency', PriceCurrencyViewSet,
-              base_name='price-currency')
-
-urlpatterns = patterns('',
-    url(r'^', include(api.urls)),
-    url(r'^apps/', include(apps.urls)),
-    url(r'^apps/app/', include(subapps.urls)),
-    url(r'^', include(services.urls)),
-    url(r'^services/', include(svcs.urls)),
-    url(r'^fireplace/report_error', error_reporter, name='error-reporter'),
-    url(r'^rocketfuel/', include(rocketfuel.urls)),
-    url(r'^rocketfuel/collections/', include(subcollections.urls)),
-    url(r'^apps/', include('mkt.versions.urls')),
-    url(r'^apps/features/', AppFeaturesList.as_view(),
-        name='api-features-feature-list')
+    # Necessary for backwards-compatibility. We assume that this always means
+    # API version 1. The namespace ensures that no URLS are ever reversed to
+    # this pattern. Yummycake because we already ate the tastypie.
+    url('', include('mkt.api.v1.urls', namespace='yummycake')),
 )

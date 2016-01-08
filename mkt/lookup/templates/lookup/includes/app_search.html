@@ -2,18 +2,10 @@
   <form method="post" class="lookup-search-form" id="app-search-form">
     {{ csrf() }}
     <label>
-      {% if is_operator() %}
-        {{ _('App Lookup') }}
-      {% else %}
-        <select name="type">
-          {% set selected = app and app.type or amo.ADDON_WEBAPP %}
-          {% for k, v in amo.ADDON_TYPE.iteritems() %}
-            {% if k > 0 %}<option value="{{ k }}"{% if k == selected %} selected{% endif %}>{{ v }} {{ _('Lookup') }}</option>{% endif %}
-          {% endfor %}
-        </select>
-      {% endif %}
+      {{ _('App Lookup') }}
     </label>
     <input type="search" id="app-search" name="q" autocomplete="off">
+    <input type="hidden" id="app-lang" name="lang" autocomplete="off" value="{{ request.LANG|default('en-US') }}">
     <button>{{ _('Search') }}</button>
     <ul id="app-search-suggestions" class="search-suggestions"
         data-src="{{ url('lookup.app_search') }}"></ul>

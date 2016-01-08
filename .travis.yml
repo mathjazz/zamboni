@@ -1,0 +1,30 @@
+language: python
+sudo: false
+python:
+  - "2.7"
+services:
+  - redis-server
+before_install:
+  - scripts/travis_es.sh
+  - /tmp/elasticsearch/elasticsearch-1.6.2/bin/elasticsearch -d -D es.path.data=/tmp -D es.gateway.type=none -D es.index.store.type=memory -D es.discovery.zen.ping.multicast.enabled=false
+install:
+  - pip install -U pip wheel
+  - pip install --no-deps -r requirements/test.txt --find-links https://pyrepo.stage.mozaws.net/wheelhouse/
+  - npm install
+before_script:
+  - mysql -e 'create database zamboni;'
+  - flake8 . --exclude='node_modules,commonplace_projects,docs,.git,migrations'
+  - ./manage.py compress_assets
+script:
+  - REUSE_DB=1 ./manage.py test lib mkt --noinput --logging-clear-handlers --with-blockage --with-nicedots
+notifications:
+  irc:
+    channels:
+      - "irc.mozilla.org#amo-bots"
+    on_success: change
+    on_failure: always
+cache:
+    directories:
+        - node_modules
+        - /tmp/elasticsearch
+        - $HOME/.cache/pip

@@ -1,10 +1,15 @@
-from jingo import register, env
+import re
+
 import jinja2
-from tower import ugettext as _
-import waffle
+from jingo import register
+from langid import classify
+
+from django.conf import settings
 
 import mkt
+from mkt.site.utils import env
 from mkt.submit.models import AppSubmissionChecklist
+from mkt.translations.utils import find_language
 
 
 def del_by_key(data, delete):
@@ -12,25 +17,19 @@ def del_by_key(data, delete):
     data = list(data)
     for idx, item in enumerate(data):
         if ((isinstance(item[0], basestring) and item[0] == delete) or
-            (isinstance(item[0], (list, tuple)) and item[0] in delete)):
+                (isinstance(item[0], (list, tuple)) and item[0] in delete)):
             del data[idx]
     return data
 
 
 @register.function
 def progress(request, addon, step):
-    if addon and not addon.is_webapp():
-        return NotImplementedError
-
     steps = list(mkt.APP_STEPS)
-    if waffle.switch_is_active('iarc'):
-        # TODO: uncomment next_steps to mkt/constants/submit.
-        steps[3] = ('next_steps', _('Next Steps'))
 
     completed = []
 
     # TODO: Hide "Developer Account" step if user already read Dev Agreement.
-    #if request.amo_user.read_dev_agreement:
+    # if request.user.read_dev_agreement:
     #    steps = del_by_key(steps, 'terms')
 
     if addon:
@@ -44,5 +43,37 @@ def progress(request, addon, step):
         completed = ['terms']
 
     c = dict(steps=steps, current=step, completed=completed)
-    t = env.get_template('submit/helpers/progress.html').render(**c)
+    t = env.get_template('submit/helpers/progress.html').render(c)
     return jinja2.Markup(t)
+
+
+def guess_language(text):
+    """
+    Passed a string, returns a two-tuple indicating the language of that
+    string, and the confidence on a 0-1.0 scale.
+
+    If the confidence is below 0.7, or below 0.9 in a string of 3 words or
+    less, will return None.
+    """
+    guess, confidence = classify(text)
+    if confidence < 0.7:
+        return None
+    elif confidence < 0.9:
+        word_count = len(re.findall(r"[\w']+", text))
+        if word_count <= 3:
+            return None
+    return guess
+
+
+def string_to_translatedfield_value(text):
+    """
+    Passed a string, will return a dict mapping 'language': string, suitable to
+    be assigned to the value of a TranslatedField. If the language can not be
+    determined with confidence, will assume English.
+    """
+    guess = guess_language(text)
+    if guess:
+        lang = find_language(guess).lower()
+        if lang:
+            return {lang: text}
+    return {settings.SHORTER_LANGUAGES['en'].lower(): text}

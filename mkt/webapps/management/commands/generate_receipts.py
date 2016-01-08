@@ -1,15 +1,13 @@
-from optparse import make_option
-
-from django.core.management.base import BaseCommand, CommandError
 import json
 import os
 import tempfile
 import time
+from optparse import make_option
 
-import amo
-from addons.models import Addon
-from users.models import UserProfile
-from mkt.webapps.models import Installed
+from django.core.management.base import BaseCommand, CommandError
+
+from mkt.users.models import UserProfile
+from mkt.webapps.models import Installed, Webapp
 
 
 class Command(BaseCommand):
@@ -29,8 +27,9 @@ class Command(BaseCommand):
                     dest='action', help='Action: create, delete.'),
         make_option('--dir', action='store', type='string',
                     dest='dir', help='Directory to read or write data.'),
-        make_option('--number', action='store', type='int', default='10',
-            dest='number', help='Number of receipts, default: %default')
+        make_option('--number', action='store', type='int',
+                    default='10', dest='number',
+                    help='Number of receipts, default: %default')
     )
 
     def filename(self, rest):
@@ -64,21 +63,19 @@ class Command(BaseCommand):
 
         for x in xrange(number):
             name = 'generate-receipt-%s-%s' % (stamp, x)
-            user = UserProfile.objects.create(email='%s@mozilla.com' % name,
-                                              username=name)
+            user = UserProfile.objects.create(email='%s@mozilla.com' % name)
             created['users'].append(user.pk)
 
         for x in xrange(number):
             name = 'generate-receipt-%s-%s' % (stamp, x)
-            addon = Addon.objects.create(name=name,
-                                         type=amo.ADDON_WEBAPP,
-                                         manifest_url='http://a.com/m.webapp')
+            addon = Webapp.objects.create(name=name,
+                                          manifest_url='http://a.com/m.webapp')
             created['webapps'].append(addon.pk)
 
         for x in xrange(number):
             installed = Installed.objects.create(
-                            addon_id=created['webapps'][x],
-                            user_id=created['users'][x])
+                addon_id=created['webapps'][x],
+                user_id=created['users'][x])
             created['installed'].append(installed.pk)
             filename = self.filename('%s.%s.receipt' %
                                      (created['webapps'][x], x))
@@ -90,6 +87,6 @@ class Command(BaseCommand):
         """Cleans up once the load testing is run and deletes the records."""
         data = json.loads(open(self.filename('created.json'), 'r').read())
         for obj, model in (['installed', Installed],
-                           ['webapps', Addon],
+                           ['webapps', Webapp],
                            ['users', UserProfile]):
             model.objects.filter(pk__in=data[obj]).delete()

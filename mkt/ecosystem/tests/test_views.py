@@ -1,24 +1,32 @@
+from django.core.urlresolvers import reverse
+
 import basket
 import mock
 from nose.tools import eq_
 from pyquery import PyQuery as pq
 
-import amo.tests
-from amo.urlresolvers import reverse
+import mkt.site.tests
+
+from mkt.ecosystem.urls import APP_SLUGS
 
 
 VIEW_PAGES = (
-    'build_app_generator', 'build_apps_offline', 'build_dev_tools',
-    'build_ffos', 'build_game_apps', 'build_intro', 'build_manifests',
-    'build_mobile_developers', 'build_quick', 'build_reference',
-    'build_tools', 'build_web_developers', 'design_concept',
-    'design_fundamentals', 'design_patterns', 'design_ui', 'dev_phone',
-    'partners', 'publish_deploy', 'publish_hosted', 'publish_packaged',
-    'publish_review', 'publish_submit', 'support', 'build_payments',
+    'partners', 'support'
+)
+
+REDIRECT_PAGES = (
+    'app_manager', 'build_app_generator', 'build_apps_offline',
+    'build_dev_tools', 'build_ffos', 'build_game_apps', 'build_intro',
+    'build_manifests', 'build_mobile_developers', 'build_payments',
+    'build_quick', 'build_reference', 'build_tools', 'build_web_developers',
+    'design_concept', 'design_fundamentals', 'design_patterns', 'design_ui',
+    'dev_phone', 'ffos_guideline', 'firefox_os_simulator', 'publish_deploy',
+    'publish_hosted', 'publish_packaged', 'publish_payments', 'publish_review',
+    'publish_submit', 'responsive_design'
 )
 
 
-class TestLanding(amo.tests.TestCase):
+class TestLanding(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.url = reverse('ecosystem.landing')
@@ -57,27 +65,33 @@ class TestLanding(amo.tests.TestCase):
              'country': 'us'}
         r = self.client.post(self.url, d)
         eq_(r.status_code, 200)
-        eq_(pq(r.content)('.notification-box.error h2').text(),
-                          'We apologize, but an error occurred in our '
-                          'system. Please try again later.')
+        eq_(pq(r.content)('.notification-box.error').text(),
+            'We apologize, but an error occurred in our '
+            'system. Please try again later.')
         assert subscribe_mock.called
 
 
-class TestDevHub(amo.tests.TestCase):
+class TestDevHub(mkt.site.tests.TestCase):
 
     def test_content_pages(self):
         for page in VIEW_PAGES:
             r = self.client.get(reverse('ecosystem.%s' % page))
-            eq_(r.status_code, 200)
+            eq_(r.status_code, 200, '%s: status %s' % (page, r.status_code))
             self.assertTemplateUsed(r, 'ecosystem/%s.html' % page)
 
-    def test_valid_reference_app(self):
-        r = self.client.get(reverse('ecosystem.apps_documentation',
-                            args=['face_value']))
-        eq_(r.status_code, 200)
-        self.assertTemplateUsed(r, 'ecosystem/reference_apps/face_value.html')
+    def test_redirect_pages(self):
+        for page in REDIRECT_PAGES:
+            r = self.client.get(reverse('ecosystem.%s' % page))
+            eq_(r.status_code, 301, '%s: status %s' % (page, r.status_code))
 
-    def test_invalid_reference_app(self):
+    def test_app_redirect_pages(self):
+        mdn_url = (
+            'https://developer.mozilla.org/docs/Web/Apps/Reference_apps/')
+        for mkt_slug, mdn_slug in APP_SLUGS.iteritems():
+            r = self.client.get(reverse('ecosystem.apps_documentation',
+                                        args=[mkt_slug]))
+            self.assert3xx(r, mdn_url + mdn_slug, status_code=301)
+
         r = self.client.get(reverse('ecosystem.apps_documentation',
-                            args=['face_value_invalid']))
-        eq_(r.status_code, 404)
+                                    args=['badslug']))
+        self.assert3xx(r, mdn_url, status_code=301)

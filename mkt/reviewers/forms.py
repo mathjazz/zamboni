@@ -1,27 +1,19 @@
-import datetime
 import logging
+from datetime import timedelta
 
 from django import forms
-from django.conf import settings
-from django.forms import ValidationError
+from django.forms import widgets
 
 import happyforms
-from jinja2.filters import do_filesizeformat
-from tower import ugettext as _, ugettext_lazy as _lazy
+from django.utils.translation import ugettext as _
+from django.utils.translation import ugettext_lazy as _lazy
 
-import amo
-import mkt.constants.reviewers as rvw
-from addons.models import AddonDeviceType, Persona
-from amo.utils import raise_required
-from editors.forms import NonValidatingChoiceField, ReviewLogForm
-from editors.models import CannedResponse, ReviewerScore
+import mkt
 from mkt.api.forms import CustomNullBooleanSelect
+from mkt.reviewers.models import CannedResponse, SHOWCASE_TAG
 from mkt.reviewers.utils import ReviewHelper
-from mkt.search.forms import ApiSearchForm
-
-
-from .models import ThemeLock
-from .tasks import approve_rereview, reject_rereview, send_mail
+from mkt.search.forms import ApiSearchForm, SimpleSearchForm
+from mkt.webapps.models import AddonDeviceType
 
 
 log = logging.getLogger('z.reviewers.forms')
@@ -29,83 +21,118 @@ log = logging.getLogger('z.reviewers.forms')
 # We set 'any' here since we need to default this field
 # to PUBLIC if not specified for consumer pages.
 STATUS_CHOICES = [('any', _lazy(u'Any Status'))]
-for status in amo.WEBAPPS_UNLISTED_STATUSES + (amo.STATUS_PUBLIC,):
-    STATUS_CHOICES.append((amo.STATUS_CHOICES_API[status],
-                           amo.STATUS_CHOICES[status]))
+for status in mkt.WEBAPPS_UNLISTED_STATUSES + mkt.LISTED_STATUSES:
+    STATUS_CHOICES.append((mkt.STATUS_CHOICES_API[status],
+                           mkt.STATUS_CHOICES[status]))
+
+MODERATE_ACTION_FILTERS = (('', ''), ('approved', _lazy(u'Approved reviews')),
+                           ('deleted', _lazy(u'Deleted reviews')))
+
+MODERATE_ACTION_DICT = {'approved': mkt.LOG.APPROVE_REVIEW,
+                        'deleted': mkt.LOG.DELETE_REVIEW}
+
+COMBINED_DEVICE_CHOICES = [('', _lazy(u'Any Device'))] + [
+    (dev.api_name, dev.name) for dev in mkt.DEVICE_TYPE_LIST]
 
 
-class ReviewAppAttachmentForm(happyforms.Form):
-    attachment = forms.FileField(label=_lazy(u'Attachment:'))
-    description = forms.CharField(required=False, label=_lazy(u'Description:'))
+class ModerateLogForm(happyforms.Form):
+    start = forms.DateField(required=False,
+                            label=_lazy(u'View entries between'))
+    end = forms.DateField(required=False,
+                          label=_lazy(u'and'))
+    search = forms.ChoiceField(required=False, choices=MODERATE_ACTION_FILTERS,
+                               label=_lazy(u'Filter by type/action'))
 
-    max_upload_size = settings.MAX_REVIEW_ATTACHMENT_UPLOAD_SIZE
+    def clean(self):
+        data = self.cleaned_data
+        # We want this to be inclusive of the end date.
+        if 'end' in data and data['end']:
+            data['end'] += timedelta(days=1)
 
-    def clean(self, *args, **kwargs):
-        data = super(ReviewAppAttachmentForm, self).clean(*args, **kwargs)
-        attachment = data.get('attachment')
-        max_size = self.max_upload_size
-        if attachment and attachment.size > max_size:
-            # Translators: Error raised when review attachment is too large.
-            exc = _('Attachment exceeds maximum size of %s.' %
-                    do_filesizeformat(self.max_upload_size))
-            raise ValidationError(exc)
+        if 'search' in data and data['search']:
+            data['search'] = MODERATE_ACTION_DICT[data['search']]
         return data
 
 
-AttachmentFormSet = forms.formsets.formset_factory(ReviewAppAttachmentForm,
-                                                   extra=1)
+class ModerateLogDetailForm(happyforms.Form):
+    action = forms.CharField(
+        required=True,
+        widget=forms.HiddenInput(attrs={'value': 'undelete', }))
 
-# This contains default values for action visibility.
-# `disabled` will be disabled (not allowed to check).
-DEFAULT_ACTION_VISIBILITY = {
-    'escalate': {
-        'disabled': ['developer']
-    },
-    'comment': {
-        'disabled': ['developer']
-    },
-}
+
+class ReviewLogForm(happyforms.Form):
+    start = forms.DateField(required=False,
+                            label=_lazy(u'View entries between'))
+    end = forms.DateField(required=False, label=_lazy(u'and'))
+    search = forms.CharField(required=False, label=_lazy(u'containing'))
+
+    def __init__(self, *args, **kw):
+        super(ReviewLogForm, self).__init__(*args, **kw)
+
+        # L10n: start, as in "start date"
+        self.fields['start'].widget.attrs = {'placeholder': _('start'),
+                                             'size': 10}
+
+        # L10n: end, as in "end date"
+        self.fields['end'].widget.attrs = {'size': 10, 'placeholder': _('end')}
+
+        self.fields['search'].widget.attrs = {
+            # L10n: Descript of what can be searched for.
+            'placeholder': _lazy(u'app, reviewer, or comment'),
+            'size': 30}
+
+    def clean(self):
+        data = self.cleaned_data
+        # We want this to be inclusive of the end date.
+        if 'end' in data and data['end']:
+            data['end'] += timedelta(days=1)
+
+        return data
+
+
+class NonValidatingChoiceField(forms.ChoiceField):
+    """A ChoiceField that doesn't validate."""
+
+    def validate(self, value):
+        pass
+
+
+class TestedOnForm(happyforms.Form):
+    device_type = NonValidatingChoiceField(
+        choices=([('', 'Choose...')] +
+                 [(v.name, v.name) for _, v in mkt.DEVICE_TYPES.items()]),
+        label=_lazy(u'Device Type:'), required=False)
+    device = forms.CharField(required=False, label=_lazy(u'Device:'))
+    version = forms.CharField(required=False, label=_lazy(u'Firefox Version:'))
+
+
+TestedOnFormSet = forms.formsets.formset_factory(TestedOnForm)
+
+
+class MOTDForm(happyforms.Form):
+    motd = forms.CharField(required=True, widget=widgets.Textarea())
 
 
 class ReviewAppForm(happyforms.Form):
-
     comments = forms.CharField(widget=forms.Textarea(),
                                label=_lazy(u'Comments:'))
     canned_response = NonValidatingChoiceField(required=False)
     action = forms.ChoiceField(widget=forms.RadioSelect())
-    device_types = forms.CharField(required=False,
-                                   label=_lazy(u'Device Types:'))
-    browsers = forms.CharField(required=False,
-                               label=_lazy(u'Browsers:'))
     device_override = forms.TypedMultipleChoiceField(
-        choices=[(k, v.name) for k, v in amo.DEVICE_TYPES.items()],
+        choices=[(k, v.name) for k, v in mkt.DEVICE_TYPES.items()],
         coerce=int, label=_lazy(u'Device Type Override:'),
         widget=forms.CheckboxSelectMultiple, required=False)
-
-    thread_perms = [('developer', _lazy('Developers')),
-                    ('reviewer', _lazy('Reviewers')),
-                    ('senior_reviewer', _lazy('Senior Reviewers')),
-                    ('staff', _lazy('Staff')),
-                    ('mozilla_contact', _lazy('Mozilla Contact'))]
-    action_visibility = forms.TypedMultipleChoiceField(
-        choices=thread_perms,
-        coerce=unicode, label=_lazy('Action Visibility to Users:'),
-        widget=forms.CheckboxSelectMultiple, required=False)
-
-    notify = forms.BooleanField(
-        required=False, label=_lazy(u'Notify me the next time the manifest is '
-                                    u'updated. (Subsequent updates will not '
-                                    u'generate an email)'))
+    is_showcase = forms.BooleanField(
+        required=False, label=_lazy(u'Nominate this app to be featured.'))
 
     def __init__(self, *args, **kw):
         self.helper = kw.pop('helper')
-        self.type = kw.pop('type', amo.CANNED_RESPONSE_APP)
         super(ReviewAppForm, self).__init__(*args, **kw)
 
         # We're starting with an empty one, which will be hidden via CSS.
         canned_choices = [['', [('', _('Choose a canned response...'))]]]
 
-        responses = CannedResponse.objects.filter(type=self.type)
+        responses = CannedResponse.objects.all()
 
         # Loop through the actions.
         for k, action in self.helper.actions.iteritems():
@@ -128,6 +155,8 @@ class ReviewAppForm(happyforms.Form):
             addon=self.helper.addon).values_list('device_type', flat=True)
         if device_types:
             self.initial['device_override'] = device_types
+        self.initial['is_showcase'] = (
+            self.helper.addon.tags.filter(tag_text=SHOWCASE_TAG).exists())
 
     def is_valid(self):
         result = super(ReviewAppForm, self).is_valid()
@@ -137,145 +166,19 @@ class ReviewAppForm(happyforms.Form):
 
 
 def get_review_form(data, files, request=None, addon=None, version=None,
-                    attachment_formset=None):
+                    attachment_formset=None, testedon_formset=None):
     helper = ReviewHelper(request=request, addon=addon, version=version,
-                          attachment_formset=attachment_formset)
+                          attachment_formset=attachment_formset,
+                          testedon_formset=testedon_formset)
     return ReviewAppForm(data=data, files=files, helper=helper)
 
 
-class ReviewAppLogForm(ReviewLogForm):
+def _search_form_status(cleaned_data):
+        status = cleaned_data['status']
+        if status == 'any':
+            return None
 
-    def __init__(self, *args, **kwargs):
-        super(ReviewAppLogForm, self).__init__(*args, **kwargs)
-        self.fields['search'].widget.attrs = {
-            # L10n: Descript of what can be searched for.
-            'placeholder': _lazy(u'app, reviewer, or comment'),
-            'size': 30}
-
-
-class DeletedThemeLogForm(ReviewLogForm):
-
-    def __init__(self, *args, **kwargs):
-        super(DeletedThemeLogForm, self).__init__(*args, **kwargs)
-        self.fields['search'].widget.attrs = {
-            # L10n: Descript of what can be searched for.
-            'placeholder': _lazy(u'theme name'),
-            'size': 30}
-
-
-class ThemeReviewForm(happyforms.Form):
-    theme = forms.ModelChoiceField(queryset=Persona.objects.all(),
-                                   widget=forms.HiddenInput())
-    action = forms.TypedChoiceField(
-        choices=rvw.REVIEW_ACTIONS.items(),
-        widget=forms.HiddenInput(attrs={'class': 'action'}),
-        coerce=int, empty_value=None
-    )
-    # Duplicate is the same as rejecting but has its own flow.
-    reject_reason = forms.TypedChoiceField(
-        choices=rvw.THEME_REJECT_REASONS.items() + [('duplicate', '')],
-        widget=forms.HiddenInput(attrs={'class': 'reject-reason'}),
-        required=False, coerce=int, empty_value=None)
-    comment = forms.CharField(required=False,
-        widget=forms.HiddenInput(attrs={'class': 'comment'}))
-
-    def clean_theme(self):
-        theme = self.cleaned_data['theme']
-        try:
-            ThemeLock.objects.get(theme=theme)
-        except (ThemeLock.DoesNotExist):
-            raise forms.ValidationError(
-                _('Someone else is reviewing this theme.'))
-        return theme
-
-    def clean_reject_reason(self):
-        reject_reason = self.cleaned_data.get('reject_reason', None)
-        if (self.cleaned_data.get('action') == rvw.ACTION_REJECT
-            and reject_reason is None):
-            raise_required()
-        return reject_reason
-
-    def clean_comment(self):
-        # Comment field needed for duplicate, flag, moreinfo, and other reject
-        # reason.
-        action = self.cleaned_data.get('action')
-        reject_reason = self.cleaned_data.get('reject_reason')
-        comment = self.cleaned_data.get('comment')
-        if (not comment and (action == rvw.ACTION_FLAG or
-                             action == rvw.ACTION_MOREINFO or
-                             (action == rvw.ACTION_REJECT and
-                              reject_reason == 0))):
-            raise_required()
-        return comment
-
-    def save(self):
-        action = self.cleaned_data['action']
-        comment = self.cleaned_data.get('comment')
-        reject_reason = self.cleaned_data.get('reject_reason')
-        theme = self.cleaned_data['theme']
-
-        is_rereview = (
-            theme.rereviewqueuetheme_set.exists() and
-            theme.addon.status not in (amo.STATUS_PENDING,
-                                       amo.STATUS_REVIEW_PENDING))
-
-        theme_lock = ThemeLock.objects.get(theme=self.cleaned_data['theme'])
-
-        mail_and_log = True
-        if action == rvw.ACTION_APPROVE:
-            if is_rereview:
-                approve_rereview(theme)
-            theme.addon.update(status=amo.STATUS_PUBLIC)
-            theme.approve = datetime.datetime.now()
-            theme.save()
-
-        elif action == rvw.ACTION_REJECT:
-            if is_rereview:
-                reject_rereview(theme)
-            else:
-                theme.addon.update(status=amo.STATUS_REJECTED)
-
-        elif action == rvw.ACTION_DUPLICATE:
-            if is_rereview:
-                reject_rereview(theme)
-            else:
-                theme.addon.update(status=amo.STATUS_REJECTED)
-
-        elif action == rvw.ACTION_FLAG:
-            if is_rereview:
-                mail_and_log = False
-            else:
-                theme.addon.update(status=amo.STATUS_REVIEW_PENDING)
-
-        elif action == rvw.ACTION_MOREINFO:
-            if not is_rereview:
-                theme.addon.update(status=amo.STATUS_REVIEW_PENDING)
-
-        if mail_and_log:
-            send_mail(self.cleaned_data, theme_lock)
-
-            # Log.
-            amo.log(amo.LOG.THEME_REVIEW, theme.addon, details={
-                    'theme': theme.addon.name.localized_string,
-                    'action': action,
-                    'reject_reason': reject_reason,
-                    'comment': comment}, user=theme_lock.reviewer)
-            log.info('%sTheme %s (%s) - %s' % (
-                '[Rereview] ' if is_rereview else '', theme.addon.name,
-                theme.id, action))
-
-        if action not in [rvw.ACTION_MOREINFO, rvw.ACTION_FLAG]:
-            ReviewerScore.award_points(theme_lock.reviewer, theme.addon,
-                                       theme.addon.status)
-        theme_lock.delete()
-
-
-class ThemeSearchForm(forms.Form):
-    q = forms.CharField(
-        required=False, label=_lazy(u'Search'),
-        widget=forms.TextInput(attrs={'autocomplete': 'off',
-                                      'placeholder': _lazy(u'Search')}))
-    queue_type = forms.CharField(required=False, widget=forms.HiddenInput())
+        return mkt.STATUS_CHOICES_API_LOOKUP.get(status, mkt.STATUS_PENDING)
 
 
 class ApiReviewersSearchForm(ApiSearchForm):
@@ -293,6 +196,13 @@ class ApiReviewersSearchForm(ApiSearchForm):
         required=False,
         label=_lazy(u'Escalated'),
         widget=CustomNullBooleanSelect)
+    is_tarako = forms.NullBooleanField(
+        required=False,
+        label=_lazy(u'Tarako-ready'),
+        widget=CustomNullBooleanSelect)
+    dev_and_device = forms.ChoiceField(
+        required=False, choices=COMBINED_DEVICE_CHOICES,
+        label=_lazy(u'Device'))
 
     def __init__(self, *args, **kwargs):
         super(ApiReviewersSearchForm, self).__init__(*args, **kwargs)
@@ -306,8 +216,50 @@ class ApiReviewersSearchForm(ApiSearchForm):
                 self.fields[field_name].choices = BOOL_CHOICES
 
     def clean_status(self):
-        status = self.cleaned_data['status']
-        if status == 'any':
-            return 'any'
+        return _search_form_status(self.cleaned_data)
 
-        return amo.STATUS_CHOICES_API_LOOKUP.get(status, amo.STATUS_PENDING)
+    def clean(self):
+        # Transform dev_and_device into the separate dev/device parameters.
+        # We then call super() so that it gets transformed into ids that ES
+        # will accept.
+        dev_and_device = self.cleaned_data.pop('dev_and_device', '').split('+')
+        self.cleaned_data['dev'] = dev_and_device[0]
+        if len(dev_and_device) > 1:
+            self.cleaned_data['device'] = dev_and_device[1]
+
+        return super(ApiReviewersSearchForm, self).clean()
+
+
+class ReviewersWebsiteSearchForm(SimpleSearchForm):
+    status = forms.ChoiceField(required=False, choices=STATUS_CHOICES,
+                               label=_lazy(u'Status'))
+
+    def clean_status(self):
+        return _search_form_status(self.cleaned_data)
+
+
+class ApproveRegionForm(happyforms.Form):
+    """TODO: Use a DRF serializer."""
+    approve = forms.BooleanField(required=False)
+
+    def __init__(self, *args, **kw):
+        self.app = kw.pop('app')
+        self.region = kw.pop('region')
+        super(ApproveRegionForm, self).__init__(*args, **kw)
+
+    def save(self):
+        approved = self.cleaned_data['approve']
+
+        if approved:
+            status = mkt.STATUS_PUBLIC
+            # Make it public in the previously excluded region.
+            self.app.addonexcludedregion.filter(
+                region=self.region.id).delete()
+        else:
+            status = mkt.STATUS_REJECTED
+
+        value, changed = self.app.geodata.set_status(
+            self.region, status, save=True)
+
+        if changed:
+            self.app.save()

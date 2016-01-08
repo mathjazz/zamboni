@@ -1,6 +1,6 @@
 <h5>{{ _('Actions') }}</h5>
 <ul>
-{% if addon.is_incomplete() %}
+{% if addon.has_incomplete_status() %}
   {% if check_addon_ownership(request, addon, dev=True) %}
     <li>
       <a href="{{ url('submit.app.resume', addon.app_slug) }}" class="tooltip"
@@ -33,7 +33,7 @@
   {# TODO: Re-enable with new URL when per-app stats are ready for Monolith.
   {% if not addon.disabled_by_user %}
     <li>
-      <a href="{{ url('stats.overview', addon.slug) }}" class="tooltip"
+      <a href="#TODO" class="tooltip"
          title="{{ _('Daily statistics on downloads and users.') }}">
         {{ _('Statistics') }}</a>
     </li>
@@ -43,9 +43,9 @@
     <a href="#" class="more-actions">{{ _('More') }}</a>
     <div class="more-actions-popup popup hidden">
       {% set manage_urls = [
-        (addon.get_dev_url('owner'), _('Manage Team Members & License')),
+        (addon.get_dev_url('owner'), _('Team Members & License')),
         (addon.get_dev_url('payments'), _('Compatibility & Payments')),
-        (addon.get_dev_url('versions'), _('Manage Status & Versions')),
+        (addon.get_dev_url('versions'), _('Status & Versions')),
       ] %}
       <ul>
         {% for url, title in manage_urls %}

@@ -81,7 +81,6 @@
             $this.find('input').prop('checked', nowSelected);
             $input.val(old).trigger('change');
             $compat_save_button.removeClass('hidden');
-            setTabState();
         })
     );
 
@@ -91,66 +90,6 @@
 
         $('#id_free_platforms, #id_paid_platforms').val([]);
     }
-
-    // Best function name ever?
-    function allTabsDeselected() {
-        var freeTabs = $('#id_free_platforms option:selected').length;
-        var paidTabs = $('#id_paid_platforms option:selected').length;
-
-        return freeTabs === 0 && paidTabs === 0;
-    }
-
-    // Condition to show packaged tab...ugly but works.
-    function showPackagedTab() {
-        // If the Android flag is disabled, and you tried to select
-        // Android Mobile or Tablet... no packaged apps for you.
-        // (This lets us prevent you from marking your app as compatible
-        // with both Firefox OS *and* Android when Android support
-        // hasn't landed yet.)
-        if (!$('[data-packaged-platforms~="android"]').length &&
-            $('option[value*="-android-"]:selected').length) {
-            return false;
-        }
-
-        // If the Desktop flag is disabled, and you tried to select
-        // Desktop... no packaged apps for you.
-        if (!$('[data-packaged-platforms~="desktop"]').length &&
-            $('option[value$="-desktop"]:selected').length) {
-            return false;
-        }
-
-        return ($('#id_free_platforms option[value="free-firefoxos"]:selected').length &&
-            $('#id_free_platforms option:selected').length == 1) ||
-            $('#id_paid_platforms option[value="paid-firefoxos"]:selected').length ||
-            $('[data-packaged-platforms~="android"] option[value*="-android-"]:selected').length ||
-            $('[data-packaged-platforms~="desktop"] option[value$="-desktop"]:selected').length ||
-            allTabsDeselected();
-    }
-
-    // Toggle packaged/hosted tab state.
-    function setTabState() {
-        if (!$('#id_free_platforms, #id_paid_platforms').length) {
-            return;
-        }
-
-        // If only free-os or paid-os is selected, show packaged.
-        if (showPackagedTab()) {
-            $('#packaged-tab-header').css('display', 'inline');
-        } else {
-            $('#packaged-tab-header').hide();
-            $('#hosted-tab-header').find('a').click();
-        }
-    }
-
-    z.body.on('tabs-changed', function(e, tab) {
-        if (tab.id == 'packaged-tab-header') {
-            $('.learn-mdn.active').removeClass('active');
-            $('.learn-mdn.packaged').addClass('active');
-        } else if (tab.id == 'hosted-tab-header') {
-            $('.learn-mdn.active').removeClass('active');
-            $('.learn-mdn.hosted').addClass('active');
-        }
-    });
 
     // Deselect all checkboxes once tabs have been setup.
     if (isSubmitAppPage) {

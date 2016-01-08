@@ -2,19 +2,20 @@ import json
 import os
 import shutil
 import tempfile
+from base64 import b64decode
 
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
 
-from base64 import b64decode
-from celeryutils import task
 import commonware.log
+import requests
+from celery import task
 from django_statsd.clients import statsd
 from signing_clients.apps import JarExtractor
-import requests
 
-import amo
-from versions.models import Version
+from mkt.versions.models import Version
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage, public_storage)
+
 
 log = commonware.log.getLogger('z.crypto')
 
@@ -23,15 +24,25 @@ class SigningError(Exception):
     pass
 
 
-def sign_app(src, dest, ids, reviewer=False):
+def sign_app(src, dest, ids, reviewer=False, local=False):
+    """
+    Sign a packaged app.
+
+    If `local` is True, we never copy the signed package to remote storage.
+
+    """
     tempname = tempfile.mktemp()
     try:
-        return _sign_app(src, dest, ids, reviewer, tempname)
+        return _sign_app(src, dest, ids, reviewer, tempname, local)
     finally:
-        os.unlink(tempname)
+        try:
+            os.unlink(tempname)
+        except OSError:
+            # If the file has already been removed, don't worry about it.
+            pass
 
 
-def _sign_app(src, dest, ids, reviewer, tempname):
+def _sign_app(src, dest, ids, reviewer, tempname, local=False):
     """
     Generate a manifest and signature and send signature to signing server to
     be signed.
@@ -46,7 +57,7 @@ def _sign_app(src, dest, ids, reviewer, tempname):
     # Extract necessary info from the archive
     try:
         jar = JarExtractor(
-            storage.open(src, 'r'), tempname,
+            src, tempname,
             ids,
             omit_signature_sections=settings.SIGNED_APPS_OMIT_PER_FILE_SIGS)
     except:
@@ -80,13 +91,20 @@ def _sign_app(src, dest, ids, reviewer, tempname):
 
     pkcs7 = b64decode(json.loads(response.content)['zigbert.rsa'])
     try:
-        jar.make_signed(pkcs7)
+        jar.make_signed(pkcs7, sigpath='zigbert')
     except:
         log.error('App signing failed', exc_info=True)
         raise SigningError('App signing failed')
-    with storage.open(dest, 'w') as destf:
-        tempf = open(tempname)
-        shutil.copyfileobj(tempf, destf)
+
+    storage = public_storage  # By default signed packages are public.
+    if reviewer:
+        storage = private_storage
+    elif local:
+        storage = local_storage
+
+    copy_stored_file(
+        tempname, dest,
+        src_storage=local_storage, dst_storage=storage)
 
 
 def _get_endpoint(reviewer=False):
@@ -108,14 +126,13 @@ def _get_endpoint(reviewer=False):
         return server + '/1.0/sign_app'
 
 
-def _no_sign(src, dest):
+def _no_sign(src, dst_path):
     # If this is a local development instance, just copy the file around
     # so that everything seems to work locally.
     log.info('Not signing the app, no signing server is active.')
-    dest_dir = os.path.dirname(dest)
-    if not os.path.exists(dest_dir):
-        os.makedirs(dest_dir)
-    shutil.copy(src, dest)
+
+    with public_storage.open(dst_path, 'w') as dst_f:
+        shutil.copyfileobj(src, dst_f)
 
 
 @task
@@ -123,11 +140,6 @@ def sign(version_id, reviewer=False, resign=False, **kw):
     version = Version.objects.get(pk=version_id)
     app = version.addon
     log.info('Signing version: %s of app: %s' % (version_id, app))
-
-    if not app.type == amo.ADDON_WEBAPP:
-        log.error('[Webapp:%s] Attempt to sign something other than an app.' %
-                  app.id)
-        raise SigningError('Not an app')
 
     if not app.is_packaged:
         log.error('[Webapp:%s] Attempt to sign a non-packaged app.' % app.id)
@@ -144,17 +156,32 @@ def sign(version_id, reviewer=False, resign=False, **kw):
     path = (file_obj.signed_reviewer_file_path if reviewer else
             file_obj.signed_file_path)
 
+    storage = private_storage if reviewer else public_storage
+
     if storage.exists(path) and not resign:
         log.info('[Webapp:%s] Already signed app exists.' % app.id)
         return path
 
-    ids = json.dumps({
-        'id': app.guid,
-        'version': version_id
-    })
+    if reviewer:
+        # Reviewers get a unique 'id' so the reviewer installed app won't
+        # conflict with the public app, and also so multiple versions of the
+        # same app won't conflict with themselves.
+        ids = json.dumps({
+            'id': 'reviewer-{guid}-{version_id}'.format(guid=app.guid,
+                                                        version_id=version_id),
+            'version': version_id
+        })
+    else:
+        ids = json.dumps({
+            'id': app.guid,
+            'version': version_id
+        })
     with statsd.timer('services.sign.app'):
         try:
-            sign_app(file_obj.file_path, path, ids, reviewer)
+            # Signing starts with the original packaged app file which is
+            # always on private storage.
+            sign_app(private_storage.open(file_obj.file_path), path, ids,
+                     reviewer)
         except SigningError:
             log.info('[Webapp:%s] Signing failed' % app.id)
             if storage.exists(path):

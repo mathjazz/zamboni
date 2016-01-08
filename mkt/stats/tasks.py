@@ -1,233 +1,173 @@
-from collections import defaultdict
-import copy
+import json
+import logging
+import datetime
 
-import commonware.log
-from celeryutils import task
+from celery import task
 
-import amo.search
-from . import search
-from lib.es.utils import get_indices
-from stats.models import Contribution
+import mkt
+from mkt.constants.regions import REGIONS_CHOICES_SLUG
+from mkt.monolith.models import MonolithRecord
+from mkt.site.decorators import use_master
+from mkt.ratings.models import Review
+from mkt.webapps.models import AddonUser, Webapp
+from mkt.users.models import UserProfile
 
-log = commonware.log.getLogger('z.task')
 
-
-@task
-def index_finance_total(addons, **kw):
-    """
-    Aggregates financial stats from all of the contributions for a given app.
-    """
-    index = kw.get('index', Contribution._get_index())
-    es = amo.search.get_es()
-    log.info('Indexing total financial stats for %s apps.' %
-              len(addons))
-
-    for addon in addons:
-        # Get all contributions for given add-on.
-        qs = Contribution.objects.filter(addon=addon, uuid=None)
-        if not qs.exists():
-            continue
-        try:
-            key = ord_word('tot' + str(addon))
-            data = search.get_finance_total(qs, addon)
-            for index in get_indices(index):
-                if not already_indexed(Contribution, data, index):
-                    Contribution.index(data, bulk=True, id=key, index=index)
-            es.flush_bulk(forced=True)
-        except Exception, exc:
-            index_finance_total.retry(args=[addons], exc=exc, **kw)
-            raise
+log = logging.getLogger('z.stats')
 
 
 @task
-def index_finance_total_by_src(addons, **kw):
-    """
-    Bug 758059
-    Total finance stats, source breakdown.
-    """
-    index = kw.get('index', Contribution._get_index())
-    es = amo.search.get_es()
-    log.info('Indexing total financial stats by source for %s apps.' %
-              len(addons))
+@use_master
+def update_monolith_stats(metric, date, **kw):
+    log.info('Updating monolith statistics (%s) for (%s)' % (metric, date))
 
-    for addon in addons:
-        # Get all contributions for given add-on.
-        qs = Contribution.objects.filter(addon=addon, uuid=None)
-        if not qs.exists():
-            continue
+    jobs = _get_monolith_jobs(date)[metric]
 
-        # Get list of distinct sources.
-        sources = set(qs.values_list('source', flat=True))
-
-        for source in sources:
-            try:
-                key = ord_word('src' + str(addon) + str(source))
-                data = search.get_finance_total(qs, addon, 'source',
-                                                source=source)
-                for index in get_indices(index):
-                    if not already_indexed(Contribution, data, index):
-                        Contribution.index(data, bulk=True, id=key,
-                                           index=index)
-                es.flush_bulk(forced=True)
-            except Exception, exc:
-                index_finance_total_by_src.retry(args=[addons], exc=exc, **kw)
-                raise
-
-
-@task
-def index_finance_total_by_currency(addons, **kw):
-    """
-    Bug 757581
-    Total finance stats, currency breakdown.
-    """
-    index = kw.get('index', Contribution._get_index())
-    es = amo.search.get_es()
-    log.info('Indexing total financial stats by currency for %s apps.' %
-              len(addons))
-
-    for addon in addons:
-        # Get all contributions for given add-on.
-        qs = Contribution.objects.filter(addon=addon, uuid=None)
-        if not qs.exists():
-            continue
-
-        # Get list of distinct currencies.
-        currencies = set(qs.values_list('currency', flat=True))
-
-        for currency in currencies:
-            try:
-                key = ord_word('cur' + str(addon) + currency.lower())
-                data = search.get_finance_total(
-                    qs, addon, 'currency', currency=currency)
-                for index in get_indices(index):
-                    if not already_indexed(Contribution, data, index):
-                        Contribution.index(data, bulk=True, id=key,
-                                           index=index)
-                es.flush_bulk(forced=True)
-            except Exception, exc:
-                index_finance_total_by_currency.retry(args=[addons], exc=exc, **kw)
-                raise
-
-
-@task
-def index_finance_daily(ids, **kw):
-    """
-    Bug 748015
-    Takes a list of Contribution ids and uses its addon and date fields to
-    index stats for that day.
-
-    Contribution stats by addon-date unique pair. Uses a nested
-    dictionary to not index duplicate contribution with same addon/date
-    pairs. For each addon-date, it stores the addon in the dict as a top
-    level key with a dict as its value. And it stores the date in the
-    add-on's dict as a second level key. To check if an addon-date pair has
-    been already index, it looks up the dict[addon][date] to see if the
-    key exists. This adds some speed up when batch processing.
-
-    ids -- ids of apps.stats.Contribution objects
-    """
-    index = kw.get('index', Contribution._get_index())
-    es = amo.search.get_es()
-
-    # Get contributions.
-    qs = (Contribution.objects.filter(id__in=ids)
-          .order_by('created').values('addon', 'created'))
-    log.info('[%s] Indexing %s contributions for daily stats.' %
-             (qs[0]['created'], len(ids)))
-
-    addons_dates = defaultdict(lambda: defaultdict(dict))
-    for contribution in qs:
-        addon = contribution['addon']
-        date = contribution['created'].strftime('%Y%m%d')
-
+    for job in jobs:
         try:
-            # Date for add-on not processed, index it and give it key.
-            if not date in addons_dates[addon]:
-                key = ord_word('fin' + str(addon) + str(date))
-                data = search.get_finance_daily(contribution)
-                for index in get_indices(index):
-                    if not already_indexed(Contribution, data, index):
-                        Contribution.index(data, bulk=True, id=key,
-                                           index=index)
-                addons_dates[addon][date] = 0
-            es.flush_bulk(forced=True)
-        except Exception, exc:
-            index_finance_daily.retry(args=[ids], exc=exc, **kw)
-            raise
+            # Only record if count is greater than zero.
+            count = job['count']()
+            if count:
+                value = {'count': count}
+                if 'dimensions' in job:
+                    value.update(job['dimensions'])
+
+                MonolithRecord.objects.create(recorded=date, key=metric,
+                                              value=json.dumps(value))
+
+                log.info('Monolith stats details: (%s) has (%s) for (%s). '
+                         'Value: %s' % (metric, count, date, value))
+            else:
+                log.info('Monolith stat (%s) did not record due to falsy '
+                         'value (%s) for (%s)' % (metric, count, date))
+
+        except Exception as e:
+            log.critical('Update of monolith table failed: (%s): %s'
+                         % ([metric, date], e))
 
 
-@task
-def index_installed_daily(ids, **kw):
+def _get_monolith_jobs(date=None):
     """
-    Takes a list of Installed ids and uses its addon and date fields to index
-    stats for that day.
-    ids -- ids of mkt.webapps.Installed objects
+    Return a dict of Monolith based statistics queries.
+
+    The dict is of the form::
+
+        {'<metric_name>': [{'count': <callable>, 'dimensions': <dimensions>}]}
+
+    Where `dimensions` is an optional dict of dimensions we expect to filter on
+    via Monolith.
+
+    If a date is specified and applies to the job it will be used.  Otherwise
+    the date will default to today().
     """
-    from mkt.webapps.models import Installed
-    index = kw.get('index', Installed._get_index())
-    es = amo.search.get_es()
-    # Get Installed's
-    qs = (Installed.objects.filter(id__in=set(ids)).
-        order_by('-created').values('addon', 'created'))
-    log.info('[%s] Indexing %s installed counts for daily stats.' %
-             (qs[0]['created'], len(qs)))
+    if not date:
+        date = datetime.date.today()
 
-    addons_dates = defaultdict(lambda: defaultdict(dict))
-    for installed in qs:
-        addon = installed['addon']
-        date = installed['created'].strftime('%Y%m%d')
+    # If we have a datetime make it a date so H/M/S isn't used.
+    if isinstance(date, datetime.datetime):
+        date = date.date()
 
-        try:
-            if not date in addons_dates[addon]:
-                key = ord_word('ins' + str(addon) + str(date))
-                data = search.get_installed_daily(installed)
-                for index in get_indices(index):
+    next_date = date + datetime.timedelta(days=1)
 
-                    if not already_indexed(Installed, data, index):
-                        Installed.index(data, bulk=True, id=key,
-                                        index=index)
-                addons_dates[addon][date] = 0
-            es.flush_bulk(forced=True)
-        except Exception, exc:
-            index_installed_daily.retry(args=[ids], exc=exc, **kw)
-            raise
+    stats = {
+        # Marketplace reviews.
+        'apps_review_count_new': [{
+            'count': Review.objects.filter(
+                created__range=(date, next_date), editorreview=0).count,
+        }],
 
+        # New users
+        'mmo_user_count_total': [{
+            'count': UserProfile.objects.filter(
+                created__lt=next_date,
+                source=mkt.LOGIN_SOURCE_MMO_BROWSERID).count,
+        }],
+        'mmo_user_count_new': [{
+            'count': UserProfile.objects.filter(
+                created__range=(date, next_date),
+                source=mkt.LOGIN_SOURCE_MMO_BROWSERID).count,
+        }],
 
-def ord_word(word):
-    """
-    Convert an alphanumeric string to its ASCII values, used for ES keys.
-    """
-    return ''.join([str(ord(letter)) for letter in word])
+        # New developers.
+        'mmo_developer_count_total': [{
+            'count': AddonUser.objects.filter(
+                user__created__lt=next_date).values('user').distinct().count,
+        }],
 
+        # App counts.
+        'apps_count_new': [{
+            'count': Webapp.objects.filter(
+                created__range=(date, next_date)).count,
+        }],
+    }
 
-def already_indexed(model, data, index=None):
-    """
-    Bug 759924
-    Checks that data is not being indexed twice.
-    """
-    # Handle the weird 'have to query in lower-case for ES' thing.
-    for k, v in data.iteritems():
-        try:
-            data[k] = v.lower()
-        except AttributeError:
-            continue
+    # Add various "Apps Added" for all the dimensions we need.
+    apps = Webapp.objects.filter(created__range=(date, next_date))
 
-    # Cast any datetimes to date.
-    if 'date' in data:
-        try:
-            data['date'] = data['date'].date()
-        except AttributeError:
-            pass
+    package_counts = []
+    premium_counts = []
 
-    filter_data = copy.deepcopy(data)
+    # privileged==packaged for our consideration.
+    package_types = mkt.ADDON_WEBAPP_TYPES.copy()
+    package_types.pop(mkt.ADDON_WEBAPP_PRIVILEGED)
 
-    # Search floating point number with string (bug 770037 fix attempt #100).
-    if 'revenue' in filter_data:
-        try:
-            filter_data['revenue'] = str(filter_data['revenue'])
-        except AttributeError:
-            pass
+    for region_slug, region in REGIONS_CHOICES_SLUG:
+        # Apps added by package type and region.
+        for package_type in package_types.values():
+            package_counts.append({
+                'count': (apps
+                          .filter(is_packaged=package_type == 'packaged')
+                          .exclude(addonexcludedregion__region=region.id)
+                          .count),
+                'dimensions': {'region': region_slug,
+                               'package_type': package_type},
+            })
 
-    # XXX shouldn't we return True here ?
-    return list(model.search(index).filter(**filter_data)
-                    .values_dict(data.keys()[0]))
+        # Apps added by premium type and region.
+        for premium_type, pt_name in mkt.ADDON_PREMIUM_API.items():
+            premium_counts.append({
+                'count': (apps
+                          .filter(premium_type=premium_type)
+                          .exclude(addonexcludedregion__region=region.id)
+                          .count),
+                'dimensions': {'region': region_slug,
+                               'premium_type': pt_name},
+            })
+
+    stats.update({'apps_added_by_package_type': package_counts})
+    stats.update({'apps_added_by_premium_type': premium_counts})
+
+    # Add various "Apps Available" for all the dimensions we need.
+    apps = Webapp.objects.filter(_current_version__reviewed__lt=next_date,
+                                 status__in=mkt.LISTED_STATUSES,
+                                 disabled_by_user=False)
+    package_counts = []
+    premium_counts = []
+
+    for region_slug, region in REGIONS_CHOICES_SLUG:
+        # Apps available by package type and region.
+        for package_type in package_types.values():
+            package_counts.append({
+                'count': (apps
+                          .filter(is_packaged=package_type == 'packaged')
+                          .exclude(addonexcludedregion__region=region.id)
+                          .count),
+                'dimensions': {'region': region_slug,
+                               'package_type': package_type},
+            })
+
+        # Apps available by premium type and region.
+        for premium_type, pt_name in mkt.ADDON_PREMIUM_API.items():
+            premium_counts.append({
+                'count': (apps
+                          .filter(premium_type=premium_type)
+                          .exclude(addonexcludedregion__region=region.id)
+                          .count),
+                'dimensions': {'region': region_slug,
+                               'premium_type': pt_name},
+            })
+
+    stats.update({'apps_available_by_package_type': package_counts})
+    stats.update({'apps_available_by_premium_type': premium_counts})
+
+    return stats

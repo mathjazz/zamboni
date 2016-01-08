@@ -1,8 +1,7 @@
 {% extends 'developers/base_impala.html' %}
 {% from 'developers/includes/macros.html' import upload_webapp_features with context %}
 
-{% set manifest_doc_url = 'https://developer.mozilla.org/en-US/docs/Apps/Manifest' %}
-{% set packaged_doc_url = 'https://developer.mozilla.org/en-US/docs/Apps/Packaged_apps' %}
+{% set doc_url = 'https://developer.mozilla.org/en-US/Marketplace/Publishing/Submit/Overview' %}
 
 {% set title = _('Submit an App') %}
 
@@ -13,7 +12,7 @@
     <a href="#" class="island choice{{ ' selected' if form.data[item[0]] == 'on' }}"
        id="{{ item[0] }}" data-value="{{ item[0] }}">
       <h3>{{ item[1] }}</h3>
-      <div>{{ DEVICE_LOOKUP[item[0]] }}</div>
+      <div>{{ PLATFORMS_NAMES[item[0]] }}</div>
       <div class="listing-footer"><input type="checkbox"></div>
     </a>
   </div>
@@ -28,26 +27,20 @@
 
   <section id="submit-payment-type" class="island tabbable">
     <div class="free tab active">
-      {% if waffle.flag('allow-b2g-paid-submission') %}
-        <h2 id="free-tab-header"><a href="#">{{ _('Free') }}</a></h2>
-      {% else %}
-        <h2>{{ _('Device Type') }}</h2>
-      {% endif %}
+      <h2 id="free-tab-header"><a href="#">{{ _('Free') }}</a></h2>
       <div class="error">{{ form.errors.free_platforms }}</div>
       {%- for item in form.fields['free_platforms'].choices -%}
         {{ button(form, item) }}
       {%- endfor %}
     </div>
 
-    {% if waffle.flag('allow-b2g-paid-submission') %}
-      <div class="paid tab">
-        <h2 id="paid-tab-header"><a href="#">{{ _('Paid / In-app') }}</a></h2>
-        <div class="error">{{ form.errors.paid_platforms }}</div>
-        {%- for item in form.fields['paid_platforms'].choices -%}
-          {{ button(form, item) }}
-        {%- endfor %}
-      </div>
-    {% endif %}
+    <div class="paid tab">
+      <h2 id="paid-tab-header"><a href="#">{{ _('Paid / In-app') }}</a></h2>
+      <div class="error">{{ form.errors.paid_platforms }}</div>
+      {%- for item in form.fields['paid_platforms'].choices -%}
+        {{ button(form, item) }}
+      {%- endfor %}
+    </div>
   </section>
 
   <section id="upload-file" class="island tabbable spacer"
@@ -81,7 +74,7 @@
         <div class="hint">
           {{ _('Manifest URLs must start with a protocol (for example, '
                '<code>http://</code> or <code>https://</code>) and '
-               'typically use the <code>.webapp</code> extension.')|safe }}
+               'typically use the <code>.webapp</code> extension.') }}
         </div>
       </div>
     </div>
@@ -104,29 +97,24 @@
         {{ form.packaged }}
       </div>
 
-      {% if waffle.switch('buchets') %}
       <div id="upload-webapp-features">
         <h3>{{ _('App Minimum Requirements') }}</h3>
         {{ upload_webapp_features(features_form) }}
       </div>
-      {% endif %}
 
-      <footer class="listing-footer hidden">
+      <div class="listing-footer footer hidden">
         {% trans %}
           <b>What's next:</b> fill out the rest of your app's details
         {% endtrans %}
         <button class="upload-file-submit prominent" disabled type="submit">
           {{ _('Continue') }}
         </button>
-      </footer>
+      </div>
     </form>
   </section>
 
-  <p class="hosted learn-mdn active"><a href="{{ manifest_doc_url }}" target="_blank">
-    {% trans %}Learn more about <b>app manifests</b> on MDN.{% endtrans -%}
-  </a></p>
-  <p class="packaged learn-mdn"><a href="{{ packaged_doc_url }}" target="_blank">
-    {% trans %}Learn more about <b>packaged apps</b> on MDN.{% endtrans -%}
+  <p class="learn-mdn active"><a href="{{ doc_url }}" target="_blank">
+    {% trans %}Learn more about submitting an app.{% endtrans -%}
   </a></p>
 
 {% endblock %}

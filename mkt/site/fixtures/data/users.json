@@ -1,0 +1,190 @@
+[
+    {
+        "fields": {
+            "email": "regular@mozilla.com",
+            "deleted": 0,
+            "password": "",
+            "display_name": "regularuser \u0627\u0644\u062a\u0637\u0628",
+            "created": "2009-02-02 11:50:31",
+            "modified": "2010-01-12 17:01:41",
+            "read_dev_agreement": "2012-08-20 00:00:00",
+            "last_login": "2012-05-22 14:59:28",
+            "enable_recommendations": 1
+        },
+        "model": "users.userprofile",
+        "pk": 999
+    },
+    {
+        "pk": 10482,
+        "model": "users.userprofile",
+        "fields": {
+            "email": "clouserw@gmail.com",
+            "deleted": 0,
+            "password": "",
+            "display_name": "clouserw \u0627\u0644\u062a\u0637\u0628",
+            "created": "2007-03-05 13:09:38",
+            "modified": "2010-03-19 13:50:38",
+            "read_dev_agreement": "2012-08-20 00:00:00",
+            "last_login": "2012-05-22 14:59:28",
+            "enable_recommendations": 1
+        }
+    },
+    {
+        "fields": {
+            "email": "admin@mozilla.com",
+            "deleted": 0,
+            "password": "",
+            "display_name": "admin \u0627\u0644\u062a\u0637\u0628",
+            "created": "2009-02-02 11:50:31",
+            "modified": "2010-01-12 17:01:41",
+            "read_dev_agreement": "2012-08-20 00:00:00",
+            "last_login": "2012-05-22 14:59:28",
+            "enable_recommendations": 1
+        },
+        "model": "users.userprofile",
+        "pk": 4043307
+    },
+    {
+        "pk": 5497308,
+        "model": "users.userprofile",
+        "fields": {
+            "email": "editor@mozilla.com",
+            "deleted": false,
+            "password": "",
+            "created": "2010-10-19 13:02:25",
+            "modified": "2010-11-16 10:51:34",
+            "last_login_ip": "127.0.0.1",
+            "read_dev_agreement": "2012-08-20 00:00:00",
+            "last_login": "2012-05-22 14:59:28",
+            "enable_recommendations": 1
+        }
+    },
+    {
+        "pk": 20,
+        "model": "users.userprofile",
+        "fields": {
+            "display_name": "",
+            "email": "partner@mozilla.com",
+            "deleted": false,
+            "password": "",
+            "created": "2011-12-01 16:20:55",
+            "modified": "2011-12-01 16:20:56",
+            "last_login_ip": "",
+            "read_dev_agreement": "2012-08-20 00:00:00",
+            "last_login": "2012-05-22 14:59:28",
+            "enable_recommendations": 1
+        }
+    },
+    {
+        "pk": 1,
+        "model": "access.group",
+        "fields": {
+            "rules": "*:*",
+            "name": "Admins",
+            "created": "2007-03-05 16:06:55",
+            "modified": "2007-03-05 16:06:55",
+            "restricted": true
+        }
+    },
+    {
+        "pk": 3,
+        "model": "access.group",
+        "fields": {
+            "rules": "API.Users:View",
+            "modified": "2012-01-27 13:32:08",
+            "name": "API.Users",
+            "created": "2012-01-27 12:41:00",
+            "restricted": false
+        }
+    },
+    {
+        "pk": 50002,
+        "model": "access.group",
+        "fields": {
+            "rules": "Addons:Review,Reviews:Edit",
+            "modified": "2012-01-27 13:32:08",
+            "name": "Add-on Reviewers",
+            "created": "2012-01-27 12:41:00",
+            "restricted": false
+        }
+    },
+    {
+        "pk": 50003,
+        "model": "access.group",
+        "fields": {
+            "rules": "Apps:Review,Reviews:Edit",
+            "modified": "2012-01-27 13:32:08",
+            "name": "App Reviewers",
+            "created": "2012-01-27 12:41:00",
+            "restricted": false
+        }
+    },
+    {
+        "pk": 10,
+        "model": "access.groupuser",
+        "fields": {
+            "group": 1,
+            "user": 4043307
+        }
+    },
+    {
+        "pk": 11,
+        "model": "access.groupuser",
+        "fields": {
+            "group": 3,
+            "user": 20
+        }
+    },
+    {
+        "pk": 259,
+        "model": "access.groupuser",
+        "fields": {
+            "group": 50002,
+            "user": 5497308
+        }
+    },
+    {
+        "pk": 260,
+        "model": "access.groupuser",
+        "fields": {
+            "group": 50003,
+            "user": 5497308
+        }
+    },
+    {
+        "pk": 15,
+        "model": "users.userprofile",
+        "fields": {
+            "display_name": "",
+            "email": "support-staff@mozilla.com",
+            "deleted": false,
+            "password": "",
+            "read_dev_agreement": "2012-08-20 00:00:00",
+            "created": "2012-01-06 12:31:13",
+            "modified": "2012-05-22 14:59:28",
+            "last_login_ip": "127.0.0.1",
+            "last_login": "2012-05-22 14:59:28",
+            "enable_recommendations": 1
+        }
+    },
+    {
+        "pk": 50057,
+        "model": "access.group",
+        "fields": {
+            "rules": "AccountLookup:View,Apps:Configure,Transaction:View,Transaction:Refund,Lookup:View,AppLookup:View,WebsiteLookup:View",
+            "notes": "",
+            "modified": "2012-05-22 17:53:57",
+            "name": "Support Staff",
+            "created": "2012-05-22 17:53:57",
+            "restricted": false
+        }
+    },
+    {
+        "pk": 6,
+        "model": "access.groupuser",
+        "fields": {
+            "group": 50057,
+            "user": 15
+        }
+    }
+]

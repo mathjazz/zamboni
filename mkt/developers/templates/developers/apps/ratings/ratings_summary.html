@@ -1,26 +1,82 @@
-{% from 'developers/includes/macros.html' import iarc_rating_icon %}
+{% extends 'developers/base_impala.html' %}
 
+{% set title = _('Content Ratings') %}
+{% block title %}{{ hub_page_title(title, addon) }}{% endblock %}
 
-<h2>{{ _('Summary') }}</h2>
-<a class="toggle-ratings-page button">{{ _('Edit') }}</a>
+{% block content %}
+  <header>
+    {{ hub_breadcrumbs(addon, items=[(None, _('Content Ratings') )]) }}
+    <h1>{{ title }}</h1>
+  </header>
 
-<table class="ratings-summary data-grid">
-  <thead>
-    <th>{{ _('Rating System') }}</th>
-    <th>{{ _('Region') }}</th>
-    <th>{{ _('Rating Category') }}</th>
-    <th>{{ _('Descriptions') }}</th>
-  </thead>
-  <tbody>
-    {% for cr in addon.content_ratings.order_by('ratings_body') %}
-      {% set ratings_body = cr.get_body() %}
-      {% set rating = cr.get_rating() %}
-      <tr>
-        <td class="name">{{ ratings_body.name }}</td>
-        <td class="regions">{{ ratings_body.region_description }}</td>
-        <td class="content-rating">{{ iarc_rating_icon(cr) }}</td>
-        <td class="desc"> {{ rating.description or '--' }}</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+  <section id="ratings-summary" class="primary manage">
+    <h2>
+      {{ _('Summary') }}
+      <a href="{{ addon.get_dev_url('ratings_edit') }}" class="button edit">
+        {{ _('Edit') }}</a>
+    </h2>
+
+    <div class="island">
+      <h3>{{ _('Content Ratings') }}</h3>
+      <table class="ratings-summary data-grid">
+        <thead>
+          <th>{{ _('Rating System') }}</th>
+          <th>{{ _('Region') }}</th>
+          <th>{{ _('Rating Category') }}</th>
+          <th>{{ _('Descriptors') }}</th>
+        </thead>
+        <tbody>
+          {% for cr in addon.content_ratings.order_by('ratings_body') %}
+            {% set body = cr.get_body() %}
+            {% set rating = cr.get_rating() %}
+            <tr>
+              <td class="name">{{ body.name }}</td>
+              <td class="regions">{{ body.description or '&mdash;'|safe }}</td>
+              <td class="content-rating">
+                {% include "developers/includes/content_rating_icon.html" %}</td>
+              <td class="content-descriptors">
+                {% set desc_icons = mkt.ratingsbodies.IARC_ICONS.descriptors %}
+                {% for descriptor in addon.rating_descriptors.to_keys_by_body(body.label) %}
+                  {% set desc_icon = body.label in desc_icons and desc_icons[body.label][descriptor] %}
+                  {% if desc_icon %}
+                    <img src="{{ media(desc_icon) }}" class="icon"
+                         title="{{ mkt.iarc_mappings.HUMAN_READABLE_DESCS_AND_INTERACTIVES[descriptor] }}">
+                  {% else %}
+                    <span class="dot-sep descriptor">
+                      {{ mkt.iarc_mappings.HUMAN_READABLE_DESCS_AND_INTERACTIVES[descriptor] }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  &mdash;
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% set interactives = addon.rating_interactives.to_keys() %}
+      {% if interactives %}
+        <h3>{{ _('Interactive Elements') }}</h3>
+        <div class="interactive-elements c">
+          <div class="names">
+            {% for interactive in interactives %}
+              <span class="dot-sep interactive">
+                {{ mkt.iarc_mappings.HUMAN_READABLE_DESCS_AND_INTERACTIVES[interactive] }}
+              </span>
+            {% endfor %}
+          </div>
+          {% set inter_icons = mkt.ratingsbodies.IARC_ICONS.interactive_elements %}
+          {% for interactive in interactives %}
+            {% if inter_icons[interactive] %}
+              <img src="{{ media(inter_icons[interactive]) }}" class="icon"
+                   title="{{ mkt.iarc_mappings.HUMAN_READABLE_DESCS_AND_INTERACTIVES[interactive] }}">
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {% include 'developers/includes/addons_edit_nav.html' %}
+{% endblock %}

@@ -1,78 +1,80 @@
 # -*- coding: utf-8 -*-
-from tower import ugettext_lazy as _lazy
+from django.utils.translation import ugettext_lazy as _lazy
 
 
-DESC_GENERAL = _lazy(u'General Audiences')
-DESC_3 = _lazy(u'Not recommended for users younger than 3 years of age')
-DESC_6 = _lazy(u'Not recommended for users younger than 6 years of age')
-DESC_7 = _lazy(u'Not recommended for users younger than 7 years of age')
-DESC_10 = _lazy(u'Not recommended for users younger than 10 years of age')
-DESC_12 = _lazy(u'Not recommended for users younger than 12 years of age')
-DESC_13 = _lazy(u'Not recommended for users younger than 13 years of age')
-DESC_14 = _lazy(u'Not recommended for users younger than 14 years of age')
-DESC_16 = _lazy(u'Not recommended for users younger than 16 years of age')
-DESC_17 = _lazy(u'Not recommended for users younger than 17 years of age')
-DESC_18 = _lazy(u'Not recommended for users younger than 18 years of age')
-DESC_REJECTED = _lazy(u'Rejected for All Audiences')
-
-RATING_DESCS = {
-    '0': DESC_GENERAL,
-    '3': DESC_3,
-    '6': DESC_6,
-    '7': DESC_7,
-    '10': DESC_10,
-    '12': DESC_12,
-    '13': DESC_13,
-    '14': DESC_14,
-    '16': DESC_16,
-    '17': DESC_17,
-    '18': DESC_18,
-    'X': DESC_REJECTED,
-}
+NAME_GENERAL = _lazy('For all ages')
+# L10n: %d is the age in years. For ages %d and higher.
+NAME_LAZY = _lazy('For ages %d+')  # Fill this in after accessing.
+NAME_REJECTED = _lazy(u'Rating Rejected')
+NAME_PENDING = _lazy(u'Rating Pending')
 
 
 class RATING(object):
-    """Content rating."""
+    """
+    Content rating.
+
+    iarc_name -- how IARC names the rating, to talk with IARC.
+    age -- minimum age of the rating's age recommendation.
+    name -- how we name the rating, for translated display on all pages.
+    label -- for CSS classes, to create icons.
+    """
+    age = None
+    name = None
+    label = None
+    adult = False
 
 
 class RATING_BODY(object):
-    """Content rating body."""
+    """
+    Content rating body.
+
+    iarc_name -- how IARC names the ratings body, to talk with IARC.
+    ratings -- list of RATINGs associated with this body.
+
+    name -- for general translated display on all pages.
+    label -- for CSS classes, to create icons.
+    description -- for general translated display on all pages.
+    full_name -- in case we ever want to display the full translated name.
+    url -- in case we ever want to link to the ratings body page for more info.
+    """
+    label = None
 
 
 class CLASSIND_L(RATING):
-    name = '0+'
     id = 0
-    description = RATING_DESCS['0']
+    age = 0
+    iarc_name = 'Livre'
 
 
 class CLASSIND_10(RATING):
-    name = '10+'
     id = 1
-    description = RATING_DESCS['10']
+    age = 10
+    iarc_name = '10+'
 
 
 class CLASSIND_12(RATING):
-    name = '12+'
     id = 2
-    description = RATING_DESCS['12']
+    age = 12
+    iarc_name = '12+'
 
 
 class CLASSIND_14(RATING):
-    name = '14+'
     id = 3
-    description = RATING_DESCS['14']
+    age = 14
+    iarc_name = '14+'
 
 
 class CLASSIND_16(RATING):
-    name = '16+'
     id = 4
-    description = RATING_DESCS['16']
+    age = 16
+    iarc_name = '16+'
 
 
 class CLASSIND_18(RATING):
-    name = '18+'
     id = 5
-    description = RATING_DESCS['18']
+    age = 18
+    iarc_name = '18+'
+    adult = True
 
 
 class CLASSIND(RATING_BODY):
@@ -80,44 +82,54 @@ class CLASSIND(RATING_BODY):
     The Brazilian game ratings body (aka. DEJUS, DJCTQ).
     """
     id = 0
+    iarc_name = 'CLASSIND'
     ratings = (CLASSIND_L, CLASSIND_10, CLASSIND_12, CLASSIND_14, CLASSIND_16,
                CLASSIND_18)
+
     name = 'CLASSIND'
+    description = _lazy(u'Brazil')
     full_name = _lazy(u'Department of Justice, Rating, Titles and '
                       u'Qualification')
-    region_description = _lazy(u'Brazil')
     url = ('http://portal.mj.gov.br/classificacao/data/Pages/'
            'MJ6BC270E8PTBRNN.htm')
 
 
 class GENERIC_3(RATING):
-    name = '3+'
     id = 0
-    description = RATING_DESCS['3']
+    age = 3
+    iarc_name = '3+'
 
 
 class GENERIC_7(RATING):
-    name = '7+'
     id = 1
-    description = RATING_DESCS['7']
+    age = 7
+    iarc_name = '7+'
 
 
 class GENERIC_12(RATING):
-    name = '12+'
     id = 2
-    description = RATING_DESCS['12']
+    age = 12
+    iarc_name = '12+'
 
 
 class GENERIC_16(RATING):
-    name = '16+'
     id = 3
-    description = RATING_DESCS['16']
+    age = 16
+    iarc_name = '16+'
 
 
 class GENERIC_18(RATING):
-    name = '18+'
     id = 4
-    description = RATING_DESCS['18']
+    age = 18
+    iarc_name = '18+'
+    adult = True
+
+
+class GENERIC_RP(RATING):
+    id = 5
+    iarc_name = 'RP'
+    label = 'pending'
+    name = NAME_PENDING
 
 
 class GENERIC(RATING_BODY):
@@ -125,46 +137,51 @@ class GENERIC(RATING_BODY):
     The generic game ratings body (used in Germany, for example).
     """
     id = 1
-    ratings = (GENERIC_3, GENERIC_7, GENERIC_12, GENERIC_16, GENERIC_18)
-    name = _lazy(u'Generic')
+    iarc_name = 'Generic'
+    ratings = (GENERIC_3, GENERIC_7, GENERIC_12, GENERIC_16, GENERIC_18,
+               GENERIC_RP)
+
+    name = _lazy('Generic')
+    description = ''  # No comment.
     full_name = _lazy(u'Generic')
-    region_description = ''  # No comment.
 
 
 class USK_0(RATING):
-    name = '0+'
     id = 0
-    description = RATING_DESCS['0']
+    age = 0
+    iarc_name = '0+'
 
 
 class USK_6(RATING):
-    name = '6+'
     id = 1
-    description = RATING_DESCS['6']
+    age = 6
+    iarc_name = '6+'
 
 
 class USK_12(RATING):
-    name = '12+'
     id = 2
-    description = RATING_DESCS['12']
+    age = 12
+    iarc_name = '12+'
 
 
 class USK_16(RATING):
-    name = '16+'
     id = 3
-    description = RATING_DESCS['16']
+    age = 16
+    iarc_name = '16+'
 
 
 class USK_18(RATING):
-    name = '18+'
     id = 4
-    description = RATING_DESCS['18']
+    age = 18
+    iarc_name = '18+'
+    adult = True
 
 
 class USK_REJECTED(RATING):
-    name = _lazy('Rejected')
     id = 5
-    description = RATING_DESCS['X']
+    iarc_name = 'Rating Refused'
+    label = 'rating-refused'
+    name = NAME_REJECTED
 
 
 class USK(RATING_BODY):
@@ -173,58 +190,50 @@ class USK(RATING_BODY):
     (aka. Unterhaltungssoftware Selbstkontrolle).
     """
     id = 2
+    iarc_name = 'USK'
     ratings = (USK_0, USK_6, USK_12, USK_16, USK_18, USK_REJECTED)
+
     name = 'USK'
+    description = _lazy(u'Germany')
     full_name = _lazy(u'Entertainment Software Self-Regulation Body')
-    region_description = _lazy(u'Germany')
     url = 'http://www.usk.de/en/'
 
 
 class ESRB_E(RATING):
     """Everybody."""
-    name = '0+'
-    full_name = _lazy('Everyone')
     id = 0
-    description = RATING_DESCS['0']
+    age = 0
+    iarc_name = 'Everyone'
+    name = _lazy('Everyone')
 
 
 class ESRB_10(RATING):
-    name = '10+'
-    # L10n: `10+` is age ten and over.
-    full_name = _lazy('Everyone 10+')
     id = 1
-    description = RATING_DESCS['10']
+    age = 10
+    iarc_name = 'Everyone 10+'
+    name = _lazy('Everyone 10+')  # L10n: `10+` is age ten and over.
 
 
 class ESRB_T(RATING):
-    name = '13+'
-    full_name = _lazy('Teen')
     id = 2
-    description = RATING_DESCS['13']
+    age = 13
+    iarc_name = 'Teen'
+    name = _lazy('Teen')
 
 
 class ESRB_M(RATING):
-    name = '17+'
-    # L10n: `17+` is age seventeen and over.
-    full_name = _lazy('Mature 17+')
     id = 3
-    description = RATING_DESCS['17']
+    age = 17
+    iarc_name = 'Mature 17+'
+    name = _lazy('Mature 17+')  # L10n: `17+` is age seventeen and over.
 
 
 class ESRB_A(RATING):
-    name = '18+'
-    # L10n: `18+` is age eighteen and over.
-    full_name = _lazy('Adults Only 18+')
     id = 4
-    description = RATING_DESCS['18']
-
-
-class ESRB_RP(RATING):
-    name = 'pending'
-    # L10n: `18+` is age eighteen and over.
-    full_name = _lazy('Rating Pending')
-    id = 4
-    description = RATING_DESCS['18']
+    age = 18
+    iarc_name = 'Adults Only'
+    name = _lazy('Adults Only 18+')  # L10n: `18+` is age eighteen and over.
+    adult = True
 
 
 class ESRB(RATING_BODY):
@@ -232,53 +241,58 @@ class ESRB(RATING_BODY):
     The North American game ratings body (i.e. USA, Canada).
     """
     id = 3
+    iarc_name = 'ESRB'
     ratings = (ESRB_E, ESRB_10, ESRB_T, ESRB_M, ESRB_A)
+
     name = 'ESRB'
+    # L10n: North and South American, but not Brazil.
+    description = _lazy(u'All Americas except Brazil')
     full_name = _lazy(u'Entertainment Software Rating Board')
-    # L10N: `N.` stands for North.
-    region_description = _lazy(u'N. America')
     url = 'http://esrb.org'
 
 
 class PEGI_3(RATING):
-    name = '3+'
     id = 0
-    description = RATING_DESCS['3']
+    age = 3
+    iarc_name = '3+'
 
 
 class PEGI_7(RATING):
-    name = '7+'
     id = 1
-    description = RATING_DESCS['7']
+    age = 7
+    iarc_name = '7+'
 
 
 class PEGI_12(RATING):
-    name = '12+'
     id = 2
-    description = RATING_DESCS['12']
+    age = 12
+    iarc_name = '12+'
 
 
 class PEGI_16(RATING):
-    name = '16+'
     id = 3
-    description = RATING_DESCS['16']
+    age = 16
+    iarc_name = '16+'
 
 
 class PEGI_18(RATING):
-    name = '18+'
-    id = 3
-    description = RATING_DESCS['18']
+    id = 4
+    age = 18
+    iarc_name = '18+'
+    adult = True
 
 
 class PEGI(RATING_BODY):
     """
-    The European game ratings body (i.e. UK, Poland, Spain).
+    The European game ratings body (i.e. GBR, Poland, Spain).
     """
     id = 4
+    iarc_name = 'PEGI'
     ratings = (PEGI_3, PEGI_7, PEGI_12, PEGI_16, PEGI_18)
+
     name = 'PEGI'
+    description = _lazy(u'Europe')
     full_name = _lazy(u'Pan European Game Information')
-    region_description = _lazy(u'Europe')
     url = 'http://www.pegi.info'
 
 
@@ -289,13 +303,159 @@ RATINGS_BODIES = {
     ESRB.id: ESRB,
     PEGI.id: PEGI,
 }
-ALL_RATINGS = []
-for rb in RATINGS_BODIES.values():
-    ALL_RATINGS.extend(rb.ratings)
 
-RATINGS_BY_NAME = []
+
+# Attach ratings bodies to ratings.
 for rb in RATINGS_BODIES.values():
     for r in rb.ratings:
-        RATINGS_BY_NAME.append((ALL_RATINGS.index(r),
-                                '%s - %s' % (rb.name, r.name)))
         r.ratingsbody = rb
+
+
+ALL_RATINGS_BODIES = [CLASSIND, GENERIC, USK, ESRB, PEGI]
+
+
+def ALL_RATINGS():
+    """
+    List of all ratings with waffled bodies.
+    """
+    ALL_RATINGS = []
+    for rb in RATINGS_BODIES.values():
+        ALL_RATINGS.extend(rb.ratings)
+    return ALL_RATINGS
+
+
+def RATINGS_BY_NAME():
+    """
+    Create a list of tuples (choices) after we know the locale since this
+    attempts to concatenate two lazy translations in constants file.
+    """
+    all_ratings = ALL_RATINGS()
+
+    ratings_choices = []
+    for rb in RATINGS_BODIES.values():
+        for r in rb.ratings:
+            ratings_choices.append(
+                (all_ratings.index(r),
+                 u'%s - %s' % (rb.name, dehydrate_rating(r).name)))
+    return ratings_choices
+
+
+def slugify_iarc_name(obj):
+    """
+    Converts ratings body's or rating's iarc_name to a slug-like label
+    (e.g. "USK" to "usk").
+    """
+    return obj.iarc_name.lower().replace(' ', '-')
+
+
+def dehydrate_rating(rating_class):
+    """
+    Returns a rating with translated fields attached and with fields that are
+    easily created dynamically.
+    """
+    rating = rating_class()
+
+    if rating.label is None:
+        rating.label = str(rating.age) or slugify_iarc_name(rating)
+    if rating.name is None:
+        if rating.age == 0:
+            rating.name = unicode(NAME_GENERAL)
+        else:
+            rating.name = unicode(NAME_LAZY) % rating.age
+
+    rating.name = unicode(rating.name)
+    return rating
+
+
+def dehydrate_ratings_body(body_class):
+    """Returns a rating body with translated fields attached."""
+    body = body_class()
+
+    if body.label is None:
+        body.label = slugify_iarc_name(body)
+
+    body.name = unicode(body.name)
+    body.description = unicode(body.description)
+    return body
+
+
+def pth(path):
+    """Prepends root icon path to path."""
+    return 'img/icons/ratings/' + path
+
+
+IARC_ICONS = {
+    'ratings': {
+        # The keys are ratings' labels.
+        'classind': {
+            '0': pth('CLASSIND_L.png'),
+            '10': pth('CLASSIND_10.png'),
+            '12': pth('CLASSIND_12.png'),
+            '14': pth('CLASSIND_14.png'),
+            '16': pth('CLASSIND_16.png'),
+            '18': pth('CLASSIND_18.png'),
+        },
+        'esrb': {
+            '0': pth('ESRB_e.png'),
+            '10': pth('ESRB_e10.png'),
+            '13': pth('ESRB_t.png'),
+            '17': pth('ESRB_m.png'),
+            '18': pth('ESRB_ao.png'),
+        },
+        'generic': {
+            '3': pth('generic_3.png'),
+            '7': pth('generic_7.png'),
+            '12': pth('generic_12.png'),
+            '16': pth('generic_16.png'),
+            '18': pth('generic_18.png'),
+            'pending': pth('generic_rp.png'),
+        },
+        'pegi': {
+            '3': pth('pegi_3.png'),
+            '7': pth('pegi_7.png'),
+            '12': pth('pegi_12.png'),
+            '16': pth('pegi_16.png'),
+            '18': pth('pegi_18.png'),
+        },
+        'usk': {
+            '0': pth('USK_0.png'),
+            '6': pth('USK_6.png'),
+            '12': pth('USK_12.png'),
+            '16': pth('USK_16.png'),
+            '18': pth('USK_18.png'),
+            'rating-refused': pth('USK_RR.png')
+        }
+    },
+    'descriptors': {
+        'pegi': {
+            'has_pegi_discrimination':
+                pth('descriptors/pegi_discrimination.png'),
+            'has_pegi_drugs': pth('descriptors/pegi_drugs.png'),
+            'has_pegi_gambling': pth('descriptors/pegi_gambling.png'),
+            'has_pegi_lang': pth('descriptors/pegi_language.png'),
+            'has_pegi_nudity': pth('descriptors/pegi_nudity.png'),
+            'has_pegi_online': pth('descriptors/pegi_online.png'),
+            'has_pegi_scary': pth('descriptors/pegi_fear.png'),
+            'has_pegi_sex_content': pth('descriptors/pegi_sex.png'),
+            'has_pegi_violence': pth('descriptors/pegi_violence.png'),
+
+            'has_pegi_digital_purchases': pth(
+                'descriptors/pegi_inapp_purchase_option.png'),
+            'has_pegi_shares_info': pth(
+                'descriptors/pegi_personal_data_sharing.png'),
+            'has_pegi_shares_location': pth(
+                'descriptors/pegi_location_data_sharing.png'),
+            'has_pegi_users_interact': pth(
+                'descriptors/pegi_social_interaction_functionality.png'),
+        }
+    },
+    'interactive_elements': {
+        'has_shares_info': pth('interactives/ESRB_shares-info_small.png'),
+        'has_shares_location':
+            pth('interactives/ESRB_shares-location_small.png'),
+        'has_users_interact':
+            pth('interactives/ESRB_users-interact_small.png'),
+        'has_digital_purchases': pth(
+            'interactives/ESRB_digital-purchases_small.png'),
+    }
+}

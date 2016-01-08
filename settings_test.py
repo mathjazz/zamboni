@@ -1,7 +1,7 @@
 import atexit
 import tempfile
 
-from django.utils.functional import lazy
+from mkt.settings import *  # noqa
 
 
 _tmpdirs = set()
@@ -28,112 +28,49 @@ def _polite_tmpdir():
     _tmpdirs.add(tmp)
     return tmp
 
-# See settings.py for documentation:
-IN_TEST_SUITE = True
+
+# Various paths. See mkt/settings.py for documentation:
 NETAPP_STORAGE = _polite_tmpdir()
 ADDONS_PATH = _polite_tmpdir()
+ADDON_ICONS_PATH = _polite_tmpdir()
+WEBSITE_ICONS_PATH = _polite_tmpdir()
+WEBAPP_PROMO_IMG_PATH = _polite_tmpdir()
+WEBSITE_PROMO_IMG_PATH = _polite_tmpdir()
 GUARDED_ADDONS_PATH = _polite_tmpdir()
 SIGNED_APPS_PATH = _polite_tmpdir()
 SIGNED_APPS_REVIEWER_PATH = _polite_tmpdir()
+SIGNING_SERVER_ACTIVE = False
 UPLOADS_PATH = _polite_tmpdir()
-MIRROR_STAGE_PATH = _polite_tmpdir()
 TMP_PATH = _polite_tmpdir()
-COLLECTIONS_ICON_PATH = _polite_tmpdir()
-PACKAGER_PATH = _polite_tmpdir()
 REVIEWER_ATTACHMENTS_PATH = _polite_tmpdir()
 DUMPED_APPS_PATH = _polite_tmpdir()
-
-# We won't actually send an email.
-SEND_REAL_EMAIL = True
-
-# Turn off search engine indexing.
-USE_ELASTIC = False
-
-# Ensure all validation code runs in tests:
-VALIDATE_ADDONS = True
-
-PAYPAL_PERMISSIONS_URL = ''
-
-SITE_URL = 'http://testserver'
-STATIC_URL = SITE_URL + '/'
-MOBILE_SITE_URL = ''
-MEDIA_URL = '/media/'
-# Reset these URLs to the defaults so your settings_local doesn't clobber them:
-ADDON_ICONS_DEFAULT_URL = MEDIA_URL + '/img/addon-icons'
-ADDON_ICON_BASE_URL = MEDIA_URL + 'img/icons/'
-ADDON_ICON_URL = (STATIC_URL +
-                  'img/uploads/addon_icons/%s/%s-%s.png?modified=%s')
-PREVIEW_THUMBNAIL_URL = (STATIC_URL +
-                         'img/uploads/previews/thumbs/%s/%d.png?modified=%d')
-PREVIEW_FULL_URL = (STATIC_URL +
-                    'img/uploads/previews/full/%s/%d.%s?modified=%d')
-USERPICS_URL = STATIC_URL + 'img/uploads/userpics/%s/%s/%s.png?modified=%d'
-
-CACHES = {
-    'default': {
-        'BACKEND': 'caching.backends.locmem.LocMemCache',
-    }
-}
-
-# COUNT() caching can't be invalidated, it just expires after x seconds. This
-# is just too annoying for tests, so disable it.
-CACHE_COUNT_TIMEOUT = None
-
-# No more failures!
-APP_PREVIEW = False
-
-# Overrides whatever storage you might have put in local settings.
-DEFAULT_FILE_STORAGE = 'amo.utils.LocalFileStorage'
-
-VIDEO_LIBRARIES = ['lib.video.dummy']
+EXTENSIONS_PATH = _polite_tmpdir()
+SIGNED_EXTENSIONS_PATH = _polite_tmpdir()
 
 ALLOW_SELF_REVIEWS = True
-
-# Make sure debug toolbar output is disabled so it doesn't interfere with any
-# html tests.
-
-
-DEBUG_TOOLBAR_CONFIG = {
-    'INTERCEPT_REDIRECTS': False,
-    'SHOW_TOOLBAR_CALLBACK': lambda r: False,
-    'HIDE_DJANGO_SQL': True,
-    'TAG': 'div',
-    'ENABLE_STACKTRACES': False,
-}
-
-MOZMARKET_VENDOR_EXCLUDE = []
-
-# These are the default languages. If you want a constrainted set for your
-# tests, you should add those in the tests.
-
-
-def lazy_langs(languages):
-    from product_details import product_details
-    if not product_details.languages:
-        return {}
-    return dict([(i.lower(), product_details.languages[i]['native'])
-                 for i in languages])
-
-AMO_LANGUAGES = (
-    'af', 'ar', 'bg', 'ca', 'cs', 'da', 'de', 'el', 'en-US', 'es', 'eu', 'fa',
-    'fi', 'fr', 'ga-IE', 'he', 'hu', 'id', 'it', 'ja', 'ko', 'mn', 'nl', 'pl',
-    'pt-BR', 'pt-PT', 'ro', 'ru', 'sk', 'sl', 'sq', 'sv-SE', 'uk', 'vi',
-    'zh-CN', 'zh-TW',
-)
-LANGUAGES = lazy(lazy_langs, dict)(AMO_LANGUAGES)
-LANGUAGE_URL_MAP = dict([(i.lower(), i) for i in AMO_LANGUAGES])
-TASK_USER_ID = '4043307'
-
+BROWSERID_AUDIENCES = [SITE_URL]
+CELERY_ROUTES = {}
+CELERY_ALWAYS_EAGER = True
+DEBUG = False
+DEBUG_PROPAGATE_EXCEPTIONS = False
+EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+ES_DEFAULT_NUM_REPLICAS = 0
+# See the following URL on why we set num_shards to 1 for tests:
+# http://www.elasticsearch.org/guide/en/elasticsearch/guide/current/relevance-is-broken.html
+ES_DEFAULT_NUM_SHARDS = 1
+IARC_MOCK = True
+IN_TEST_SUITE = True
+INSTALLED_APPS += ('mkt.translations.tests.testapp',)
 PASSWORD_HASHERS = (
     'django.contrib.auth.hashers.MD5PasswordHasher',
 )
-
-SQL_RESET_SEQUENCES = False
-GEOIP_URL = ''
-GEOIP_DEFAULT_VAL = 'worldwide'
-GEOIP_DEFAULT_TIMEOUT = .2
-
-ES_DEFAULT_NUM_REPLICAS = 0
-ES_DEFAULT_NUM_SHARDS = 3
-
-PAYMENT_LIMITED = False
+PAYMENT_PROVIDERS = ['bango', 'reference']
+# This is a precaution in case something isn't mocked right.
+PRE_GENERATE_APK_URL = 'http://you-should-never-load-this.com/'
+RUN_ES_TESTS = True
+SEND_REAL_EMAIL = True
+SITE_URL = 'http://testserver'
+STATIC_URL = SITE_URL + '/'
+TASK_USER_ID = '4043307'
+TEMPLATE_DEBUG = False
+VIDEO_LIBRARIES = ['lib.video.dummy']

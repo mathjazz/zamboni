@@ -1,42 +1,43 @@
+# -*- coding: utf-8 -*-
 import json
 import os
 import shutil
 
+from django import forms as django_forms
 from django.conf import settings
-from django.core.files.storage import default_storage as storage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test.client import RequestFactory
 
 import mock
-from nose.tools import eq_
-from test_utils import RequestFactory
-
-import amo
-import amo.tests
-from amo.tests import app_factory, version_factory
-from amo.tests.test_helpers import get_image_path
-from addons.models import Addon, AddonCategory, Category
-from files.helpers import copyfileobj
-from tags.models import Tag
-from users.models import UserProfile
+from nose.tools import eq_, ok_
 
 import mkt
+import mkt.site.tests
+from lib.post_request_task import task as post_request_task
 from mkt.developers import forms
 from mkt.developers.tests.test_views_edit import TestAdmin
 from mkt.site.fixtures import fixture
-from mkt.webapps.models import (AddonExcludedRegion as AER, ContentRating,
-                                Webapp)
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage)
+from mkt.site.tests.test_utils_ import get_image_path
+from mkt.site.utils import app_factory, version_factory
+from mkt.tags.models import Tag
+from mkt.users.models import UserProfile
+from mkt.webapps.models import Geodata, IARCInfo, Webapp
 
 
-class TestPreviewForm(amo.tests.TestCase):
-    fixtures = ['base/addon_3615']
+class TestPreviewForm(mkt.site.tests.TestCase):
+    fixtures = fixture('webapp_337141', 'user_999')
 
     def setUp(self):
-        self.addon = Addon.objects.get(pk=3615)
+        self.addon = Webapp.objects.get(pk=337141)
         self.dest = os.path.join(settings.TMP_PATH, 'preview')
+        self.user = UserProfile.objects.get(pk=999)
+        mkt.set_user(self.user)
         if not os.path.exists(self.dest):
             os.makedirs(self.dest)
 
-    @mock.patch('amo.models.ModelBase.update')
+    @mock.patch('mkt.site.models.ModelBase.update')
     def test_preview_modified(self, update_mock):
         name = 'transparent.png'
         form = forms.PreviewForm({'upload_hash': name,
@@ -48,14 +49,17 @@ class TestPreviewForm(amo.tests.TestCase):
 
     def test_preview_size(self):
         name = 'non-animated.gif'
-        form = forms.PreviewForm({'upload_hash': name,
-                                  'position': 1})
-        with storage.open(os.path.join(self.dest, name), 'wb') as f:
-            copyfileobj(open(get_image_path(name)), f)
+        form = forms.PreviewForm({'upload_hash': name, 'position': 1})
+        copy_stored_file(
+            get_image_path(name), os.path.join(self.dest, name),
+            src_storage=local_storage, dst_storage=private_storage)
         assert form.is_valid(), form.errors
         form.save(self.addon)
+        # Since the task is a post-request-task and we are outside the normal
+        # request-response cycle, manually send the tasks.
+        post_request_task._send_tasks()
         eq_(self.addon.previews.all()[0].sizes,
-            {u'image': [250, 297], u'thumbnail': [180, 214]})
+            {u'image': [250, 297], u'thumbnail': [100, 119]})
 
     def check_file_type(self, type_):
         form = forms.PreviewForm({'upload_hash': type_,
@@ -75,43 +79,45 @@ class TestPreviewForm(amo.tests.TestCase):
         eq_(self.check_file_type('x.foo'), 'image/png')
 
 
-class TestCategoryForm(amo.tests.WebappTestCase):
+class TestCategoryForm(mkt.site.tests.WebappTestCase):
     fixtures = fixture('user_999', 'webapp_337141')
 
     def setUp(self):
         super(TestCategoryForm, self).setUp()
-        self.user = UserProfile.objects.get(username='regularuser')
+        self.user = UserProfile.objects.get(email='regular@mozilla.com')
         self.app = Webapp.objects.get(pk=337141)
         self.request = RequestFactory()
         self.request.user = self.user
         self.request.groups = ()
-
-        self.cat = Category.objects.create(type=amo.ADDON_WEBAPP)
+        self.cat = 'social'
 
     def _make_form(self, data=None):
         self.form = forms.CategoryForm(
             data, product=self.app, request=self.request)
 
-    def _cat_count(self):
-        return self.form.fields['categories'].queryset.count()
-
     def test_has_no_cats(self):
         self._make_form()
-        eq_(self._cat_count(), 1)
+        eq_(self.form.initial['categories'], [])
         eq_(self.form.max_categories(), 2)
 
     def test_save_cats(self):
-        self._make_form({'categories':
-            map(str, Category.objects.filter(type=amo.ADDON_WEBAPP)
-                                     .values_list('id', flat=True))})
+        self._make_form({'categories': ['books-comics', 'social']})
         assert self.form.is_valid(), self.form.errors
         self.form.save()
-        eq_(AddonCategory.objects.filter(addon=self.app).count(),
-            Category.objects.count())
+        eq_(self.app.reload().categories, ['books-comics', 'social'])
         eq_(self.form.max_categories(), 2)
 
+    def test_save_too_many_cats(self):
+        self._make_form({'categories': ['books-comics', 'social', 'games']})
+        ok_(self.form.errors)
 
-class TestRegionForm(amo.tests.WebappTestCase):
+    def test_save_non_existent_cat(self):
+        self._make_form({'categories': ['nonexistent']})
+        ok_(self.form.errors)
+
+
+@mock.patch('mkt.webapps.models.clean_memoized_exclusions', None)
+class TestRegionForm(mkt.site.tests.WebappTestCase):
     fixtures = fixture('webapp_337141')
 
     def setUp(self):
@@ -119,49 +125,74 @@ class TestRegionForm(amo.tests.WebappTestCase):
         self.request = RequestFactory()
         self.kwargs = {'product': self.app}
 
-    def test_initial_empty(self):
+    def test_initial_checked(self):
         form = forms.RegionForm(data=None, **self.kwargs)
-        eq_(form.initial['regions'], mkt.regions.ALL_REGION_IDS)
-        eq_(form.initial['enable_new_regions'], False)
+        # Even special regions (i.e., China) should be checked.
+        eq_(form.initial['restricted'], False)
+        eq_(form.initial['enable_new_regions'], True)
+        self.assertSetEqual(form.initial['regions'],
+                            set(mkt.regions.ALL_REGION_IDS))
 
     def test_initial_excluded_in_region(self):
-        AER.objects.create(addon=self.app, region=mkt.regions.BR.id)
+        self.app.geodata.update(restricted=True)
+        self.app.update(enable_new_regions=False)
+        self.app.addonexcludedregion.create(region=mkt.regions.BRA.id)
 
-        regions = list(mkt.regions.ALL_REGION_IDS)
-        regions.remove(mkt.regions.BR.id)
-
-        eq_(self.get_app().get_region_ids(worldwide=True), regions)
+        # Everything except Brazil.
+        regions = set(mkt.regions.ALL_REGION_IDS)
+        regions.remove(mkt.regions.BRA.id)
+        self.assertSetEqual(self.get_app().get_region_ids(restofworld=True),
+                            regions)
 
         form = forms.RegionForm(data=None, **self.kwargs)
-        eq_(form.initial['regions'], regions)
+
+        # Everything (even China) except Brazil.
+        self.assertSetEqual(form.initial['regions'], regions)
         eq_(form.initial['enable_new_regions'], False)
 
     def test_initial_excluded_in_regions_and_future_regions(self):
-        regions = [mkt.regions.BR, mkt.regions.UK, mkt.regions.WORLDWIDE]
+        self.app.geodata.update(restricted=True)
+        self.app.update(enable_new_regions=False)
+        regions = [mkt.regions.BRA, mkt.regions.GBR, mkt.regions.RESTOFWORLD]
         for region in regions:
-            AER.objects.create(addon=self.app, region=region.id)
+            self.app.addonexcludedregion.create(region=region.id)
 
-        regions = list(mkt.regions.ALL_REGION_IDS)
-        regions.remove(mkt.regions.BR.id)
-        regions.remove(mkt.regions.UK.id)
-        regions.remove(mkt.regions.WORLDWIDE.id)
+        regions = set(mkt.regions.ALL_REGION_IDS)
+        regions.remove(mkt.regions.BRA.id)
+        regions.remove(mkt.regions.GBR.id)
+        regions.remove(mkt.regions.RESTOFWORLD.id)
 
-        eq_(self.get_app().get_region_ids(), regions)
+        self.assertSetEqual(self.get_app().get_region_ids(),
+                            regions)
 
         form = forms.RegionForm(data=None, **self.kwargs)
-        eq_(form.initial['regions'], regions)
+        self.assertSetEqual(form.initial['regions'], regions)
         eq_(form.initial['enable_new_regions'], False)
 
-    def test_worldwide_only(self):
-        form = forms.RegionForm({'regions': [mkt.regions.WORLDWIDE.id]},
+    def test_restricted_ignores_enable_new_regions(self):
+        self.app.geodata.update(restricted=True)
+        self.app.update(enable_new_regions=False)
+
+        form = forms.RegionForm({'restricted': '0',
+                                 'regions': [mkt.regions.RESTOFWORLD.id],
+                                 'enable_new_regions': False}, **self.kwargs)
+        assert form.is_valid(), form.errors
+        form.save()
+
+        eq_(self.app.enable_new_regions, True)
+        eq_(self.app.geodata.restricted, False)
+
+    def test_restofworld_only(self):
+        form = forms.RegionForm({'regions': [mkt.regions.RESTOFWORLD.id]},
                                 **self.kwargs)
         assert form.is_valid(), form.errors
 
     def test_no_regions(self):
-        form = forms.RegionForm({'enable_new_regions': True}, **self.kwargs)
-        assert not form.is_valid()
+        form = forms.RegionForm({'restricted': '1',
+                                 'enable_new_regions': True}, **self.kwargs)
+        assert not form.is_valid(), 'Form should be invalid'
         eq_(form.errors,
-            {'__all__': ['You must select at least one region.']})
+            {'regions': ['You must select at least one region.']})
 
     def test_exclude_each_region(self):
         """Test that it's possible to exclude each region."""
@@ -181,70 +212,7 @@ class TestRegionForm(amo.tests.WebappTestCase):
             eq_(self.app.reload().get_region_ids(True), to_exclude,
                 'Failed for %s' % r_id)
 
-    def test_unrated_games_excluded(self):
-        games = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        AddonCategory.objects.create(addon=self.app, category=games)
-
-        form = forms.RegionForm({'regions': mkt.regions.REGION_IDS,
-                                 'restricted': '1',
-                                 'enable_new_regions': True},
-                                **self.kwargs)
-
-        # Developers should still be able to save form OK, even
-        # if they pass a bad region. Think of the grandfathered developers.
-        assert form.is_valid(), form.errors
-        form.save()
-
-        # No matter what the developer tells us, still exclude Brazilian
-        # and German games.
-        form = forms.RegionForm(data=None, **self.kwargs)
-        self.assertSetEqual(form.initial['regions'],
-            set(mkt.regions.REGION_IDS) -
-            set([mkt.regions.BR.id, mkt.regions.DE.id,
-                 mkt.regions.WORLDWIDE.id]))
-        eq_(form.initial['enable_new_regions'], True)
-
-    def test_unrated_games_already_excluded(self):
-        regions = [x.id for x in mkt.regions.ALL_REGIONS_WITH_CONTENT_RATINGS]
-        for region in regions:
-            AER.objects.create(addon=self.app, region=region)
-
-        games = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        AddonCategory.objects.create(addon=self.app, category=games)
-
-        form = forms.RegionForm({'regions': mkt.regions.REGION_IDS,
-                                 'restricted': '1',
-                                 'enable_new_regions': True},
-                                **self.kwargs)
-
-        assert form.is_valid()
-        form.save()
-
-        form = forms.RegionForm(data=None, **self.kwargs)
-        self.assertSetEqual(form.initial['regions'],
-            set(mkt.regions.REGION_IDS) -
-            set(regions + [mkt.regions.WORLDWIDE.id]))
-        eq_(form.initial['enable_new_regions'], True)
-
-    def test_rated_games_with_content_rating(self):
-        # This game has a government content rating!
-        for region in mkt.regions.ALL_REGIONS_WITH_CONTENT_RATINGS:
-            rb = region.ratingsbodies[0]
-            ContentRating.objects.create(
-                addon=self.app, ratings_body=rb.id, rating=rb.ratings[0].id)
-
-        games = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        AddonCategory.objects.create(addon=self.app, category=games)
-
-        form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS,
-                                 'enable_new_regions': True},
-                                **self.kwargs)
-        assert form.is_valid(), form.errors
-        form.save()
-
-        eq_(self.app.get_region_ids(True), mkt.regions.ALL_REGION_IDS)
-
-    def test_exclude_worldwide(self):
+    def test_exclude_restofworld(self):
         form = forms.RegionForm({'regions': mkt.regions.REGION_IDS,
                                  'restricted': '1',
                                  'enable_new_regions': False}, **self.kwargs)
@@ -253,7 +221,7 @@ class TestRegionForm(amo.tests.WebappTestCase):
         eq_(self.app.get_region_ids(True), mkt.regions.REGION_IDS)
 
     def test_reinclude_region(self):
-        AER.objects.create(addon=self.app, region=mkt.regions.BR.id)
+        self.app.addonexcludedregion.create(region=mkt.regions.BRA.id)
 
         form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS,
                                  'enable_new_regions': True}, **self.kwargs)
@@ -261,45 +229,214 @@ class TestRegionForm(amo.tests.WebappTestCase):
         form.save()
         eq_(self.app.get_region_ids(True), mkt.regions.ALL_REGION_IDS)
 
-    def test_reinclude_worldwide(self):
-        AER.objects.create(addon=self.app, region=mkt.regions.WORLDWIDE.id)
+    def test_reinclude_restofworld(self):
+        self.app.addonexcludedregion.create(region=mkt.regions.RESTOFWORLD.id)
 
-        form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS},
+        form = forms.RegionForm({'restricted': '1',
+                                 'regions': mkt.regions.ALL_REGION_IDS},
                                 **self.kwargs)
         assert form.is_valid(), form.errors
         form.save()
         eq_(self.app.get_region_ids(True), mkt.regions.ALL_REGION_IDS)
 
-    def test_worldwide_valid_choice_paid(self):
-        self.app.update(premium_type=amo.ADDON_PREMIUM)
+    def test_restofworld_valid_choice_paid(self):
+        self.app.update(premium_type=mkt.ADDON_PREMIUM)
         form = forms.RegionForm(
-            {'regions': [mkt.regions.WORLDWIDE.id]}, **self.kwargs)
+            {'restricted': '1',
+             'regions': [mkt.regions.RESTOFWORLD.id]}, **self.kwargs)
         assert form.is_valid(), form.errors
 
-    def test_worldwide_valid_choice_free(self):
+    def test_paid_app_options_initial(self):
+        """Check initial regions of a paid app post-save.
+
+        Check that if we save the region form for a paid app
+        with a specific region that should *not* be excluded it is still
+        shown as a initial region when the new form instance is created.
+
+        """
+
+        self.app.update(premium_type=mkt.ADDON_PREMIUM)
         form = forms.RegionForm(
-            {'regions': [mkt.regions.WORLDWIDE.id]}, **self.kwargs)
+            {'restricted': '1',
+             'regions': [mkt.regions.RESTOFWORLD.id]}, **self.kwargs)
+        assert form.is_valid(), form.errors
+        form.save()
+        new_form = forms.RegionForm(**self.kwargs)
+        self.assertIn(mkt.regions.RESTOFWORLD.id,
+                      new_form.initial.get('regions', []))
+
+    def test_restofworld_valid_choice_free(self):
+        form = forms.RegionForm(
+            {'restricted': '1',
+             'regions': [mkt.regions.RESTOFWORLD.id]}, **self.kwargs)
         assert form.is_valid(), form.errors
 
+    def test_china_initially_included(self):
+        self.create_flag('special-regions')
+        form = forms.RegionForm(None, **self.kwargs)
+        cn = mkt.regions.CHN.id
+        assert cn in form.initial['regions']
+        assert cn in dict(form.fields['regions'].choices).keys()
 
-class TestNewManifestForm(amo.tests.TestCase):
+    def _test_china_excluded_if_pending_or_rejected(self):
+        self.create_flag('special-regions')
+
+        # Mark app as pending/rejected in China.
+        for status in (mkt.STATUS_PENDING, mkt.STATUS_REJECTED):
+            self.app.geodata.set_status(mkt.regions.CHN, status, save=True)
+            eq_(self.app.geodata.get_status(mkt.regions.CHN), status)
+
+            # Post the form.
+            form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS,
+                                     'special_regions': [mkt.regions.CHN.id]},
+                                    **self.kwargs)
+
+            # China should be checked if it's pending and
+            # unchecked if rejected.
+            cn = mkt.regions.CHN.id
+            if status == mkt.STATUS_PENDING:
+                assert cn in form.initial['regions'], (
+                    status, form.initial['regions'])
+            else:
+                assert cn not in form.initial['regions'], (
+                    status, form.initial['regions'])
+            choices = dict(form.fields['regions'].choices).keys()
+            assert cn in choices, (status, choices)
+
+            assert form.is_valid(), form.errors
+            form.save()
+
+            # App should be unlisted in China and always pending after
+            # requesting China.
+            self.app = self.app.reload()
+            eq_(self.app.listed_in(mkt.regions.CHN), False)
+            eq_(self.app.geodata.get_status(mkt.regions.CHN),
+                mkt.STATUS_PENDING)
+
+    def test_china_excluded_if_pending_or_rejected(self):
+        self._test_china_excluded_if_pending_or_rejected()
+
+    def test_china_already_excluded_and_pending_or_rejected(self):
+        cn = mkt.regions.CHN.id
+        self.app.addonexcludedregion.create(region=cn)
+
+        # If the app was already excluded in China, the checkbox should still
+        # be checked if the app's been requested for approval in China now.
+        self._test_china_excluded_if_pending_or_rejected()
+
+    def test_china_excluded_if_pending_cancelled(self):
+        """
+        If the developer already requested to be in China,
+        and a reviewer hasn't reviewed it for China yet,
+        keep the region exclusion and the status as pending.
+
+        """
+
+        self.create_flag('special-regions')
+
+        # Mark app as pending in China.
+        status = mkt.STATUS_PENDING
+        self.app.geodata.set_status(mkt.regions.CHN, status, save=True)
+        eq_(self.app.geodata.get_status(mkt.regions.CHN), status)
+
+        # Post the form.
+        form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS},
+                                **self.kwargs)
+
+        # China should be checked if it's pending.
+        cn = mkt.regions.CHN.id
+        assert cn in form.initial['regions']
+        assert cn in dict(form.fields['regions'].choices).keys()
+
+        assert form.is_valid(), form.errors
+        form.save()
+
+        # App should be unlisted in China and now null.
+        self.app = self.app.reload()
+        eq_(self.app.listed_in(mkt.regions.CHN), False)
+        eq_(self.app.geodata.get_status(mkt.regions.CHN), mkt.STATUS_NULL)
+
+    def test_china_included_if_approved_but_unchecked(self):
+        self.create_flag('special-regions')
+
+        # Mark app as public in China.
+        status = mkt.STATUS_PUBLIC
+        self.app.geodata.set_status(mkt.regions.CHN, status, save=True)
+        eq_(self.app.geodata.get_status(mkt.regions.CHN), status)
+
+        # Post the form.
+        form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS},
+                                **self.kwargs)
+
+        # China should be checked if it's public.
+        cn = mkt.regions.CHN.id
+        assert cn in form.initial['regions']
+        assert cn in dict(form.fields['regions'].choices).keys()
+
+        assert form.is_valid(), form.errors
+        form.save()
+
+        # App should be unlisted in China and now null.
+        self.app = self.app.reload()
+        eq_(self.app.listed_in(mkt.regions.CHN), False)
+        eq_(self.app.geodata.get_status(mkt.regions.CHN), mkt.STATUS_NULL)
+
+    def test_china_included_if_approved_and_checked(self):
+        self.create_flag('special-regions')
+
+        # Mark app as public in China.
+        status = mkt.STATUS_PUBLIC
+        self.app.geodata.set_status(mkt.regions.CHN, status, save=True)
+        eq_(self.app.geodata.get_status(mkt.regions.CHN), status)
+
+        # Post the form.
+        form = forms.RegionForm({'regions': mkt.regions.ALL_REGION_IDS,
+                                 'special_regions': [mkt.regions.CHN.id]},
+                                **self.kwargs)
+        assert form.is_valid(), form.errors
+        form.save()
+
+        # App should still be listed in China and still public.
+        self.app = self.app.reload()
+        eq_(self.app.listed_in(mkt.regions.CHN), True)
+        eq_(self.app.geodata.get_status(mkt.regions.CHN), status)
+
+    def test_low_memory_regions_true(self):
+        regions = {10: mock.MagicMock(low_memory=True),
+                   20: mock.MagicMock(low_memory=False),
+                   30: mock.MagicMock(low_memory=False)}
+        form = forms.RegionForm(**self.kwargs)
+        with mock.patch.object(forms.RegionForm, 'regions_by_id', regions):
+            assert form.low_memory_regions, 'expected low memory regions'
+
+    def test_low_memory_regions_false(self):
+        regions = {10: mock.MagicMock(low_memory=False),
+                   20: mock.MagicMock(low_memory=False),
+                   30: mock.MagicMock(low_memory=False)}
+        form = forms.RegionForm(**self.kwargs)
+        with mock.patch.object(forms.RegionForm, 'regions_by_id', regions):
+            assert not form.low_memory_regions, 'expected no low memory region'
+
+
+class TestNewManifestForm(mkt.site.tests.TestCase):
 
     @mock.patch('mkt.developers.forms.verify_app_domain')
     def test_normal_validator(self, _verify_app_domain):
         form = forms.NewManifestForm({'manifest': 'http://omg.org/yes.webapp'},
-            is_standalone=False)
+                                     is_standalone=False)
         assert form.is_valid()
         assert _verify_app_domain.called
 
     @mock.patch('mkt.developers.forms.verify_app_domain')
     def test_standalone_validator(self, _verify_app_domain):
         form = forms.NewManifestForm({'manifest': 'http://omg.org/yes.webapp'},
-            is_standalone=True)
+                                     is_standalone=True)
         assert form.is_valid()
         assert not _verify_app_domain.called
 
 
-class TestPackagedAppForm(amo.tests.AMOPaths, amo.tests.WebappTestCase):
+class TestPackagedAppForm(mkt.site.tests.MktPaths,
+                          mkt.site.tests.WebappTestCase):
 
     def setUp(self):
         super(TestPackagedAppForm, self).setUp()
@@ -324,8 +461,8 @@ class TestPackagedAppForm(amo.tests.AMOPaths, amo.tests.WebappTestCase):
         validation = json.loads(form.file_upload.validation)
         assert 'messages' in validation, 'No messages in validation.'
         eq_(validation['messages'][0]['message'],
-            u'Packaged app too large for submission. Packages must be less '
-            u'than 5 bytes.')
+            u'Packaged app too large for submission. Packages must be smaller '
+            u'than 5\xa0bytes.')
 
     def test_origin_exists(self):
         self.app.update(app_domain='app://hy.fr')
@@ -337,7 +474,7 @@ class TestPackagedAppForm(amo.tests.AMOPaths, amo.tests.WebappTestCase):
             'allowed.')
 
 
-class TestTransactionFilterForm(amo.tests.TestCase):
+class TestTransactionFilterForm(mkt.site.tests.TestCase):
 
     def setUp(self):
         (app_factory(), app_factory())
@@ -368,21 +505,22 @@ class TestTransactionFilterForm(amo.tests.TestCase):
             assert assertion, '(%s, %s) not in choices' % (app.id, app.name)
 
 
-class TestAppFormBasic(amo.tests.TestCase):
-
+class TestAppFormBasic(mkt.site.tests.TestCase):
     def setUp(self):
         self.data = {
             'slug': 'yolo',
+            'hosted_url': '',
             'manifest_url': 'https://omg.org/yes.webapp',
             'description': 'You Only Live Once'
         }
-        self.request = mock.Mock()
-        self.request.groups = ()
+        self.user = mkt.site.tests.user_factory()
+        self.request = mkt.site.tests.req_factory_factory(user=self.user)
+        self.app = app_factory(name='YOLO',
+                               manifest_url='https://omg.org/yes.webapp')
 
-    def post(self):
-        self.form = forms.AppFormBasic(
-            self.data, instance=Webapp.objects.create(app_slug='yolo'),
-            request=self.request)
+    def post(self, app=None):
+        self.form = forms.AppFormBasic(self.data, instance=app or self.app,
+                                       request=self.request)
 
     def test_success(self):
         self.post()
@@ -390,60 +528,299 @@ class TestAppFormBasic(amo.tests.TestCase):
         eq_(self.form.errors, {})
 
     def test_slug_invalid(self):
-        Webapp.objects.create(app_slug='yolo')
-        self.post()
+        app = Webapp.objects.create(app_slug='yolo')
+        self.post(app=app)
         eq_(self.form.is_valid(), False)
         eq_(self.form.errors,
             {'slug': ['This slug is already in use. Please choose another.']})
 
+    def test_adding_tags(self):
+        self.data.update({'tags': 'tag one, tag two'})
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
 
-class TestAppVersionForm(amo.tests.TestCase):
+        eq_(self.app.tags.count(), 2)
+        self.assertSetEqual(
+            self.app.tags.values_list('tag_text', flat=True),
+            ['tag one', 'tag two'])
+
+    def test_removing_tags(self):
+        Tag(tag_text='tag one').save_tag(self.app)
+        eq_(self.app.tags.count(), 1)
+
+        self.data.update({'tags': 'tag two, tag three'})
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
+
+        eq_(self.app.tags.count(), 2)
+        self.assertSetEqual(
+            self.app.tags.values_list('tag_text', flat=True),
+            ['tag two', 'tag three'])
+
+    def test_removing_all_tags(self):
+        Tag(tag_text='tag one').save_tag(self.app)
+        eq_(self.app.tags.count(), 1)
+
+        self.data.update({'tags': ''})
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
+
+        eq_(self.app.tags.count(), 0)
+        self.assertSetEqual(
+            self.app.tags.values_list('tag_text', flat=True), [])
+
+    def test_add_restricted_tag_no_perm(self):
+        Tag.objects.create(tag_text='restricted', restricted=True)
+        self.data.update({'tags': 'restricted'})
+
+        self.post()
+        ok_(not self.form.is_valid())
+
+    def test_add_restricted_tag_ok(self):
+        Tag.objects.create(tag_text='restricted', restricted=True)
+        self.data.update({'tags': 'restricted'})
+
+        self.grant_permission(self.user, 'Apps:Edit')
+        self.request = mkt.site.tests.req_factory_factory(user=self.user)
+
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+
+        self.form.save(self.app)
+        self.assertSetEqual(self.app.tags.values_list('tag_text', flat=True),
+                            ['restricted'])
+
+    def test_add_restricted_tag_curator(self):
+        Tag.objects.create(tag_text='restricted', restricted=True)
+        self.data.update({'tags': 'restricted'})
+
+        self.grant_permission(self.user, 'Feed:Curate')
+        self.request = mkt.site.tests.req_factory_factory(user=self.user)
+
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+
+        self.form.save(self.app)
+        self.assertSetEqual(self.app.tags.values_list('tag_text', flat=True),
+                            ['restricted'])
+
+    def test_restricted_tag_not_removed(self):
+        t = Tag.objects.create(tag_text='restricted', restricted=True)
+        self.app.tags.add(t)
+        self.data.update({'tags': 'hey'})
+
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
+
+        ok_(self.app.tags.filter(tag_text='restricted'))
+        ok_(self.app.tags.filter(tag_text='hey'))
+
+    def test_remove_restricted_tag_with_perms(self):
+        t = Tag.objects.create(tag_text='restricted', restricted=True)
+        self.app.tags.add(t)
+        self.data.update({'tags': 'hey'})
+
+        self.grant_permission(self.user, 'Apps:Edit')
+        self.request = mkt.site.tests.req_factory_factory(user=self.user)
+
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
+
+        ok_(not self.app.tags.filter(tag_text='restricted'))
+        ok_(self.app.tags.filter(tag_text='hey'))
+
+    @mock.patch('mkt.developers.forms.update_manifests')
+    def test_manifest_url_change(self, mock):
+        self.data.update({'manifest_url': 'https://omg.org/no.webapp'})
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
+        assert mock.delay.called
+
+    def test_hosted_url_change(self):
+        self.data.update({'hosted_url': 'http://ngokevin.com'})
+        self.post()
+        assert self.form.is_valid(), self.form.errors
+        self.form.save(self.app)
+        eq_(self.app.hosted_url, 'http://ngokevin.com')
+
+
+class TestAppVersionForm(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.request = mock.Mock()
-        self.app = app_factory(make_public=amo.PUBLIC_IMMEDIATELY,
+        self.app = app_factory(publish_type=mkt.PUBLISH_IMMEDIATE,
                                version_kw={'version': '1.0',
                                            'created': self.days_ago(5)})
         version_factory(addon=self.app, version='2.0',
-                        file_kw=dict(status=amo.STATUS_PENDING))
+                        file_kw=dict(status=mkt.STATUS_PENDING))
         self.app.reload()
 
-    def get_form(self, version, data=None):
+    def _get_form(self, version, data=None):
         return forms.AppVersionForm(data, instance=version)
 
     def test_get_publish(self):
-        form = self.get_form(self.app.latest_version)
+        form = self._get_form(self.app.latest_version)
         eq_(form.fields['publish_immediately'].initial, True)
 
-        self.app.update(make_public=amo.PUBLIC_WAIT)
+        self.app.update(publish_type=mkt.PUBLISH_PRIVATE)
         self.app.reload()
-        form = self.get_form(self.app.latest_version)
+        form = self._get_form(self.app.latest_version)
         eq_(form.fields['publish_immediately'].initial, False)
 
     def test_post_publish(self):
         # Using the latest_version, which is pending.
-        form = self.get_form(self.app.latest_version,
-                             data={'publish_immediately': True})
+        form = self._get_form(self.app.latest_version,
+                              data={'publish_immediately': True})
         eq_(form.is_valid(), True)
         form.save()
         self.app.reload()
-        eq_(self.app.make_public, amo.PUBLIC_IMMEDIATELY)
+        eq_(self.app.publish_type, mkt.PUBLISH_IMMEDIATE)
 
-        form = self.get_form(self.app.latest_version,
-                             data={'publish_immediately': False})
+        form = self._get_form(self.app.latest_version,
+                              data={'publish_immediately': False})
         eq_(form.is_valid(), True)
         form.save()
         self.app.reload()
-        eq_(self.app.make_public, amo.PUBLIC_WAIT)
+        eq_(self.app.publish_type, mkt.PUBLISH_PRIVATE)
 
     def test_post_publish_not_pending(self):
         # Using the current_version, which is public.
-        form = self.get_form(self.app.current_version,
-                             data={'publish_immediately': False})
+        form = self._get_form(self.app.current_version,
+                              data={'publish_immediately': False})
         eq_(form.is_valid(), True)
         form.save()
         self.app.reload()
-        eq_(self.app.make_public, amo.PUBLIC_IMMEDIATELY)
+        eq_(self.app.publish_type, mkt.PUBLISH_IMMEDIATE)
+
+
+class TestPublishForm(mkt.site.tests.TestCase):
+
+    def setUp(self):
+        self.app = app_factory(status=mkt.STATUS_PUBLIC)
+        self.form = forms.PublishForm
+
+    def test_initial(self):
+        app = Webapp(status=mkt.STATUS_PUBLIC)
+        eq_(self.form(None, addon=app).fields['publish_type'].initial,
+            mkt.PUBLISH_IMMEDIATE)
+        eq_(self.form(None, addon=app).fields['limited'].initial, False)
+
+        app.status = mkt.STATUS_UNLISTED
+        eq_(self.form(None, addon=app).fields['publish_type'].initial,
+            mkt.PUBLISH_HIDDEN)
+        eq_(self.form(None, addon=app).fields['limited'].initial, False)
+
+        app.status = mkt.STATUS_APPROVED
+        eq_(self.form(None, addon=app).fields['publish_type'].initial,
+            mkt.PUBLISH_HIDDEN)
+        eq_(self.form(None, addon=app).fields['limited'].initial, True)
+
+    def test_go_public(self):
+        self.app.update(status=mkt.STATUS_APPROVED)
+        form = self.form({'publish_type': mkt.PUBLISH_IMMEDIATE,
+                          'limited': False}, addon=self.app)
+        assert form.is_valid()
+        form.save()
+        self.app.reload()
+        eq_(self.app.status, mkt.STATUS_PUBLIC)
+
+    def test_go_unlisted(self):
+        self.app.update(status=mkt.STATUS_PUBLIC)
+        form = self.form({'publish_type': mkt.PUBLISH_HIDDEN,
+                          'limited': False}, addon=self.app)
+        assert form.is_valid()
+        form.save()
+        self.app.reload()
+        eq_(self.app.status, mkt.STATUS_UNLISTED)
+
+    def test_go_private(self):
+        self.app.update(status=mkt.STATUS_PUBLIC)
+        form = self.form({'publish_type': mkt.PUBLISH_HIDDEN,
+                          'limited': True}, addon=self.app)
+        assert form.is_valid()
+        form.save()
+        self.app.reload()
+        eq_(self.app.status, mkt.STATUS_APPROVED)
+
+    def test_invalid(self):
+        form = self.form({'publish_type': 999}, addon=self.app)
+        assert not form.is_valid()
+
+
+@mock.patch('mkt.webapps.models.Webapp.get_cached_manifest', mock.Mock)
+class TestPublishFormPackaged(mkt.site.tests.TestCase):
+    """
+    Test that changing the app visibility doesn't affect the version statuses
+    in weird ways.
+    """
+
+    def setUp(self):
+        self.app = app_factory(status=mkt.STATUS_PUBLIC, is_packaged=True)
+        self.ver1 = self.app.current_version
+        self.ver1.update(created=self.days_ago(1))
+        self.ver2 = version_factory(addon=self.app, version='2.0',
+                                    file_kw=dict(status=mkt.STATUS_APPROVED))
+        self.app.update(_latest_version=self.ver2)
+        self.form = forms.PublishForm
+
+    def test_initial(self):
+        app = Webapp(status=mkt.STATUS_PUBLIC)
+        eq_(self.form(None, addon=app).fields['publish_type'].initial,
+            mkt.PUBLISH_IMMEDIATE)
+        eq_(self.form(None, addon=app).fields['limited'].initial, False)
+
+        app.status = mkt.STATUS_UNLISTED
+        eq_(self.form(None, addon=app).fields['publish_type'].initial,
+            mkt.PUBLISH_HIDDEN)
+        eq_(self.form(None, addon=app).fields['limited'].initial, False)
+
+        app.status = mkt.STATUS_APPROVED
+        eq_(self.form(None, addon=app).fields['publish_type'].initial,
+            mkt.PUBLISH_HIDDEN)
+        eq_(self.form(None, addon=app).fields['limited'].initial, True)
+
+    def test_go_public(self):
+        self.app.update(status=mkt.STATUS_APPROVED)
+        form = self.form({'publish_type': mkt.PUBLISH_IMMEDIATE,
+                          'limited': False}, addon=self.app)
+        assert form.is_valid()
+        form.save()
+        self.app.reload()
+        eq_(self.app.status, mkt.STATUS_PUBLIC)
+        eq_(self.app.current_version, self.ver1)
+        eq_(self.app.latest_version, self.ver2)
+
+    def test_go_private(self):
+        self.app.update(status=mkt.STATUS_PUBLIC)
+        form = self.form({'publish_type': mkt.PUBLISH_HIDDEN,
+                          'limited': True}, addon=self.app)
+        assert form.is_valid()
+        form.save()
+        self.app.reload()
+        eq_(self.app.status, mkt.STATUS_APPROVED)
+        eq_(self.app.current_version, self.ver1)
+        eq_(self.app.latest_version, self.ver2)
+
+    def test_go_unlisted(self):
+        self.app.update(status=mkt.STATUS_PUBLIC)
+        form = self.form({'publish_type': mkt.PUBLISH_HIDDEN,
+                          'limited': False}, addon=self.app)
+        assert form.is_valid()
+        form.save()
+        self.app.reload()
+        eq_(self.app.status, mkt.STATUS_UNLISTED)
+        eq_(self.app.current_version, self.ver1)
+        eq_(self.app.latest_version, self.ver2)
+
+    def test_invalid(self):
+        form = self.form({'publish_type': 999}, addon=self.app)
+        assert not form.is_valid()
 
 
 class TestAdminSettingsForm(TestAdmin):
@@ -451,7 +828,7 @@ class TestAdminSettingsForm(TestAdmin):
     def setUp(self):
         super(TestAdminSettingsForm, self).setUp()
         self.data = {'position': 1}
-        self.user = UserProfile.objects.get(username='admin')
+        self.user = UserProfile.objects.get(email='admin@mozilla.com')
         self.request = RequestFactory()
         self.request.user = self.user
         self.request.groups = ()
@@ -464,105 +841,139 @@ class TestAdminSettingsForm(TestAdmin):
         form.save(self.webapp)
         index_webapps_mock.assert_called_with([self.webapp.id])
 
-    def test_reinclude_rated_games(self):
-        """
-        Adding a content rating for a game in a region should remove the
-        regional exclusion for that region.
-        """
 
-        # List it in the Games category.
-        cat = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        self.webapp.addoncategory_set.create(category=cat)
+class TestIARCGetAppInfoForm(mkt.site.tests.WebappTestCase):
 
-        self.log_in_with('Apps:Configure')
+    def _get_form(self, app=None, **kwargs):
+        data = {
+            'submission_id': 1,
+            'security_code': 'a'
+        }
+        data.update(kwargs)
+        return forms.IARCGetAppInfoForm(data=data, app=app or self.app)
 
-        form = forms.AdminSettingsForm(self.data, **self.kwargs)
+    def test_good(self):
+        with self.assertRaises(IARCInfo.DoesNotExist):
+            self.app.iarc_info
+
+        form = self._get_form()
         assert form.is_valid(), form.errors
-        form.save(self.webapp)
+        form.save()
 
-        excluded_regions = [
-            x.id for x in mkt.regions.ALL_REGIONS_WITH_CONTENT_RATINGS
-        ]
+        iarc_info = IARCInfo.objects.get(addon=self.app)
+        eq_(iarc_info.submission_id, 1)
+        eq_(iarc_info.security_code, 'a')
 
-        # After the form was saved, it should be excluded in Brazil.
-        self.assertSetEqual(
-            self.webapp.addonexcludedregion.values_list('region', flat=True),
-            excluded_regions)
+    @mock.patch.object(settings, 'IARC_ALLOW_CERT_REUSE', False)
+    def test_iarc_cert_reuse_on_self(self):
+        # Test okay to use on self.
+        self.app.set_iarc_info(1, 'a')
+        form = self._get_form()
+        ok_(form.is_valid())
+        form.save()
+        eq_(IARCInfo.objects.count(), 1)
 
-        # Add Brazil content rating.
-        rb_br = mkt.regions.BR.ratingsbodies[0]
-        br_0_idx = mkt.ratingsbodies.ALL_RATINGS.index(rb_br.ratings[0])
-        self.data['app_ratings'] = [br_0_idx]
+    @mock.patch.object(settings, 'IARC_ALLOW_CERT_REUSE', False)
+    def test_iarc_cert_already_used(self):
+        # Test okay to use on self.
+        self.app.set_iarc_info(1, 'a')
+        eq_(IARCInfo.objects.count(), 1)
 
-        # Post the form again.
-        form = forms.AdminSettingsForm(self.data, **self.kwargs)
+        some_app = app_factory()
+        form = self._get_form(app=some_app)
+        ok_(not form.is_valid())
+
+        form = self._get_form(app=some_app, submission_id=2)
+        ok_(form.is_valid())
+
+    @mock.patch.object(settings, 'IARC_ALLOW_CERT_REUSE', True)
+    def test_iarc_already_used_dev(self):
+        self.app.set_iarc_info(1, 'a')
+        form = self._get_form()
+        ok_(form.is_valid())
+
+    def test_changing_cert(self):
+        self.app.set_iarc_info(1, 'a')
+        form = self._get_form(submission_id=2, security_code='b')
+        ok_(form.is_valid(), form.errors)
+        form.save()
+
+        iarc_info = self.app.iarc_info.reload()
+        eq_(iarc_info.submission_id, 2)
+        eq_(iarc_info.security_code, 'b')
+
+    def test_iarc_unexclude(self):
+        geodata, created = Geodata.objects.get_or_create(addon=self.app)
+        geodata.update(region_br_iarc_exclude=True,
+                       region_de_iarc_exclude=True)
+
+        form = self._get_form()
+        ok_(form.is_valid())
+        form.save()
+
+        geodata = Geodata.objects.get(addon=self.app)
+        assert not geodata.region_br_iarc_exclude
+        assert not geodata.region_de_iarc_exclude
+
+    def test_allow_subm(self):
+        form = self._get_form(submission_id='subm-1231')
         assert form.is_valid(), form.errors
-        form.save(self.webapp)
+        form.save()
 
-        self.webapp = self.webapp.reload()
+        iarc_info = self.app.iarc_info
+        eq_(iarc_info.submission_id, 1231)
+        eq_(iarc_info.security_code, 'a')
 
-        # Notice the Brazilian region exclusion is now gone.
-        excluded_regions.remove(mkt.regions.BR.id)
-        self.assertSetEqual(
-            self.webapp.addonexcludedregion.values_list('region', flat=True),
-            excluded_regions)
+    def test_bad_submission_id(self):
+        form = self._get_form(submission_id='subwayeatfresh-133')
+        assert not form.is_valid()
 
-    def test_exclude_unrated_games_when_removing_content_rating(self):
-        """
-        Removing a content rating for a game in Brazil should exclude that
-        game in Brazil only.
-        """
+    def test_incomplete(self):
+        form = self._get_form(submission_id=None)
+        assert not form.is_valid(), 'Form was expected to be invalid.'
 
-        self.log_in_with('Apps:Configure')
-        rb_br = mkt.regions.BR.ratingsbodies[0]
-        ContentRating.objects.create(addon=self.webapp, ratings_body=rb_br.id,
-                                     rating=rb_br.ratings[0].id)
-
-        rb_de = mkt.regions.DE.ratingsbodies[0]
-        ContentRating.objects.create(addon=self.webapp, ratings_body=rb_de.id,
-                                     rating=rb_de.ratings[0].id)
-
-        games = Category.objects.create(type=amo.ADDON_WEBAPP, slug='games')
-        AddonCategory.objects.create(addon=self.webapp, category=games)
-
-        # Remove Brazil but keep Germany.
-        de_0_idx = mkt.ratingsbodies.ALL_RATINGS.index(rb_de.ratings[0])
-        self.data['app_ratings'] = [de_0_idx]
-
-        form = forms.AdminSettingsForm(self.data, **self.kwargs)
+    @mock.patch('lib.iarc.utils.IARC_XML_Parser.parse_string')
+    def test_rating_not_found(self, _mock):
+        _mock.return_value = {'rows': [
+            {'ActionStatus': 'No records found. Please try another criteria.'}
+        ]}
+        form = self._get_form()
         assert form.is_valid(), form.errors
-        form.save(self.webapp)
+        with self.assertRaises(django_forms.ValidationError):
+            form.save()
 
-        regions = self.webapp.get_region_ids()
-        for region in mkt.regions.ALL_REGIONS_WITH_CONTENT_RATINGS:
-            if region == mkt.regions.BR:
-                assert region.id not in regions, (
-                    'should not be listed in %s' % region.slug)
-            else:
-                assert region.id in regions, (
-                    'should be listed in %s' % region.slug)
 
-    def test_adding_tags(self):
-        self.data.update({'tags': 'tag one, tag two'})
-        form = forms.AdminSettingsForm(self.data, **self.kwargs)
-        assert form.is_valid(), form.errors
-        form.save(self.webapp)
+class TestAPIForm(mkt.site.tests.WebappTestCase):
 
-        eq_(self.webapp.tags.count(), 2)
-        self.assertSetEqual(
-            self.webapp.tags.values_list('tag_text', flat=True),
-            ['tag one', 'tag two'])
+    def setUp(self):
+        super(TestAPIForm, self).setUp()
+        self.form = forms.APIConsumerForm
 
-    def test_removing_tags(self):
-        Tag(tag_text='tag one').save_tag(self.webapp)
-        eq_(self.webapp.tags.count(), 1)
+    def test_non_url(self):
+        form = self.form({
+            'app_name': 'test',
+            'redirect_uri': 'mailto:cvan@example.com',
+            'oauth_leg': 'website'
+        })
+        assert not form.is_valid()
+        eq_(form.errors['redirect_uri'], ['Enter a valid URL.'])
 
-        self.data.update({'tags': 'tag two, tag three'})
-        form = forms.AdminSettingsForm(self.data, **self.kwargs)
-        assert form.is_valid(), form.errors
-        form.save(self.webapp)
+    def test_non_app_name(self):
+        form = self.form({
+            'redirect_uri': 'mailto:cvan@example.com',
+            'oauth_leg': 'website'
+        })
+        assert not form.is_valid()
+        eq_(form.errors['app_name'], ['This field is required.'])
 
-        eq_(self.webapp.tags.count(), 2)
-        self.assertSetEqual(
-            self.webapp.tags.values_list('tag_text', flat=True),
-            ['tag two', 'tag three'])
+    def test_command(self):
+        form = self.form({'oauth_leg': 'command'})
+        assert form.is_valid()
+
+    def test_website(self):
+        form = self.form({
+            'app_name': 'test',
+            'redirect_uri': 'https://f.com',
+            'oauth_leg': 'website'
+        })
+        assert form.is_valid()

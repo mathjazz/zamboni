@@ -1,99 +1,25 @@
+import datetime
+
 from django.conf import settings
+from django.test.utils import override_settings
 
-import mock
+from dateutil.tz import tzutc
+from mock import patch
 from nose.tools import eq_, ok_
-from test_utils import RequestFactory
 
-import amo.tests
-from users.models import UserProfile
-
-from mkt.site.middleware import DeviceDetectionMiddleware
+import mkt.site.tests
 from mkt.site.fixtures import fixture
-
-_langs = ['cs', 'de', 'en-US', 'es', 'fr', 'pt-BR', 'pt-PT']
-
-
-@mock.patch.object(settings, 'LANGUAGES', [x.lower() for x in _langs])
-class TestRedirectPrefixedURIMiddleware(amo.tests.TestCase):
-
-    def test_redirect_for_good_application(self):
-        for app in amo.APPS:
-            r = self.client.get('/%s/' % app)
-            self.assert3xx(r, '/', 302)
-
-    def test_redirect_for_bad_application(self):
-        r = self.client.get('/mosaic/')
-        eq_(r.status_code, 404)
-
-    def test_redirect_for_good_locale(self):
-        redirects = [
-            ('/en-US/', '/?lang=en-us'),
-            ('/pt-BR/', '/?lang=pt-br'),
-            ('/pt-br/', '/?lang=pt-br'),
-            ('/fr/', '/?lang=fr'),
-            ('/es-PE/', '/?lang=es'),
-        ]
-        for before, after in redirects:
-            r = self.client.get(before)
-            self.assert3xx(r, after, 302)
-
-    def test_preserve_qs_for_lang(self):
-        r = self.client.get('/pt-BR/firefox/privacy-policy?omg=yes')
-        self.assert3xx(r, '/privacy-policy?lang=pt-br&omg=yes', 302)
-
-        r = self.client.get('/pt-BR/privacy-policy?omg=yes')
-        self.assert3xx(r, '/privacy-policy?lang=pt-br&omg=yes', 302)
-
-    def test_switch_locale(self):
-        # Locale in URL prefix takes precedence.
-        r = self.client.get('/pt-BR/?lang=de')
-        self.assert3xx(r, '/?lang=pt-br', 302)
-
-    def test_no_locale(self):
-        r = self.client.get('/robots.txt')
-        eq_(r.status_code, 200)
-        r = self.client.get('/robots.txt?lang=fr')
-        eq_(r.status_code, 200)
-
-    def test_redirect_for_good_region(self):
-        redirects = [
-            ('/worldwide/', '/?region=worldwide'),
-            ('/br/', '/?region=br'),
-            ('/us/', '/?region=us'),
-            ('/BR/', '/?region=br'),
-        ]
-        for before, after in redirects:
-            r = self.client.get(before)
-            self.assert3xx(r, after, 302)
-
-    def test_redirect_for_good_locale_and_region(self):
-        r = self.client.get('/en-US/br/developers/support?omg=yes',
-                            follow=True)
-        # Can you believe this actually works?
-        self.assert3xx(r,
-            '/developers/support?lang=en-us&region=br&omg=yes', 302)
-
-    def test_preserve_qs_for_region(self):
-        r = self.client.get('/br/developers/support?omg=yes')
-        self.assert3xx(r, '/developers/support?region=br&omg=yes', 302)
-
-    def test_switch_region(self):
-        r = self.client.get('/worldwide/?region=brazil')
-        self.assert3xx(r, '/?region=worldwide', 302)
-
-    def test_404_for_bad_prefix(self):
-        for url in ['/xxx', '/xxx/search/',
-                    '/brazil/', '/BRAZIL/',
-                    '/pt/?lang=de', '/pt-XX/brazil/']:
-            r = self.client.get(url)
-            got = r.status_code
-            eq_(got, 404, "For %r: expected '404' but got %r" % (url, got))
+from mkt.site.middleware import lang_from_accept_header
+from mkt.users.models import UserProfile
 
 
-@mock.patch.object(settings, 'LANGUAGES', [x.lower() for x in _langs])
-@mock.patch.object(settings, 'LANGUAGE_URL_MAP',
-                   dict([x.lower(), x] for x in _langs))
-class TestLocaleMiddleware(amo.tests.TestCase):
+_langs = ['cs', 'de', 'en-US', 'es', 'fr', 'pt-BR', 'pt-PT', 'sr-Latn']
+
+
+@patch.object(settings, 'LANGUAGES', [x.lower() for x in _langs])
+@patch.object(settings, 'LANGUAGE_URL_MAP',
+              dict([x.lower(), x] for x in _langs))
+class TestLocaleMiddleware(mkt.site.tests.TestCase):
 
     def test_accept_good_locale(self):
         locales = [
@@ -178,7 +104,7 @@ class TestLocaleMiddleware(amo.tests.TestCase):
         eq_(r.context['request'].LANG, settings.LANGUAGE_CODE)
 
     def test_no_api_cookie(self):
-        res = self.client.get('/api/v1/apps/schema/?region=worldwide',
+        res = self.client.get('/api/v1/apps/schema/?region=restofworld',
                               HTTP_ACCEPT_LANGUAGE='de')
         ok_(not res.cookies)
 
@@ -237,32 +163,47 @@ class TestLocaleMiddleware(amo.tests.TestCase):
         eq_(r.cookies['lang'].value, 'fr,')
 
 
-@mock.patch.object(settings, 'LANGUAGES', [x.lower() for x in _langs])
-@mock.patch.object(settings, 'LANGUAGE_URL_MAP',
-                   dict([x.lower(), x] for x in _langs))
-class TestLocaleMiddlewarePersistence(amo.tests.TestCase):
+@patch.object(settings, 'LANGUAGES', [x.lower() for x in _langs])
+@patch.object(settings, 'LANGUAGE_URL_MAP',
+              dict([x.lower(), x] for x in _langs))
+class TestLocaleMiddlewarePersistence(mkt.site.tests.TestCase):
     fixtures = fixture('user_999')
 
     def test_save_lang(self):
-        self.client.login(username='regular@mozilla.com', password='password')
-        self.client.get('/robots.txt', HTTP_ACCEPT_LANGUAGE='de')
-        eq_(UserProfile.objects.get(pk=999).lang, 'de')
+        self.login('regular@mozilla.com')
+        self.client.get('/robots.txt', HTTP_ACCEPT_LANGUAGE='sr-Latn')
+        eq_(UserProfile.objects.get(pk=999).lang, 'sr-Latn')
 
 
-class TestVaryMiddleware(amo.tests.TestCase):
+class TestVaryMiddleware(mkt.site.tests.TestCase):
+    fixtures = fixture('user_999')
 
-    def test_no_vary_cookie(self):
+    def test_vary_headers(self):
+        def vary(res):
+            return [x.strip() for x in res.get('Vary', '').split(',')]
+
         # What is expected to `Vary`.
-        r = self.client.get('/privacy-policy')
-        eq_(r['Vary'], 'Accept-Language, Cookie, X-Mobile, User-Agent')
+        res = self.client.get('/developers')
+        eq_(sorted(res['Vary'].split(', ')), ['Accept-Language', 'Cookie'])
 
-        r = self.client.get('/privacy-policy', follow=True)
-        eq_(r['Vary'], 'Accept-Language, Cookie, X-Mobile, User-Agent')
+        res = self.client.get('/developers', follow=True)
+        eq_(sorted(res['Vary'].split(', ')), ['Accept-Language', 'Cookie'])
+
+        res = self.client.get('/api/v1/services/config/site/?vary=1')
+        # DRF adds `Vary: Accept` by default, so let's not check that.
+        assert 'Accept-Language' in vary(res), (
+            'Expected "Vary: Accept-Language"')
+        assert 'Cookie' in vary(res), 'Expected "Vary: Cookie"'
+
+        res = self.client.get('/api/v1/services/config/site/?vary=0')
+        assert 'Accept-Language' not in vary(res), (
+            'Should not contain "Vary: Accept-Language"')
+        assert 'Cookie' not in vary(res), 'Should not contain "Vary: Cookie"'
 
     # Patching MIDDLEWARE_CLASSES because other middleware tweaks vary headers.
-    @mock.patch.object(settings, 'MIDDLEWARE_CLASSES', [
-        'amo.middleware.CommonMiddleware',
-        'amo.middleware.NoVarySessionMiddleware',
+    @patch.object(settings, 'MIDDLEWARE_CLASSES', [
+        'mkt.site.middleware.CommonMiddleware',
+        'mkt.site.middleware.NoVarySessionMiddleware',
         'django.contrib.auth.middleware.AuthenticationMiddleware',
         'mkt.site.middleware.RequestCookiesMiddleware',
         'mkt.site.middleware.LocaleMiddleware',
@@ -272,7 +213,7 @@ class TestVaryMiddleware(amo.tests.TestCase):
     def test_no_user_agent(self):
         # We've toggled the middleware to not rewrite the application and also
         # not vary headers based on User-Agent.
-        self.client.login(username='31337', password='password')
+        self.login('regular@mozilla.com')
 
         r = self.client.get('/robots.txt', follow=True)
         eq_(r.status_code, 200)
@@ -283,7 +224,7 @@ class TestVaryMiddleware(amo.tests.TestCase):
             'User-Agent should not be in the "Vary" header.')
 
 
-class TestDeviceMiddleware(amo.tests.TestCase):
+class TestDeviceMiddleware(mkt.site.tests.TestCase):
     devices = ['mobile', 'gaia']
 
     def test_no_effect(self):
@@ -330,9 +271,109 @@ class TestDeviceMiddleware(amo.tests.TestCase):
             r = self.client.get('/robots.txt', follow=True)
             assert getattr(r.context['request'], device.upper())
 
-    def test_xmobile(self):
-        rf = RequestFactory().get('/robots.txt')
-        for state in [True, False]:
-            rf.MOBILE = state
-            DeviceDetectionMiddleware().process_request(rf)
-            eq_(rf.MOBILE, state)
+
+class TestCacheHeadersMiddleware(mkt.site.tests.TestCase):
+    CACHE_DURATION = 60 * 2
+
+    def _test_headers_set(self, res, max_age):
+        eq_(res['Cache-Control'],
+            'must-revalidate, max-age=%s' % max_age)
+        assert res.has_header('ETag'), 'Missing ETag header'
+
+        now = datetime.datetime.now(tzutc())
+
+        self.assertCloseToNow(res['Expires'],
+                              now=now + datetime.timedelta(seconds=max_age))
+        self.assertCloseToNow(res['Last-Modified'], now=now)
+
+    def _test_headers_missing(self, res):
+        assert res.has_header('ETag'), 'Missing ETag header'
+        for header in ['Cache-Control', 'Expires', 'Last-Modified']:
+            assert not res.has_header(header), (
+                'Should not have header: %s: %s' % (header, res[header]))
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=CACHE_DURATION, USE_ETAGS=True)
+    def test_no_headers_on_disallowed_statuses(self):
+        res = self.client.get('/404')  # 404
+        self._test_headers_missing(res)
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=CACHE_DURATION, USE_ETAGS=True)
+    def test_no_headers_on_disallowed_methods(self):
+        for method in ('delete', 'post', 'put'):
+            res = getattr(self.client, method)('/robots.txt')
+            self._test_headers_missing(res)
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=CACHE_DURATION, USE_ETAGS=True)
+    def test_no_headers_querystring_says_no_cache(self):
+        self._test_headers_missing(self.client.get('/robots.txt?cache=0'))
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=CACHE_DURATION, USE_ETAGS=True)
+    def test_no_headers_querystring_says_garbage(self):
+        self._test_headers_missing(self.client.get('/robots.txt?cache=dummy'))
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=0, USE_ETAGS=True)
+    def test_no_headers_no_querystring(self):
+        self._test_headers_missing(self.client.get('/robots.txt'))
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=CACHE_DURATION, USE_ETAGS=True)
+    def test_headers_set(self):
+        for method in ('get', 'head', 'options'):
+            res = getattr(self.client, method)('/robots.txt?cache=1')
+            self._test_headers_set(res, max_age=self.CACHE_DURATION)
+
+            # We can never get a lower max-age than CACHE_MIDDLEWARE_SECONDS
+            # as long as we request caching headers to be set.
+            res = getattr(self.client, method)('/robots.txt?cache=60')
+            self._test_headers_set(res, max_age=self.CACHE_DURATION)
+
+    @override_settings(CACHE_MIDDLEWARE_SECONDS=CACHE_DURATION, USE_ETAGS=True)
+    def test_headers_set_and_long_cache_requested(self):
+        for method in ('get', 'head', 'options'):
+            res = getattr(self.client, method)('/robots.txt?cache=21600')
+            self._test_headers_set(res, max_age=21600)
+
+
+def accept_check(x, y):
+    return eq_(lang_from_accept_header(x), y)
+
+
+def test_parse_accept_language():
+    expected = 'ga-IE', 'zh-TW', 'zh-CN', 'en-US', 'fr'
+    for lang in expected:
+        assert lang in settings.AMO_LANGUAGES, lang
+    d = (('ga-ie', 'ga-IE'),
+         # Capitalization is no big deal.
+         ('ga-IE', 'ga-IE'),
+         ('GA-ie', 'ga-IE'),
+         # Go for something less specific.
+         ('fr-FR', 'fr'),
+         # Go for something more specific.
+         ('ga', 'ga-IE'),
+         ('ga-XX', 'ga-IE'),
+         # With multiple zh-XX choices, choose the first alphabetically.
+         ('zh', 'zh-CN'),
+         # Default to en-us.
+         ('xx', 'en-US'),
+         # Check q= sorting.
+         ('fr,en;q=0.8', 'fr'),
+         ('en;q=0.8,fr,ga-IE;q=0.9', 'fr'),
+         # Beware of invalid headers.
+         ('en;q=wtf,fr,ga-IE;q=oops', 'en-US'),
+         # zh is a partial match but it's still preferred.
+         ('zh, fr;q=0.8', 'zh-CN'),
+         # Caps + q= sorting.
+         ('ga-IE,en;q=0.8,fr;q=0.6', 'ga-IE'),
+         ('fr-fr, en;q=0.8, es;q=0.2', 'fr'),
+         # Consolidated languages.
+         ('es-PE', 'es'),
+         )
+    for x, y in d:
+        yield accept_check, x, y
+
+
+class TestShorter(mkt.site.tests.TestCase):
+
+    def test_no_shorter_language(self):
+        accept_check('zh', 'zh-CN')
+        with self.settings(LANGUAGE_URL_MAP={'en-us': 'en-US'}):
+            accept_check('zh', 'en-US')

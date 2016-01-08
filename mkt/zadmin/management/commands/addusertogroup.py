@@ -3,13 +3,13 @@ from django.db import IntegrityError
 
 import commonware.log
 
-from access.models import Group, GroupUser
-from users.models import UserProfile
+from mkt.access.models import Group, GroupUser
+from mkt.users.models import UserProfile
 
 
 class Command(BaseCommand):
     help = ('Add a new user to a group. Syntax: \n'
-            '    ./manage.py addusertogroup <userid> <groupid>')
+            '    ./manage.py addusertogroup <user_id|email> <group_id>')
 
     log = commonware.log.getLogger('z.users')
 

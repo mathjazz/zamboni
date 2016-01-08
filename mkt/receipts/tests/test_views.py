@@ -1,66 +1,58 @@
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 import calendar
 import json
 import time
 import uuid
 
 from django.conf import settings
+from django.core.urlresolvers import reverse
+from django.test.client import RequestFactory
 
 import mock
 from nose.tools import eq_, ok_
-from pyquery import PyQuery as pq
-from test_utils import RequestFactory
 
-from addons.models import AddonUser
-import amo
-import amo.tests
-from amo.helpers import absolutify
-from amo.urlresolvers import reverse
-from devhub.models import AppLog
+import mkt
 from mkt.constants import apps
-from mkt.site.fixtures import fixture
-from mkt.webapps.models import Webapp
+from mkt.developers.models import AppLog
+from mkt.receipts.tests.test_models import TEST_LEEWAY
 from mkt.receipts.utils import create_test_receipt
-from mkt.receipts.views import devhub_verify
-from services.verify import decode_receipt, settings as verify_settings
-from users.models import UserProfile
-from zadmin.models import DownloadSource
+from mkt.site.fixtures import fixture
+from mkt.site.helpers import absolutify
+from mkt.site.tests import app_factory, MktPaths, TestCase
+from mkt.users.models import UserProfile
+from mkt.webapps.models import AddonUser, Webapp
+from services.verify import settings as verify_settings
+from services.verify import decode_receipt
 
-from .test_models import TEST_LEEWAY
 
-
-@mock.patch.object(settings, 'WEBAPPS_RECEIPT_KEY',
-                   amo.tests.AMOPaths.sample_key())
-class TestInstall(amo.tests.TestCase):
+class TestInstall(TestCase):
     fixtures = fixture('user_999', 'user_editor', 'user_editor_group',
                        'group_editor')
 
     def setUp(self):
-        self.addon = amo.tests.app_factory(manifest_url='http://cbc.ca/man')
+        self.addon = app_factory(manifest_url='http://cbc.ca/man')
         self.url = self.addon.get_detail_url('record')
         self.user = UserProfile.objects.get(email='regular@mozilla.com')
-        assert self.client.login(username=self.user.email, password='password')
+        self.login(self.user.email)
 
     def test_pending_free_for_reviewer(self):
-        self.addon.update(status=amo.STATUS_PENDING)
-        assert self.client.login(username='editor@mozilla.com',
-                                 password='password')
+        self.addon.update(status=mkt.STATUS_PENDING)
+        self.login('editor@mozilla.com')
         eq_(self.client.post(self.url).status_code, 200)
 
     def test_pending_free_for_developer(self):
         AddonUser.objects.create(addon=self.addon, user=self.user)
-        self.addon.update(status=amo.STATUS_PENDING)
+        self.addon.update(status=mkt.STATUS_PENDING)
         eq_(self.client.post(self.url).status_code, 200)
 
     def test_pending_free_for_anonymous(self):
-        self.addon.update(status=amo.STATUS_PENDING)
+        self.addon.update(status=mkt.STATUS_PENDING)
         eq_(self.client.post(self.url).status_code, 404)
 
     def test_pending_paid_for_reviewer(self):
-        self.addon.update(status=amo.STATUS_PENDING,
-                          premium_type=amo.ADDON_PREMIUM)
-        assert self.client.login(username='editor@mozilla.com',
-                                 password='password')
+        self.addon.update(status=mkt.STATUS_PENDING,
+                          premium_type=mkt.ADDON_PREMIUM)
+        self.login('editor@mozilla.com')
         eq_(self.client.post(self.url).status_code, 200)
         # Because they aren't using reviewer tools, they'll get a normal
         # install record and receipt.
@@ -68,8 +60,8 @@ class TestInstall(amo.tests.TestCase):
             apps.INSTALL_TYPE_USER)
 
     def test_pending_paid_for_admin(self):
-        self.addon.update(status=amo.STATUS_PENDING,
-                          premium_type=amo.ADDON_PREMIUM)
+        self.addon.update(status=mkt.STATUS_PENDING,
+                          premium_type=mkt.ADDON_PREMIUM)
         self.grant_permission(self.user, '*:*')
         eq_(self.client.post(self.url).status_code, 200)
         # Check ownership ignores admin users.
@@ -78,37 +70,31 @@ class TestInstall(amo.tests.TestCase):
 
     def test_pending_paid_for_developer(self):
         AddonUser.objects.create(addon=self.addon, user=self.user)
-        self.addon.update(status=amo.STATUS_PENDING,
-                          premium_type=amo.ADDON_PREMIUM)
+        self.addon.update(status=mkt.STATUS_PENDING,
+                          premium_type=mkt.ADDON_PREMIUM)
         eq_(self.client.post(self.url).status_code, 200)
         eq_(self.user.installed_set.all()[0].install_type,
             apps.INSTALL_TYPE_DEVELOPER)
 
     def test_pending_paid_for_anonymous(self):
-        self.addon.update(status=amo.STATUS_PENDING,
-                          premium_type=amo.ADDON_PREMIUM)
+        self.addon.update(status=mkt.STATUS_PENDING,
+                          premium_type=mkt.ADDON_PREMIUM)
         eq_(self.client.post(self.url).status_code, 404)
-
-    def test_not_record_addon(self):
-        self.addon.update(type=amo.ADDON_EXTENSION)
-        res = self.client.post(self.url)
-        eq_(res.status_code, 404)
-        eq_(self.user.installed_set.count(), 0)
 
     @mock.patch('mkt.webapps.models.Webapp.has_purchased')
     def test_paid(self, has_purchased):
         has_purchased.return_value = True
-        self.addon.update(premium_type=amo.ADDON_PREMIUM)
+        self.addon.update(premium_type=mkt.ADDON_PREMIUM)
         eq_(self.client.post(self.url).status_code, 200)
 
     def test_own_payments(self):
-        self.addon.update(premium_type=amo.ADDON_OTHER_INAPP)
+        self.addon.update(premium_type=mkt.ADDON_OTHER_INAPP)
         eq_(self.client.post(self.url).status_code, 200)
 
     @mock.patch('mkt.webapps.models.Webapp.has_purchased')
     def test_not_paid(self, has_purchased):
         has_purchased.return_value = False
-        self.addon.update(premium_type=amo.ADDON_PREMIUM)
+        self.addon.update(premium_type=mkt.ADDON_PREMIUM)
         eq_(self.client.post(self.url).status_code, 403)
 
     def test_record_logged_out(self):
@@ -122,7 +108,7 @@ class TestInstall(amo.tests.TestCase):
         eq_(res.status_code, 200)
         logs = AppLog.objects.filter(addon=self.addon)
         eq_(logs.count(), 1)
-        eq_(logs[0].activity_log.action, amo.LOG.INSTALL_ADDON.id)
+        eq_(logs[0].activity_log.action, mkt.LOG.INSTALL_ADDON.id)
 
     @mock.patch('mkt.receipts.views.record_action')
     @mock.patch('mkt.receipts.views.receipt_cef.log')
@@ -131,8 +117,8 @@ class TestInstall(amo.tests.TestCase):
         eq_(res.status_code, 200)
         eq_(record_action.call_args[0][0], 'install')
         eq_(record_action.call_args[0][2], {'app-domain': u'http://cbc.ca',
-                                           'app-id': self.addon.pk,
-                                           'anonymous': False})
+                                            'app-id': self.addon.pk,
+                                            'anonymous': False})
 
     @mock.patch('mkt.receipts.views.record_action')
     @mock.patch('mkt.receipts.views.receipt_cef.log')
@@ -170,38 +156,14 @@ class TestInstall(amo.tests.TestCase):
         eq_(res.status_code, 200)
         eq_(self.user.installed_set.count(), 1)
 
-    @mock.patch.object(settings, 'WEBAPPS_RECEIPT_KEY',
-                       amo.tests.AMOPaths.sample_key())
     @mock.patch('mkt.receipts.views.receipt_cef.log')
     def test_record_receipt(self, cef):
         res = self.client.post(self.url)
         content = json.loads(res.content)
         assert content.get('receipt'), content
 
-    def test_installed_client_data(self):
-        download_source = DownloadSource.objects.create(name='mkt-home')
-        device_type = 'mobile'
-        user_agent = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:16.0)'
 
-        self.addon.update(type=amo.ADDON_WEBAPP)
-        res = self.client.post(self.url,
-                               data={'device_type': device_type,
-                                     'is_chromeless': False,
-                                     'src': download_source.name},
-                               HTTP_USER_AGENT=user_agent)
-
-        eq_(res.status_code, 200)
-        eq_(self.user.installed_set.count(), 1)
-        ins = self.user.installed_set.get()
-        eq_(ins.client_data.download_source, download_source)
-        eq_(ins.client_data.device_type, device_type)
-        eq_(ins.client_data.user_agent, user_agent)
-        eq_(ins.client_data.is_chromeless, False)
-        eq_(not ins.client_data.language, False)
-        eq_(not ins.client_data.region, False)
-
-
-class TestReceiptVerify(amo.tests.TestCase):
+class TestReceiptVerify(TestCase):
     fixtures = fixture('user_999', 'user_editor', 'user_editor_group',
                        'group_editor')
 
@@ -281,7 +243,7 @@ class TestReceiptVerify(amo.tests.TestCase):
         eq_(res.status_code, 200)
 
 
-class TestReceiptIssue(amo.tests.TestCase):
+class TestReceiptIssue(TestCase):
     fixtures = fixture('user_999', 'user_editor', 'user_editor_group',
                        'group_editor', 'webapp_337141')
 
@@ -295,7 +257,7 @@ class TestReceiptIssue(amo.tests.TestCase):
     @mock.patch('mkt.receipts.views.create_receipt')
     def test_issued(self, create_receipt):
         create_receipt.return_value = 'foo'
-        self.client.login(username=self.reviewer.email, password='password')
+        self.login(self.reviewer.email)
         res = self.client.post(self.url)
         eq_(res.status_code, 200)
         eq_(create_receipt.call_args[1]['flavour'], 'reviewer')
@@ -303,7 +265,7 @@ class TestReceiptIssue(amo.tests.TestCase):
             apps.INSTALL_TYPE_REVIEWER)
 
     def test_get(self):
-        self.client.login(username=self.reviewer.email, password='password')
+        self.login(self.reviewer.email)
         res = self.client.get(self.url)
         eq_(res.status_code, 405)
 
@@ -312,7 +274,7 @@ class TestReceiptIssue(amo.tests.TestCase):
         eq_(res.status_code, 403)
 
     def test_issued_not_reviewer(self):
-        self.client.login(username=self.user, password='password')
+        self.login(self.user.email)
         res = self.client.post(self.url)
         eq_(res.status_code, 403)
 
@@ -320,7 +282,7 @@ class TestReceiptIssue(amo.tests.TestCase):
     def test_issued_developer(self, create_receipt):
         create_receipt.return_value = 'foo'
         AddonUser.objects.create(user=self.user, addon=self.app)
-        self.client.login(username=self.user.email, password='password')
+        self.login(self.user.email)
         res = self.client.post(self.url)
         eq_(res.status_code, 200)
         eq_(create_receipt.call_args[1]['flavour'], 'developer')
@@ -332,25 +294,25 @@ class TestReceiptIssue(amo.tests.TestCase):
         """
         Regression test to ensure that the CEF log works. Pass through the
         app.pk instead of the full unicode name, until the CEF library is
-        fixed, or metlog is used.
+        fixed, or heka is used.
         """
         create_receipt.return_value = 'foo'
         self.app.name = u'\u0627\u0644\u062a\u0637\u0628-news'
         self.app.save()
 
-        self.client.login(username=self.reviewer.email, password='password')
+        self.login(self.reviewer.email)
         res = self.client.post(self.url)
         eq_(res.status_code, 200)
 
 
-class TestReceiptCheck(amo.tests.TestCase):
+class TestReceiptCheck(TestCase):
     fixtures = fixture('user_999', 'user_editor', 'user_editor_group',
                        'group_editor', 'webapp_337141')
 
     def setUp(self):
         super(TestReceiptCheck, self).setUp()
         self.app = Webapp.objects.get(pk=337141)
-        self.app.update(status=amo.STATUS_PENDING)
+        self.app.update(status=mkt.STATUS_PENDING)
         self.url = reverse('receipt.check',
                            args=[self.app.guid])
         self.reviewer = UserProfile.objects.get(pk=5497308)
@@ -360,18 +322,18 @@ class TestReceiptCheck(amo.tests.TestCase):
         eq_(self.client.get(self.url).status_code, 302)
 
     def test_not_reviewer(self):
-        self.client.login(username=self.user.email, password='password')
+        self.login(self.user.email)
         eq_(self.client.get(self.url).status_code, 403)
 
     def test_not_there(self):
-        self.client.login(username=self.reviewer.email, password='password')
+        self.login(self.reviewer.email)
         res = self.client.get(self.url)
         eq_(res.status_code, 200)
         eq_(json.loads(res.content)['status'], False)
 
     def test_there(self):
-        self.client.login(username=self.reviewer.email, password='password')
-        amo.log(amo.LOG.RECEIPT_CHECKED, self.app, user=self.reviewer)
+        self.login(self.reviewer.email)
+        mkt.log(mkt.LOG.RECEIPT_CHECKED, self.app, user=self.reviewer)
         res = self.client.get(self.url)
         eq_(res.status_code, 200)
         eq_(json.loads(res.content)['status'], True)
@@ -384,17 +346,22 @@ class RawRequestFactory(RequestFactory):
         return data
 
 
-# Ooof.
 @mock.patch.object(verify_settings, 'WEBAPPS_RECEIPT_KEY',
-                   amo.tests.AMOPaths.sample_key())
-@mock.patch.object(settings, 'WEBAPPS_RECEIPT_KEY',
-                   amo.tests.AMOPaths.sample_key())
+                   MktPaths.sample_key())
 @mock.patch.object(settings, 'SITE_URL', 'https://foo.com')
 @mock.patch.object(verify_settings, 'DOMAIN', 'foo.com')
-class TestDevhubReceipts(amo.tests.TestCase):
+class TestDevhubReceipts(TestCase):
 
     def setUp(self):
         self.issue = reverse('receipt.test.issue')
+
+    def test_verify_supports_cors(self):
+        res = self.client.options(reverse('receipt.test.verify',
+                                          args=['ok']))
+        eq_(res.status_code, 200, res)
+        eq_(res['Access-Control-Allow-Headers'],
+            'content-type, accept, x-fxpay-version')
+        eq_(res['Access-Control-Allow-Origin'], '*')
 
     def test_install_page(self):
         eq_(self.client.get(reverse('receipt.test.install')).status_code, 200)
@@ -431,14 +398,14 @@ class TestDevhubReceipts(amo.tests.TestCase):
         ok_(json.loads(res.content)['error'])
 
     def test_verify_fails(self):
-        req = RawRequestFactory().post('/', '')
-        res = devhub_verify(req, 'expired')
+        res = self.client.post(reverse('receipt.test.verify',
+                                       args=['expired']))
         eq_(json.loads(res.content)['status'], 'invalid')
 
     def test_verify(self):
-        url = absolutify(reverse('receipt.test.verify',
-                                 kwargs={'status': 'expired'}))
         receipt = create_test_receipt('http://foo', 'expired')
-        req = RawRequestFactory().post(url, receipt)
-        res = devhub_verify(req, 'expired')
+        res = self.client.post(reverse('receipt.test.verify',
+                                       args=['expired']),
+                               receipt,
+                               content_type='text/plain')
         eq_(json.loads(res.content)['status'], 'expired')

@@ -1,15 +1,14 @@
 from django.core.management.base import BaseCommand, CommandError
-from django.db import IntegrityError
 
 import commonware.log
 
-from access.models import Group, GroupUser
-from users.models import UserProfile
+from mkt.access.models import Group, GroupUser
+from mkt.users.models import UserProfile
 
 
 class Command(BaseCommand):
     help = ('Remove a user from a group. Syntax: \n'
-            '    ./manage.py removeuserfromgroup <userid> <groupid>')
+            '    ./manage.py removeuserfromgroup <user_id|email> <group_id>')
 
     log = commonware.log.getLogger('z.users')
 

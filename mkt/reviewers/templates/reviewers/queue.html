@@ -1,4 +1,5 @@
 {% extends 'reviewers/base.html' %}
+{% from 'reviewers/includes/macros.html' import app_flags with context %}
 {% from 'site/helpers/form_row.html' import form_row %}
 
 {% block breadcrumbs %}
@@ -18,10 +19,12 @@
   <section id="queue-island" class="island search-toggle">
     {% if tab == 'moderated' %}
       {% include "reviewers/includes/queue_moderation.html" %}
+    {% elif tab in ['abuse', 'abusewebsites'] %}
+      {% include "reviewers/includes/queue_abuse.html" %}
     {% else %}
       {% if addons %}
         <table id="addon-queue" class="data-grid items"
-               data-url="{{ url('editors.queue_viewing') }}">
+               data-url="{{ url('reviewers.queue_viewing') }}">
           <thead>
             <tr class="listing-header">
               <th>&nbsp;</th>
@@ -29,64 +32,52 @@
               <th>{{ _('Flags') }}</th>
               <th class="waiting-time">{{ sort_link(_('Waiting Time'), date_sort or 'created')|safe }}</th>
               <th>{{ _('Devices') }}</th>
-              {% if DESKTOP %}
-                <th class="payments">{{ _('Payments') }}</th>
-                {% if tab == 'escalated' %}
-                  <th>{{ sort_link(_('Abuse Reports'), 'num_abuse_reports')|safe }}</th>
-                {% endif %}
-              {% endif %}
+              <th class="payments reviewers-desktop">{{ _('Payments') }}</th>
             </tr>
           </thead>
-          <tbody>
-            {% for qa in addons %}
-              <tr data-addon="{{ qa.app.id }}" class="addon-row" id="addon-{{ qa.app.id }}">
-                <td><div class="addon-locked"></div></td>
-                <td class="app-name"><a href="{{ url('reviewers.apps.review', qa.app.app_slug) }}">{{ qa.app.name }}</a></td>
-                <td class="flags">{# Flags #}
-                  {% if qa.app.is_packaged %}
-                    <div class="sprite-reviewer sprite-reviewer-packaged-app" title="{{ _('Packaged App') }}"></div>
-                    {% if qa.app.latest_version.is_privileged %}
-                      <div class="sprite-reviewer sprite-reviewer-privileged-app" title="{{ _('Privileged App') }}"></div>
-                    {% endif %}
-                  {% endif %}
-                  {% if qa.app.status == amo.STATUS_BLOCKED %}
-                    <div class="sprite-reviewer sprite-reviewer-blocked" title="{{ _('Blocklisted App') }}"></div>
-                  {% endif %}
-                  {% if qa.app.is_premium() %}
-                    <div class="sprite-reviewer sprite-reviewer-premium" title="{{ _('Premium App') }}"></div>
-                  {% endif %}
-                  {% if qa.app.current_version.has_info_request %}
-                    <div class="sprite-reviewer sprite-reviewer-info" title="{{ _('More Information Requested') }}"></div>
-                  {% endif %}
-                  {% if qa.app.current_version.has_editor_comment %}
-                    <div class="sprite-reviewer sprite-reviewer-editor" title="{{ _('Contains Editor Comment') }}"></div>
-                  {% endif %}
-                </td>
-                <td class="waiting-time">{{ qa.created|timelabel }}</td>
-                <td>{{ device_list(qa.app) }}</td>
-                {% if DESKTOP %}
-                  <td class="payments">{{ amo.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}</td>
-                  {% if tab == 'escalated' %}
-                    <td class="abuse-reports">{{ qa.app.abuse_reports.count() }}</td>
-                  {% endif %}
-                {% endif %}
-              </tr>
-              {% if not DESKTOP %}
-                <tr class="extra-info">
+          {% if use_es %}
+            <tbody>
+              {% for qa in addons %}
+                <tr data-addon="{{ qa.app.id }}" class="addon-row" id="addon-{{ qa.app.id }}">
+                  <td><div class="addon-locked"></div></td>
+                  <td class="app-name"><a href="{{ url('reviewers.apps.review', qa.app.app_slug) }}">{{ qa.app.name_translations[0]['string'] }}</a></td>
+                  <td class="flags">{{ app_flags(qa.app) }}</td>
+                  <td class="waiting-time">{{ qa.date_field|es2datetime|timelabel }}</td>
+                  <td>{{ device_list_es(qa.app) }}</td>
+                  <td class="payments reviewers-desktop">{{ mkt.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}</td>
+                </tr>
+                <tr class="extra-info reviewers-mobile">
                   <td colspan="5">
                     <em>
                       {{ _('Payment Category:') }}
-                      {{ amo.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}
+                      {{ mkt.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}
                     </em>
-                    {% if tab == 'escalated' %}
-                      {{ _('Abuse Reports:') }}
-                      {{ qa.app.abuse_reports.count() }}
-                    {% endif %}
                   </td>
                 </tr>
-              {% endif %}
-            {% endfor %}
-          </tbody>
+              {% endfor %}
+            </tbody>
+          {% else %}
+            <tbody>
+              {% for qa in addons %}
+                <tr data-addon="{{ qa.app.id }}" class="addon-row" id="addon-{{ qa.app.id }}">
+                  <td><div class="addon-locked"></div></td>
+                  <td class="app-name"><a href="{{ url('reviewers.apps.review', qa.app.app_slug) }}">{{ qa.app.name }}</a></td>
+                  <td class="flags">{{ app_flags(qa.app) }}</td>
+                  <td class="waiting-time">{{ qa.date_field|timelabel }}</td>
+                  <td>{{ device_list(qa.app) }}</td>
+                  <td class="payments reviewers-desktop">{{ mkt.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}</td>
+                </tr>
+                <tr class="extra-info reviewers-mobile">
+                  <td colspan="5">
+                    <em>
+                      {{ _('Payment Category:') }}
+                      {{ mkt.ADDON_PREMIUM_TYPES[qa.app.premium_type] }}
+                    </em>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          {% endif %}
         </table>
       {% else %}
         {{ no_results() }}
@@ -98,7 +89,7 @@
         </div>
       {% else %}
         <div class="impala-paginator">{{ pager|impala_paginator }}</div>
-        <div class="mobile-paginator hidden">{{ pager|mobile_impala_paginator }}</div>
+        <div class="mobile-paginator hidden">{{ pager|mobile_reviewers_paginator }}</div>
       {% endif %}
 
     {% endif %}
@@ -110,7 +101,7 @@
 
   <p id="helpfulLinks">
     {{ _('Helpful Links:') }}
-    <a href="http://wiki.mozilla.org/Update:Editors">{{ _("Editors' Guide") }}</a>
+    <a href="https://wiki.mozilla.org/Marketplace/Reviewers/Apps/Guide">{{ _("Reviewers' Guide") }}</a>
   </p>
 
   {% include "reviewers/includes/search_results.html" %}

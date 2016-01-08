@@ -1,13 +1,7 @@
 <h1>
-  {% if app.is_webapp() %}
-    {{ _('App Lookup results for') }}
-    <a href="{{ app.get_url_path() }}"
-       title="{{ _('App Detail') }}">{{ app.name }}</a>
-  {% else %}
-    {{ _('Add-on Lookup results for') }}
-    {# TODO(Kumar) reverse to AMO doesn't work from mkt. #}
-    {{ app.name }}
-  {% endif %}
+  {{ _('App Lookup results for') }}
+  <a href="{{ app.get_url_path() }}"
+     title="{{ _('App Detail') }}">{{ app.name }}</a>
   ({{ app.pk }})
 </h1>
 
@@ -23,19 +17,19 @@
       </li>
       {% if not is_operator or is_author %}
         <li>
-          <a href="{{ url('detail.app_activity', app.app_slug) }}"
+          <a href="{{ url('lookup.app_activity', app.id) }}"
             {% if page_type == 'activity' %}class="sel"{% endif %}>
             {{ _('Activity') }}
           </a>
         </li>
         <li>
-          <a href="{{ url('mkt.stats.overview', app.app_slug) }}">
+          <a href="{{ url('commonplace.stats.app_dashboard', app.app_slug) }}">
             {{ _('Statistics') }}
           </a>
         </li>
         {% if is_admin or is_staff %}
         <li>
-          <a href="{{ app.get_dev_url() if app.is_webapp() else '' }}">
+          <a href="{{ app.get_dev_url() }}">
             {{ _('Edit Listing') }}
           </a>
         </li>
@@ -44,6 +38,11 @@
         <li>
           <a href="{{ url('reviewers.apps.review', app.app_slug) }}">
             {{ _('Review History') }}
+          </a>
+        </li>
+        <li>
+          <a href="{{ url('commonplace.commbadge.app_dashboard', app.id) }}">
+            {{ _('Communication Dashboard') }}
           </a>
         </li>
         {% endif %}

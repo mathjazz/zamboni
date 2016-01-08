@@ -6,44 +6,18 @@
           <h2 class="title nav-title">{{ _('Design') }}</h2>
           <ol>
             <li>
-              <a href="{{ url('ecosystem.design_concept') }}"
-                 {%- if section == 'design_concept' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.design_concept') }}">
                 {{- _('Concept: A Great App') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.design_fundamentals') }}"
-                 {%- if section == 'design_fundamentals' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.design_fundamentals') }}">
                 {{- _('Design Fundamentals') }}</a>
             </li>
-            <li class="has-children{{ ' active' if section in ('design_ui',
-                                                               'design_patterns') }}">
+            <li>
               <h2 class="subtitle nav-title">
                 <a href="{{ url('ecosystem.design_ui') }}">
                   {{- _('UI Guidelines') }}</a>
               </h2>
-              <ol>
-                <li>
-                  <a href="//developer.mozilla.org/docs/Web_Development/Mobile/Responsive_design"
-                     rel="external">
-                    {{- _('Intro to Responsive Design') }}</a>
-                </li>
-                <li>
-                  <a href="{{ url('ecosystem.design_patterns') }}"
-                     {%- if section == 'design_patterns' %}
-                     class="selected"
-                     {% endif %}>
-                    {{- _('Responsive Navigation Patterns') }}</a>
-                </li>
-                <li>
-                  <a href="//developer.mozilla.org/en-US/docs/Apps/UI-Guidelines"
-                     rel="external">
-                    {{- _('UI Guidelines for Firefox OS') }}</a>
-                </li>
-              </ol>
             </li>
           </ol>
         </div>
@@ -51,28 +25,18 @@
           <h2 class="title nav-title">{{ _('Build') }}</h2>
           <ol>
             <li>
-              <a href="{{ url('ecosystem.build_quick') }}"
-                {%- if section == 'build_quick' %}
-                class="selected"
-                {% endif %}>
+              <a href="{{ url('ecosystem.build_quick') }}">
                 {{- _('Quick Start') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_intro') }}"
-                {%- if section == 'build_intro' %}
-                class="selected"
-                {% endif %}>
+              <a href="{{ url('ecosystem.build_intro') }}">
                 {{- _('Intro to Open Web Apps') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_ffos') }}"
-                 {%- if section == 'firefox_os' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_ffos') }}">
                 {{- _('Intro to Firefox OS') }}</a>
             </li>
-            <li class="has-children{{ ' active' if section in ('build_reference',
-                                                               'chrono',
+            <li class="has-children{{ ' active' if section in ('chrono',
                                                                'face_value',
                                                                'generalnotes',
                                                                'podcasts',
@@ -141,79 +105,53 @@
               </ol>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_manifests') }}"
-                 {%- if section == 'build_manifests' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_manifests') }}">
                 {{- _('Intro to Manifests') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_web_developers') }}"
-                 {%- if section == 'build_web_developers' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_web_developers') }}">
                 {{- _('For Current Web Developers') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_mobile_developers') }}"
-                 {%- if section == 'build_mobile_developers' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_mobile_developers') }}">
                 {{- _('For Current Mobile Developers') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_apps_offline') }}"
-                 {%- if section == 'build_apps_offline' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_apps_offline') }}">
                 {{- _('Using Apps Offline') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_game_apps') }}"
-                 {%- if section == 'build_game_apps' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_game_apps') }}">
                 {{- _('Developing Game Apps') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.build_payments') }}"
-                 {%- if section == 'build_payments' %}
-                 class="selected"
-                 {% endif %}>
+              <a href="{{ url('ecosystem.build_payments') }}">
                 {{- _('Payments') }}</a>
             </li>
-            <li class="has-children{{ ' active' if section in ('build_tools',
-                                                               'build_app_generator',
-                                                               'firefox_os_simulator',
-                                                               'build_dev_tools') }}">
+            <li class="has-children">
               <h2 class="subtitle nav-title">
                 <a href="{{ url('ecosystem.build_tools') }}">
                   {{- _('Tools') }}</a>
               </h2>
               <ol>
                 <li>
-                  <a href="{{ url('ecosystem.build_app_generator') }}"
-                     {%- if section == 'build_app_generator' %}
-                     class="selected"
-                     {% endif %}>
+                  <a href="{{ url('ecosystem.build_app_generator') }}">
                     {{- _('App Generator') }}</a>
                 </li>
                 <li>
-                  <a href="{{ url('mkt.developers.validate_addon') }}">
+                  <a href="{{ url('mkt.developers.validate_app') }}">
                     {{- _('App Validator') }}</a>
                 </li>
                 <li>
-                  <a href="{{ url('ecosystem.firefox_os_simulator') }}"
-                     {%- if section == 'firefox_os_simulator' %}
-                     class="selected"
-                     {% endif %}>
+                  <a href="{{ url('ecosystem.app_manager') }}">
+                    {{- _('App Manager') }}</a>
+                </li>
+                <li>
+                  <a href="{{ url('ecosystem.firefox_os_simulator') }}">
                     {{- _('Firefox OS Simulator') }}</a>
                 </li>
                 <li>
-                  <a href="{{ url('ecosystem.build_dev_tools') }}"
-                     {%- if section == 'build_dev_tools' %}
-                     class="selected"
-                     {% endif %}>
+                  <a href="{{ url('ecosystem.build_dev_tools') }}">
                     {{- _('Firefox Developer Tools') }}</a>
                 </li>
               </ol>
@@ -224,47 +162,30 @@
           <h2 class="title nav-title">{{ _('Publish') }}</h2>
           <ol>
             <li>
-              <a href="{{ url('ecosystem.publish_submit') }}"
-                 {% if section == 'publish_submit' -%}
-                 class="selected"
-                 {% endif -%}>
+              <a href="{{ url('ecosystem.publish_submit') }}">
                 {{- _('Marketplace Submission') }}</a>
             </li>
             <li>
-              <a href="{{ url('ecosystem.publish_review') }}"
-                 {% if section == 'publish_review' -%}
-                 class="selected"
-                 {% endif -%}>
+              <a href="{{ url('ecosystem.publish_review') }}">
                 {{- _('Marketplace Review Criteria') }}</a>
             </li>
-            <li class="has-children{{ ' active' if section in ('publish_deploy',
-                                                               'publish_hosted',
-                                                               'publish_packaged') }}">
+            <li class="has-children">
               <h2 class="subtitle nav-title">
                 <a href="{{ url('ecosystem.publish_deploy') }}">
                   {{- _('Deploying Your App') }}</a>
               </h2>
               <ol>
                 <li>
-                  <a href="{{ url('ecosystem.publish_hosted') }}"
-                     {% if section == 'publish_hosted' -%}
-                     class="selected"
-                     {% endif -%}>
+                  <a href="{{ url('ecosystem.publish_hosted') }}">
                     {{- _('Hosted Apps') }}</a>
                 </li>
                 <li>
-                  <a href="{{ url('ecosystem.publish_packaged') }}"
-                     {% if section == 'publish_packaged' -%}
-                     class="selected"
-                     {% endif -%}>
+                  <a href="{{ url('ecosystem.publish_packaged') }}">
                     {{- _('Packaged Apps') }}</a>
                 </li>
               </ol>
               <li>
-                <a href="{{ url('ecosystem.publish_payments') }}"
-                   {% if section == 'publish_payments' -%}
-                   class="selected"
-                   {% endif -%}>
+                <a href="{{ url('ecosystem.publish_payments') }}">
                   {{- _('Payments Status') }}</a>
               </li>
             </li>

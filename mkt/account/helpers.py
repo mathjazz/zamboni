@@ -1,10 +1,21 @@
-from jingo import register
+import uuid
+
+from django.conf import settings
+
 import jinja2
+from jingo import register
+from jingo.helpers import urlparams
 
-from mkt.site.helpers import new_context
+from mkt.account.views import fxa_oauth_api
 
 
-@register.inclusion_tag('account/helpers/refund_info.html')
 @jinja2.contextfunction
-def refund_info(context, product, contributions, show_link):
-    return new_context(**locals())
+@register.function
+def fxa_auth_info(context=None):
+    state = uuid.uuid4().hex
+    return (state,
+            urlparams(
+                fxa_oauth_api('authorization'),
+                client_id=settings.FXA_CLIENT_ID,
+                state=state,
+                scope='profile'))

@@ -6,15 +6,16 @@
 {% block content %}
   {% include 'lookup/includes/transaction_search.html' %}
 
-  <section class="island c">
+  <section class="island c" id="transaction-lookup">
     <h1>
       {% trans tx_url = url('lookup.transaction_summary', uuid) %}
-        Transaction Lookup results for <a href="{{ tx_url }}">Transaction {{ uuid }}</a>
+        Transaction Lookup
       {% endtrans %}
     </h1>
 
     {% if contrib %}
       <section id="prose">
+        <h2>{{ _('Marketplace information') }}</h2>
         <dl>
           <dt>{{ _('Transaction ID') }}</dt><dd>{{ contrib.uuid }}</dd>
           <dt>{{ _('Date') }}</dt><dd>{{ contrib.created|datetime('%B %e, %Y %H:%M:%S') }}</dd>
@@ -37,22 +38,77 @@
             </dd>
           {% endif %}
         </dl>
+
+        <h2>{{ _('Payment provider information') }}</h2>
+        {% if not lookup['transaction'] %}
+          <p>{{ _('Currently unable to retrieve transaction status.') }}</p>
+        {% endif %}
+
+        {% if provider == 'bango' %}
+          <p>
+            {% trans bango_support='support@bango.com' %}
+              This payment was made through Bango. To get more information
+              contact <a href="mailto:{{ bango_support }}">Bango support</a>
+              with the following information.
+            {% endtrans %}
+          </p>
+        {% endif %}
+
+        {% if provider == 'reference' %}
+          <p>
+            {% trans %}
+              This payment was made through the <b>reference implementation</b>.
+              It wasn't a real transaction.
+            {% endtrans %}
+          </p>
+        {% endif %}
+
+        {% if lookup['transaction'] %}
+          {# Note: deliberately not translating these strings, they
+             are intended to be sent to the payment provider in an email
+             all of whom support English #}
+          <dl>
+            <dt>Amount paid</dt>
+            <dd>{{ amount }} {{ currency }}</dd>
+            <dt>Lookup id</dt>
+            <dd>{{ support }}</dd>
+            <dt>Package id</dt>
+            <dd>{{ package_id }}</dd>
+            <dt>Timestamp</dt>
+            <dd>{{ timestamp }} PST</dd>
+          </dl>
+        {% endif %}
       </section>
     {% else %}
       {{ no_results() }}
     {% endif %}
 
     <div class="refund-transaction c">
+      <h2>{{ _('Refund information') }}</h2>
+      {% if not lookup['status'] %}
+        <p>{{ _('Currently unable to retrieve refund status.') }}</p>
+      {% endif %}
       <dl>
         <dt>{{ _('Refund Status') }}</dt>
         <dd>{{ refund_status or _('Unrequested') }}</dd>
       </dl>
       {% if action_allowed('Transaction', 'Refund') and is_refundable %}
         <form method="post"
-              action="{{ url('lookup.transaction_refund', uuid) }}">
-          {{ csrf() }}
-          {{ tx_refund_form }}
-          <button>{{ _('Refund this transaction') }}</button>
+              action="{{ url('lookup.transaction_refund', uuid) }}"
+              class="lookup">
+            {{ csrf() }}
+            <label>{{ tx_refund_form.refund_reason.label }}:</label>
+            {{ tx_refund_form.refund_reason }}
+            {{ tx_refund_form.manual }}
+            <label class="inline" for="id_manual">{{ tx_refund_form.manual.label }}</label>
+            <p>
+              {% trans %}
+              If a manual refund has been processed by the payment provider,
+              check this box. This will refund it in the Mozilla servers but
+              not contact the payment provider.
+              {% endtrans %}
+            </p>
+            <button>{{ _('Refund this transaction') }}</button>
         </form>
       {% endif %}
     </div>

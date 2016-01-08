@@ -1,14 +1,14 @@
 from django.db import models
 
-import amo.models
 import mkt
+from mkt.site.models import ModelBase
 
 
-class AppSubmissionChecklist(amo.models.ModelBase):
-    addon = models.OneToOneField('addons.Addon')
-    terms = models.BooleanField()
-    manifest = models.BooleanField()
-    details = models.BooleanField()
+class AppSubmissionChecklist(ModelBase):
+    addon = models.OneToOneField('webapps.Webapp')
+    terms = models.BooleanField(default=False)
+    manifest = models.BooleanField(default=False)
+    details = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'submission_checklist_apps'

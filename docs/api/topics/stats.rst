@@ -12,6 +12,9 @@ Global Statistics
 
 Statistics across the Marketplace as a whole.
 
+.. note:: Authentication is required and the authenticated user must have the
+          Stats:View permission.
+
 Metrics
 -------
 
@@ -22,7 +25,7 @@ Apps added by packaging type
 
 The number of apps added each day over time for each app package type.
 
-.. http:get:: /api/v1/stats/global/apps_added_by_package/
+.. http:get:: /api/v2/stats/global/apps_added_by_package/
 
     **Request**:
 
@@ -70,7 +73,7 @@ Apps added by premium type
 
 The number of apps added each day over time, filtered by premium type.
 
-.. http:get:: /api/v1/stats/global/apps_added_by_premium/
+.. http:get:: /api/v2/stats/global/apps_added_by_premium/
 
     **Request**:
 
@@ -151,7 +154,7 @@ Apps available by packaging type
 
 The number of apps available each day over time for each app package type.
 
-.. http:get:: /api/v1/stats/global/apps_available_by_package/
+.. http:get:: /api/v2/stats/global/apps_available_by_package/
 
     **Request**:
 
@@ -199,7 +202,7 @@ Apps available by premium type
 
 The number of apps available each day over time, filtered by premium type.
 
-.. http:get:: /api/v1/stats/global/apps_available_by_premium/
+.. http:get:: /api/v2/stats/global/apps_available_by_premium/
 
     **Request**:
 
@@ -281,7 +284,9 @@ Apps installed
 The number of apps installed each day over time, optionally filtered by
 region.
 
-.. http:get:: /api/v1/stats/global/apps_installed/
+.. note:: Zero values are not stored.
+
+.. http:get:: /api/v2/stats/global/apps_installed/
 
     **Request**:
 
@@ -318,7 +323,7 @@ Total developers
 
 The total number of developers over time.
 
-.. http:get:: /api/v1/stats/global/total_developers/
+.. http:get:: /api/v2/stats/global/total_developers/
 
     **Request**:
 
@@ -353,7 +358,7 @@ Total visits
 
 The total number of visits to Marketplace over time.
 
-.. http:get:: /api/v1/stats/global/total_visits/
+.. http:get:: /api/v2/stats/global/total_visits/
 
     **Request**:
 
@@ -383,13 +388,82 @@ The total number of visits to Marketplace over time.
             ],
         }
 
+Ratings
+~~~~~~~
+
+The number of app ratings each day to Marketplace over time.
+
+.. http:get:: /api/v2/stats/global/ratings/
+
+    **Request**:
+
+    :param start: The starting date in "YYYY-MM-DD" format.
+    :type start: string
+    :param end: The ending date in "YYYY-MM-DD" format.
+    :type end: string
+    :param interval: The interval. One of the following: 'day', 'week',
+                     'month', 'quarter', 'year'.
+    :type interval: string
+
+    **Response**:
+
+    .. code-block:: json
+
+         {
+            "objects": [
+                {
+                    "count": 12,
+                    "date": "2013-08-01"
+                },
+                {
+                    "count": 23,
+                    "date": "2013-08-02"
+                },
+                ...
+            ],
+        }
+
+Abuse Reports
+~~~~~~~~~~~~~
+
+The number of abuse reports each day to Marketplace over time.
+
+.. http:get:: /api/v2/stats/global/abuse_reports/
+
+    **Request**:
+
+    :param start: The starting date in "YYYY-MM-DD" format.
+    :type start: string
+    :param end: The ending date in "YYYY-MM-DD" format.
+    :type end: string
+    :param interval: The interval. One of the following: 'day', 'week',
+                     'month', 'quarter', 'year'.
+    :type interval: string
+
+    **Response**:
+
+    .. code-block:: json
+
+         {
+            "objects": [
+                {
+                    "count": 3,
+                    "date": "2013-08-01"
+                },
+                {
+                    "count": 0,
+                    "date": "2013-08-02"
+                },
+                ...
+            ],
+        }
 
 Gross Revenue
 ~~~~~~~~~~~~~
 
 The gross revenue of apps purchased over time.
 
-.. http:get:: /api/v1/stats/global/revenue/
+.. http:get:: /api/v2/stats/global/revenue/
 
     **Request**:
 
@@ -425,6 +499,9 @@ Per-app Statistics
 
 Statistics per public app in the Marketplace.
 
+.. note:: Authentication is required and the authenticated user must be the
+          app owner or have the Stats:View permission.
+
 Metrics
 -------
 
@@ -436,7 +513,9 @@ Installs
 The number of apps installs each day over time, optionally filtered by
 region.
 
-.. http:get:: /api/v1/stats/app/(int:id)|(string:slug)/installs/
+.. note:: Zero values are not stored.
+
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/installs/
 
     **Request**:
 
@@ -473,7 +552,9 @@ Visits
 
 The number of page visits each day over time.
 
-.. http:get:: /api/v1/stats/app/(int:id)|(string:slug)/visits/
+.. note:: Zero values are not stored.
+
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/visits/
 
     **Request**:
 
@@ -503,12 +584,117 @@ The number of page visits each day over time.
             ],
         }
 
+Ratings
+~~~~~~~
+
+The number of app ratings each day for this app over time.
+
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/ratings/
+
+    **Request**:
+
+    :param start: The starting date in "YYYY-MM-DD" format.
+    :type start: string
+    :param end: The ending date in "YYYY-MM-DD" format.
+    :type end: string
+    :param interval: The interval. One of the following: 'day', 'week',
+                     'month', 'quarter', 'year'.
+    :type interval: string
+
+    **Response**:
+
+    .. code-block:: json
+
+         {
+            "objects": [
+                {
+                    "count": 12,
+                    "date": "2013-08-01"
+                },
+                {
+                    "count": 8,
+                    "date": "2013-08-02"
+                },
+                ...
+            ],
+        }
+
+Average ratings
+~~~~~~~~~~~~~~~
+
+The average rating for this app over time.
+
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/average_rating/
+
+    **Request**:
+
+    :param start: The starting date in "YYYY-MM-DD" format.
+    :type start: string
+    :param end: The ending date in "YYYY-MM-DD" format.
+    :type end: string
+    :param interval: The interval. One of the following: 'day', 'week',
+                     'month', 'quarter', 'year'.
+    :type interval: string
+
+    **Response**:
+
+    .. code-block:: json
+
+         {
+            "objects": [
+                {
+                    "count": 3.5,
+                    "date": "2013-08-01"
+                },
+                {
+                    "count": 3.75,
+                    "date": "2013-08-02"
+                },
+                ...
+            ],
+        }
+
+Abuse Reports
+~~~~~~~~~~~~~
+
+The number of abuse reports each day for this app over time.
+
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/abuse_reports/
+
+    **Request**:
+
+    :param start: The starting date in "YYYY-MM-DD" format.
+    :type start: string
+    :param end: The ending date in "YYYY-MM-DD" format.
+    :type end: string
+    :param interval: The interval. One of the following: 'day', 'week',
+                     'month', 'quarter', 'year'.
+    :type interval: string
+
+    **Response**:
+
+    .. code-block:: json
+
+         {
+            "objects": [
+                {
+                    "count": 3,
+                    "date": "2013-08-01"
+                },
+                {
+                    "count": 0,
+                    "date": "2013-08-02"
+                },
+                ...
+            ],
+        }
+
 Gross Revenue
 ~~~~~~~~~~~~~
 
 The gross revenue of app purchases over time.
 
-.. http:get:: /api/v1/stats/app/(int:id)|(string:slug)/revenue/
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/revenue/
 
     **Request**:
 
@@ -536,4 +722,99 @@ The gross revenue of app purchases over time.
                 },
                 ...
             ],
+        }
+
+
+Totals Statistics
+=================
+
+Statistical information about metrics tracked. The information includes
+the total, minimum and maximum, and other statistical calculations for
+various metrics tracked.
+
+Metrics
+-------
+
+Provided are the following metrics.
+
+Global totals
+~~~~~~~~~~~~~
+
+Statistical information about global metrics.
+
+.. http:get:: /api/v2/stats/global/totals/
+
+    **Response**:
+
+    .. code-block:: json
+
+        {
+            "abuse_reports": {
+                "max": 2.0,
+                "mean": 1.5,
+                "min": 1.0,
+                "std_deviation": 0.5,
+                "sum_of_squares": 10.0,
+                "total": 6.0,
+                "variance": 0.25
+            },
+            "installs": {
+                "max": 2716.0,
+                "mean": 14.313328064711078,
+                "min": 1.0,
+                "std_deviation": 55.293387141332197,
+                "sum_of_squares": 70173830.0,
+                "total": 307894.0,
+                "variance": 3057.3586615612408
+            },
+            "ratings": {
+                "max": 1.0,
+                "mean": 1.0,
+                "min": 1.0,
+                "std_deviation": 0.0,
+                "sum_of_squares": 2.0,
+                "total": 2.0,
+                "variance": 0.0
+            }
+        }
+
+Per-app totals
+~~~~~~~~~~~~~~
+
+Statistical information about per-app metrics.
+
+.. http:get:: /api/v2/stats/app/(int:id)|(string:slug)/totals/
+
+    **Response**:
+
+    .. code-block:: json
+
+        {
+            "abuse_reports": {
+                "max": 1.0,
+                "mean": 1.0,
+                "min": 1.0,
+                "std_deviation": 0.0,
+                "sum_of_squares": 2.0,
+                "total": 2.0,
+                "variance": 0.0
+            },
+            "installs": {
+                "max": 43.0,
+                "mean": 7.730769230769231,
+                "min": 1.0,
+                "std_deviation": 7.5483087736492305,
+                "sum_of_squares": 21247.0,
+                "total": 1407.0,
+                "variance": 56.976965342349956
+            },
+            "ratings": {
+                "max": 1.0,
+                "mean": 1.0,
+                "min": 1.0,
+                "std_deviation": 0.0,
+                "sum_of_squares": 2.0,
+                "total": 2.0,
+                "variance": 0.0
+            }
         }

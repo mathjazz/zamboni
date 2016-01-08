@@ -1,11 +1,11 @@
 import logging
+import logging.config
 import logging.handlers
 
 from django.conf import settings
 
-from raven.contrib.django.handlers import SentryHandler
 import commonware.log
-import dictconfig
+
 
 base_fmt = ('%(name)s:%(levelname)s %(message)s '
             ':%(pathname)s:%(lineno)s')
@@ -44,12 +44,12 @@ handlers = {
         'formatter': 'debug',
     },
     'syslog': {
-        'class': 'lib.misc.unicode_log.UnicodeHandler',
+        'class': 'mozilla_logger.log.UnicodeHandler',
         'facility': logging.handlers.SysLogHandler.LOG_LOCAL7,
         'formatter': 'prod',
     },
     'syslog2': {
-        'class': 'lib.misc.unicode_log.UnicodeHandler',
+        'class': 'mozilla_logger.log.UnicodeHandler',
         'facility': logging.handlers.SysLogHandler.LOG_LOCAL7,
         'formatter': 'prod2',
     },
@@ -60,33 +60,37 @@ handlers = {
         'level': 'ERROR',
         'class': 'django_statsd.loggers.errors.StatsdHandler',
     },
-    'errortype_syslog': {
-        'class': 'lib.misc.admin_log.ErrorSyslogHandler',
-        'facility': logging.handlers.SysLogHandler.LOG_LOCAL7,
-        'formatter': 'error',
-    },
 }
 
 loggers = {
     'z': {},
     'django.request': {
-        # Note these handlers will choose what they want to emit and when.
-        'handlers': ['errortype_syslog', 'statsd'],
+        'handlers': ['statsd'],
         'level': 'ERROR',
         'propagate': True,
     },
     'z.celery': {
-        'handlers': ['errortype_syslog', 'statsd'],
+        'handlers': ['statsd'],
         'level': 'ERROR',
         'propagate': True,
-    },
-    'caching': {
-        'level': 'ERROR',
     },
     'newrelic': {
         'level': 'WARNING',
     },
-    'elasticutils': {
+    'elasticsearch': {
+        'level': 'WARNING',
+    },
+    'suds': {
+        'level': 'ERROR',
+        'propagate': True
+    },
+    'cron': {
+        'level': 'WARNING',
+    },
+    'z.cron': {
+        'level': 'WARNING',
+    },
+    'z.geoip': {
         'level': 'WARNING',
     },
 }
@@ -123,9 +127,4 @@ def log_configure():
         if logger is not cfg['root'] and 'propagate' not in logger:
             logger['propagate'] = False
 
-    dictconfig.dictConfig(cfg)
-
-    # logging.getLogger() accesses a singleton, this just binds
-    # in the SentryHandler to error level messages
-    tastypie = logging.getLogger('django.request.tastypie')
-    tastypie.addHandler(SentryHandler())
+    logging.config.dictConfig(cfg)

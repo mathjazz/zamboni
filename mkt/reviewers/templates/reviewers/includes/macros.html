@@ -1,14 +1,15 @@
 {% macro dropdown_menu(type, title, tabs, is_selected) %}
 {# type -- string (e.g. 'queue', 'log')
    title -- translation string (e.g. _('Queues'))
-   tabs -- list of named_url/tab_code/tab_text tuples
+   tabs -- list of url/tab_code/tab_text tuples
    is_selected -- boolean condition to highlight this element #}
   {% if tabs %}
     <li{% if is_selected %} class="selected"{% endif %}>
-      <a href="{{ url(tabs[0][0]) }}" class="controller trigger-{{ type }}">{{ title }}</a>
+      {% set tab_url = tabs[0][0] %}
+      <a href="{{ tab_url if tab_url.startswith('/') else url(tab_url) }}" class="controller trigger-{{ type }}">{{ title }}</a>
       <ul>
-        {% for named_url, tab_code, text in tabs %}
-          <li><a href="{{ url(named_url) }}">{{ text }}</a></li>
+        {% for url_, tab_code, text in tabs %}
+          <li><a href="{{ url_ if url_.startswith('/') else url(url_) }}">{{ text }}</a></li>
         {% endfor %}
       </ul>
     </li>
@@ -23,8 +24,8 @@
     <header>{{ title }}</header>
     <menu class="nav-action-menu">
       <div>
-        {% for named_url, tab_code, text in tabs %}
-          <button data-url="{{ url(named_url) }}">{{ text }}</button>
+        {% for url_, tab_code, text in tabs %}
+          <button data-url="{{ url_ if url_.startswith('/') else url(url_) }}">{{ text }}</button>
         {% endfor %}
       </div>
       <button data-url="#cancel">{{ _('Cancel') }}</button>
@@ -36,19 +37,18 @@
 {# type -- string (e.g. 'queue', 'log')
    tabs -- list of named_url/tab_code/tab_text tuples #}
   <ul class="tabnav{{ ' search-toggle' if not no_search_toggle }}">
-    {% for named_url, tab_code, text in tabs %}
+    {% for url_, tab_code, text in tabs %}
       <li{% if tab == tab_code %} class="selected trigger-{{ type }}"{% endif %}>
-        <a href="{{ url(named_url) }}">{{ text }}</a>
+        <a href="{{ url_ if url_.startswith('/') else url(url_) }}">{{ text }}</a>
         <div class="tabnav-sprite hidden"></div>
       </li>
     {% endfor %}
   </ul>
 {% endmacro %}
 
-{% macro log_filter(type, form) %}
-  {# type -- string (e.g. 'apps', 'themes') #}
+{% macro log_filter(form, action_url) %}
   <div id="log-filter" class="log-filter-outside island">
-    <form action="{{ url('reviewers.' + type + '.logs') }}" method="get">
+    <form action="{{ url(action_url) }}" method="get">
       <div class="date_range">
         {{ form.start.label_tag() }}
         {{ form.start }}
@@ -62,4 +62,49 @@
       </div>
     </form>
   </div>
+{% endmacro %}
+
+{% macro app_origin(app) %}
+  <dt>{{ _('App origin') }}</dt>
+  <dd class="app_origin">
+    {{ product.app_domain }}
+    {% if product.punycode_app_domain != product.app_domain %}
+      <br>
+      {% trans punycode_app_domain=product.punycode_app_domain %}
+        <strong>IDN domain!</strong> punycode version: {{ punycode_app_domain }}
+      {% endtrans %}
+    {% endif %}
+  </dd>
+{% endmacro %}
+
+{% macro app_flags(app) %}
+  {% if app.priority_review %}
+    <div class="sprite-reviewer sprite-reviewer-priority" title="{{ _('Priority Review Needed') }}"></div>
+  {% endif %}
+  {# If this is an Elasticsearch hit `app_type` (from the index) is an integer, otherwise it is a string from the Webapp property. #}
+  {# TODO: Remove the strings when removing the 'reviewer-tools-elasticsearch' waffle. #}
+  {% if app.app_type in (mkt.ADDON_WEBAPP_PACKAGED, mkt.ADDON_WEBAPP_PRIVILEGED, 'packaged', 'privileged') %}
+    <div class="sprite-reviewer sprite-reviewer-packaged-app" title="{{ _('Packaged App') }}"></div>
+    {% if app.app_type in (mkt.ADDON_WEBAPP_PRIVILEGED, 'privileged') %}
+      <div class="sprite-reviewer sprite-reviewer-privileged-app" title="{{ _('Privileged App') }}"></div>
+    {% endif %}
+  {% endif %}
+  {% if app.status == mkt.STATUS_BLOCKED %}
+    <div class="sprite-reviewer sprite-reviewer-blocked" title="{{ _('Blocklisted App') }}"></div>
+  {% endif %}
+
+  {% if app.premium_type == mkt.ADDON_PREMIUM_INAPP %}
+    <div class="sprite-reviewer sprite-reviewer-premium inapp" title="{{ _('Premium with In-App') }}"></div>
+  {% elif app.premium_type == mkt.ADDON_FREE_INAPP %}
+    <div class="sprite-reviewer sprite-reviewer-premium free inapp" title="{{ _('Free with In-App') }}"></div>
+  {% elif app.premium_type == mkt.ADDON_PREMIUM %}
+    <div class="sprite-reviewer sprite-reviewer-premium" title="{{ _('Premium App') }}"></div>
+  {% endif %}
+
+  {% if app.latest_version.has_info_request %}
+    <div class="sprite-reviewer sprite-reviewer-info" title="{{ _('More Information Requested') }}"></div>
+  {% endif %}
+  {% if app.latest_version.has_editor_comment %}
+    <div class="sprite-reviewer sprite-reviewer-editor" title="{{ _('Contains Editor Comment') }}"></div>
+  {% endif %}
 {% endmacro %}

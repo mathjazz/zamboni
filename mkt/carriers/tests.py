@@ -1,19 +1,18 @@
+from django.core.urlresolvers import reverse
+from django.test.client import RequestFactory
+
 import mock
 from nose.tools import eq_
-from test_utils import RequestFactory
 
-from amo.tests import TestCase
-from amo.urlresolvers import reverse, set_url_prefix
-
-from . import get_carrier, set_carrier, context_processors
-from .middleware import CarrierURLMiddleware
+from mkt.site.tests import TestCase
+from mkt.carriers import context_processors, get_carrier, set_carrier
+from mkt.carriers.middleware import CarrierURLMiddleware
 
 
 class TestCarrierURLs(TestCase):
 
     def setUp(self):
         set_carrier(None)
-        set_url_prefix(None)
 
     def request(self, url):
         request = RequestFactory().get(url)

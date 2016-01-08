@@ -1,17 +1,29 @@
 .. _app:
 
-===
-App
-===
+====
+Apps
+====
+
+App Submission
+==============
+
+See the dedicated :ref:`App Submission <app_submission>` topic.
 
 App
 ===
 
-.. http:get:: /api/v1/apps/app/
+.. note::
+
+    The `name`, `description`, `homepage`, `release_notes`, `support_email`
+    and `support_url` fields are user-translated fields and have a dynamic type
+    depending on the query. See :ref:`translations <overview-translations>`.
+
+
+.. http:get:: /api/v2/apps/app/
 
     .. note:: Requires authentication.
 
-    Retuns a list of apps you have developed.
+    Returns a list of apps you have developed.
 
     **Request**
 
@@ -26,7 +38,7 @@ App
 
 .. _app-response-label:
 
-.. http:get:: /api/v1/apps/app/(int:id)|(string:slug)/
+.. http:get:: /api/v2/apps/app/(int:id)|(string:slug)/
 
     .. note:: Does not require authentication if your app is public.
 
@@ -50,31 +62,43 @@ App
                 "games"
             ],
             "content_ratings": {
-                "de": [
-                    {"body": "USK", "description": "Not recommended...", "name": "13+"}
-                ],
-                "generic": [
-                    {"body": "GENERIC", "description": "Not recommended...", "name": "13+"}
-                ]
-            }
+                "body": "esrb",
+                "rating": "13",
+                "descriptors_text": ["Frightening Content", "Crime"],
+                "descriptors": ["has_esrb_scary", "has_esrb_crime"],
+                "interactives_text": ["Users Interact", "Shares Location"]
+                "interactives": ["has_users_interact", "has_shares_location"]
+            },
             "created": "2013-09-17T13:19:16",
             "current_version": "1.1",
             "default_locale": "en-US",
-            "description": "This is the description.",
+            "description": {
+                "en-US": "Description in english",
+                "fr": "Description en français"
+            },
             "device_types": [
                 "firefoxos"
             ],
-            "homepage": "http://www.example.com/",
+            "feature_compatibility": true,
+            "file_size": 8675,
+            "homepage": {
+                "en-US": "http://www.example.com/"
+            },
             "icons": {
-                "16": "/tmp/uploads/addon_icons/0/24-32.png?modified=1362762723",
+                "32": "/tmp/uploads/addon_icons/0/24-32.png?modified=1362762723",
                 "48": "/tmp/uploads/addon_icons/0/24-48.png?modified=1362762723",
                 "64": "/tmp/uploads/addon_icons/0/24-64.png?modified=1362762723",
                 "128": "/tmp/uploads/addon_icons/0/24-128.png?modified=1362762723"
             },
-            "id": "24",
+            "id": 24,
+            "is_disabled": false,
             "is_packaged": false,
+            "last_updated": "2013-09-17T13:19:16",
             "manifest_url": "http://zrnktefoptje.test-manifest.herokuapp.com/manifest.webapp",
-            "name": "Test App (zrnktefoptje)",
+            "name": {
+                "en-US": "Test app",
+            },
+            "package_path": null,
             "payment_account": null,
             "payment_required": false,
             "premium_type": "free",
@@ -83,13 +107,17 @@ App
                     "filetype": "image/png",
                     "id": "37",
                     "image_url": "/tmp/uploads/previews/full/0/37.png?modified=1362762723",
-                    "resource_uri": "/api/v1/apps/preview/37/",
+                    "resource_uri": "/api/v2/apps/preview/37/",
                     "thumbnail_url": "/tmp/uploads/previews/thumbs/0/37.png?modified=1362762723"
                 }
             ],
             "price": null,
             "price_locale": null,
-            "privacy_policy": "/api/v1/apps/app/24/privacy/",
+            "privacy_policy": "/api/v2/apps/app/24/privacy/",
+            "promo_imgs": {
+                "320": "/tmp/img/uploads/webapp_promo_imgs/0/31-320.png?modified=1362762723",
+                "640": "/tmp/img/uploads/webapp_promo_imgs/0/31-640.png?modified=1362762723",
+             },
             "public_stats": false,
             "ratings": {
                 "average": 0.0,
@@ -105,15 +133,20 @@ App
                 {
                     "adolescent": true,
                     "mcc": null,
-                    "name": "Worldwide",
-                    "slug": "worldwide"
+                    "name": "Rest of World",
+                    "slug": "restofworld"
                 }
             ],
-            "resource_uri": "/api/v1/apps/app/24/",
+            "release_notes": null,
+            "resource_uri": "/api/v2/apps/app/24/",
             "slug": "test-app-zrnktefoptje",
             "status": 4,
-            "support_email": "author@example.com",
-            "support_url": "",
+            "support_email": {
+                "en-US": "author@example.com"
+            },
+            "support_url": {
+                "en-US": "http://www.example.com/support/"
+            },
             "supported_locales": [
                 "en-US",
                 "es",
@@ -127,8 +160,8 @@ App
                 "purchased": false
             },
             "versions": {
-                "1.0": "/api/v1/apps/versions/7012/",
-                "1.1": "/api/v1/apps/versions/7930/"
+                "1.0": "/api/v2/apps/versions/7012/",
+                "1.1": "/api/v2/apps/versions/7930/"
             }
         }
 
@@ -142,10 +175,30 @@ App
     :param categories: An array of strings representing the slugs of the
         categories the app belongs to.
     :type categories: array
-    :param content_ratings: An object representing the content ratings
-        associated with the app by region. Regions not included in this object
-        will use the rating keyed under "generic".
+    :param content_ratings: International Age Rating Coalition (IARC) content
+        ratings data. It has three parts, ``ratings``, ``descriptors``, and
+        ``interactive_elements``. If a region is detected, only a subset
+        of data will be returned.
     :type content_ratings: object
+    :param content_ratings.body: The rating body that assigned the content
+        rating. It is based off of the region of the request. It can be
+        'classind', 'esrb', 'generic', 'pegi', or 'usk.
+    :type content_ratings.body: string
+    :param content_ratings.rating: The content rating (usually an age).
+    :type content_ratings.ratings: string
+    :param content_ratings.descriptors_text: IARC content descriptors, flags about
+        the app that might affect its suitability for younger-aged users.
+    :type content_ratings.descriptors_text: array
+    :param content_ratings.descriptors: IARC content descriptors in
+        normalized slug form.
+    :type content_ratings.descriptors: array
+    :param content_ratings.interactives_text: IARC interactive elements,
+        aspects about the app relating to whether the app shares info or
+        interacts with external elements.
+    :type content_ratings.interactives_text: array
+    :param content_ratings.interactives: IARC interactive elements in
+        normalized slug form
+    :type content_ratings.interactives: array
     :param created: The date the app was added to the Marketplace, in ISO 8601
         format.
     :type created: string
@@ -155,25 +208,45 @@ App
     :param default_locale: The app's default locale, copied from the manifest.
     :type default_locale: string
     :param description: The app's description.
-    :type description: string
+    :type description: string|object
     :param device_types: An array of strings representing the devices the app
         is marked as compatible with. Currently available devices names are
-        ``desktop``, ``android-mobile``, ``android-tablet``, ``firefoxos``.
+       ``desktop``, ``android-mobile``, ``android-tablet``, ``firefoxos``,
+       ``firefoxos-tv``.
+    :type device_types: array
+    :param feature_compatibility: Boolean indicating whether the app's current
+        version is compatible with the
+        :ref:`feature profile signature <feature-profile-label>`  passed to the
+        API request. If no profile signature was passed or if the backend is
+        unable to determine compatibility, null is returned.
+    :type feature_compatibility: boolean|null
+    :param file_size: Size of the app's current version in bytes.
+    :type file_size: int
     :param homepage: The app's homepage.
-    :type homepage: string
+    :type homepage: string|object
     :param icons: An object containing information about the app icons. The
         keys represent icon sizes, the values the corresponding URLs.
     :type icons: object
     :param id: The app ID.
     :type id: int
+    :param is_disabled: Boolean indicating whether the app is disabled or not.
+    :type is_disabled: boolean
     :param is_packaged: Boolean indicating whether the app is packaged or not.
     :type is_packaged: boolean
+    :param last_updated: The date the app was last updated in the Marketplace,
+        in ISO 8601 format.
+    :type last_updated: string
     :param manifest_url: URL for the app manifest. If the app is not an hosted
         app, this will be a minimal manifest generated by the Marketplace.
     :param name: The app name.
-    :type name: string
+    :type name: string|object
+    :param package_path: URL for the app package of the latest public version. If the app is not a packaged app, this will be ``null``.
+    :type package_path: string
     :param payment_account: The path to the :ref:`payment account <payment-account-response-label>`
         being used for this app, or none if not applicable.
+        **NOTE**: This will always point to the Bango account or else it will
+        be None. In other words, it will not tell you *all* the payment
+        providers that this app supports.
     :param payment_required: A payment is required for this app. It
         could be that ``payment_required`` is ``true``, but price is ``null``.
         In this case, the app cannot be bought.
@@ -208,6 +281,9 @@ App
     :type price_locale: string|null
     :param privacy_policy: The path to the privacy policy resource.
     :type privacy_policy: string
+    :param promo_imgs:  An object containing information about app promo images.
+        The keys represent image sizes, the values the corresponding URLs.
+    :type promo_imgs: object
     :param ratings: An object holding basic information about the app ratings.
     :type ratings: object
     :param ratings.average: The average rating.
@@ -223,11 +299,13 @@ App
     :type regions.adolescent: boolean
     :param regions.mcc: represents the region's ITU `mobile
         country code`_.
-    :type regions.mcc: string|null
+    :type regions.mcc: int|null
     :param regions.name: The region name.
     :type regions.name: string
     :param regions.slug: The region slug.
     :type regions.slug: string
+    :param release_notes: the release notes for the current version.
+    :type release_notes: string|object|null
     :param resource_uri: The canonical URI for this resource.
     :type resource_uri: string
     :param slug: The app slug
@@ -235,9 +313,9 @@ App
     :param status: The app status. See the :ref:`status table <app-statuses>`.
     :type status: int
     :param support_email: The email the app developer set for support requests.
-    :type support_email: string
+    :type support_email: string|object
     :param support_url: The URL the app developer set for support requests.
-    :type support_url: string
+    :type support_url: string|object
     :param supported_locales: The list of locales (as strings) supported by the
         app, according to what was set by the developer in the manifest.
     :param supported_locales: array
@@ -278,7 +356,7 @@ App
          15   Blocked
     =======  ============================
 
-.. http:get:: /api/v1/apps/(int:id)|(string:slug)/privacy/
+.. http:get:: /api/v2/apps/(int:id)|(string:slug)/privacy/
 
     **Response**
 
@@ -290,7 +368,7 @@ App
     :status 404: not found.
     :status 451: resource unavailable for legal reasons.
 
-.. http:delete:: /api/v1/apps/app/(int:id)/
+.. http:delete:: /api/v2/apps/app/(int:id)/
 
    .. note:: Requires authentication.
 
@@ -298,19 +376,43 @@ App
 
    :status 204: successfully deleted.
 
-.. http:post:: /api/v1/apps/app/
+.. http:post:: /api/v2/apps/app/
 
    See :ref:`Creating an app <app-post-label>`
 
-.. http:put:: /api/v1/apps/app/(int:id)/
+.. http:put:: /api/v2/apps/app/(int:id)/
 
    See :ref:`Creating an app <app-put-label>`
 
+Updating an App Icon
+====================
+
+.. note:: Requires authentication and a successfully created app.
+
+.. http:put:: /api/v2/apps/app/(int:id|string:app_slug)/icon/
+
+    **Request**
+
+    :param file: a dictionary containing the appropriate file data in the upload field.
+    :type file: object
+    :param file.type: the content type.
+    :type file.type: string
+    :param file.name: the file name.
+    :type file.name: string
+    :param file.data: the base 64 encoded data.
+    :type file.data: string
+
+    **Response**
+
+    :status 200: successfully updated the icon.
+    :status 400: error processing the form.
+
+.. _versions-label:
 
 Versions
 ========
 
-.. http:get:: /api/v1/apps/versions/(int:id)/
+.. http:get:: /api/v2/apps/versions/(int:id)/
 
     Retrieves data for a specific version of an application.
 
@@ -324,7 +426,7 @@ Versions
     .. code-block:: json
 
         {
-            "app": "/api/v1/apps/app/7/",
+            "app": "/api/v2/apps/app/7/",
             "developer_name": "Cee's Vans",
             "features": [
                 "apps",
@@ -335,14 +437,18 @@ Versions
             "version": "1.1"
         }
 
+    :param id: the version id
+    :type id: int
     :param is_current_version: indicates whether this is the most recent
         public version of the application.
     :type is_current_version: boolean
     :param features: each item represents a
-        :ref:`device feature <features>` required to run the application.
+        :ref:`device feature <app_features>` required to run the application.
     :type features: array
+    :param release_notes: the release notes for that version.
+    :type release_notes: string|object|null
 
-.. http:patch:: /api/v1/apps/versions/(int:id)/
+.. http:patch:: /api/v2/apps/versions/(int:id)/
 
     Update data for a specific version of an application.
 
@@ -364,7 +470,7 @@ Versions
         }
 
     :param features: each item represents a
-        :ref:`device feature <features>` required to run the application.
+        :ref:`device feature <app_features>` required to run the application.
         Features not present are assumed not to be required.
     :type features: array
 
@@ -382,7 +488,7 @@ Payments
 
 .. note:: Requires authentication and a successfully created app.
 
-.. http:get:: /api/v1/apps/app/(int:id)/payments/
+.. http:get:: /api/v2/apps/app/(int:id)/payments/
 
     Gets information about the payments of an app, including the payment
     account.
@@ -395,7 +501,7 @@ Payments
     :type account: string
     :status 200: sucessfully completed.
 
-.. http:post:: /api/v1/apps/app/(int:id)/payments/status/
+.. http:post:: /api/v2/apps/app/(int:id)/payments/status/
 
     Queries the Mozilla payment server to check that the app is ready to be
     sold. This would normally be run at the end of the payment flow to ensure
@@ -429,7 +535,7 @@ Payments
 
 .. note:: The Transaction:Debug permission is required.
 
-.. http:get:: /api/v1/apps/app/(int:id)/payments/debug/
+.. http:get:: /api/v2/apps/app/(int:id)/payments/debug/
 
     Returns useful debug information about the app, suitable for marketplace
     developers and integrators. Output is truncated below and is subject
@@ -455,7 +561,7 @@ Manifest refresh
 
 .. note:: Requires authentication and a successfully created hosted app.
 
-.. http:post:: /api/v1/apps/app/(int:id|string:slug)/refresh-manifest/
+.. http:post:: /api/v2/apps/app/(int:id|string:slug)/refresh-manifest/
 
     **Response**
     :status 204: Refresh triggered.

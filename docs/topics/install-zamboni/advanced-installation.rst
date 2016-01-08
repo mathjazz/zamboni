@@ -1,8 +1,8 @@
 .. _advanced-installation:
 
-=============
-Getting Fancy
-=============
+=================
+Optional installs
+=================
 
 .. _configure-mysql:
 
@@ -37,13 +37,13 @@ Here are `more tips for optimizing MySQL <http://bonesmoses.org/2011/02/28/mysql
 Memcached
 ---------
 
-We slipped this in with the basic install.  The package was
-``libmemcached-dev`` on Ubuntu and ``libmemcached`` on OS X.  Switch your
-``settings_local.py`` to use ::
+By default zamboni uses an in memory cache. To install memcached
+``libmemcached-dev`` on Ubuntu and ``libmemcached`` on OS X.  Alter your
+local settings file to use::
 
     CACHES = {
         'default': {
-            'BACKEND': 'caching.backends.memcached.MemcachedCache',
+            'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
             'LOCATION': ['localhost:11211'],
             'TIMEOUT': 500,
         }
@@ -53,32 +53,43 @@ We slipped this in with the basic install.  The package was
 RabbitMQ and Celery
 -------------------
 
+By default zamboni automatically processes jobs without needing Celery.
+
 See the :doc:`./celery` page for installation instructions.  The
 :ref:`example settings <example-settings>` set ``CELERY_ALWAYS_EAGER = True``.
-If you're setting up Rabbit and want to use ``celeryd``, make sure you remove
-that line from your ``settings_local.py``.
+If you're setting up RabbitMQ and want to use ``celery worker`` you will need to
+alter your local settings file to set this up.
 
+See :doc:`./celery` for more instructions.
 
--------------
-elasticsearch
--------------
+-------
+Node.js
+-------
 
-See :doc:`./elasticsearch` for more instructions.
+`Node.js <http://nodejs.org/>`_ is needed for Stylus and LESS, which in turn
+are needed to precompile the CSS files.
 
+If you want to serve the CSS files from another domain than the webserver, you
+will need to precompile them. Otherwise you can have them compiled on the fly,
+using javascript in your browser, if you set ``LESS_PREPROCESS = False`` in
+your local settings.
 
------
-Redis
------
+First, we need to install node and npm::
 
-On OS X the package is called ``redis``.  Get it running with the ``launchctl``
-script included in homebrew.  To let zamboni know about Redis, add this to
-``settings_local.py``::
+    brew install node
+    curl http://npmjs.org/install.sh | sh
 
-    CACHE_MACHINE_USE_REDIS = True
-    REDIS_BACKEND = 'redis://'
+Optionally make the local scripts available on your path if you don't already
+have this in your profile::
 
-The ``REDIS_BACKEND`` is parsed like ``CACHE_BACKEND`` if you need something
-other than the default settings.
+    export PATH="./node_modules/.bin/:${PATH}"
+
+Not working?
+ * If you're having trouble installing node, try
+   http://shapeshed.com/journal/setting-up-nodejs-and-npm-on-mac-osx/.  You
+   need brew, which we used earlier.
+ * If you're having trouble with npm, check out the README on
+   https://github.com/isaacs/npm
 
 
 ----------
@@ -94,65 +105,3 @@ In your ``settings_local.py`` (or ``settings_local_mkt.py``) ensure you are
 pointing to the correct executable for ``stylus``::
 
     STYLUS_BIN = path('node_modules/stylus/bin/stylus')
-
-
---------
-LESS CSS
---------
-
-We're slowing switching over from regular CSS to LESS.  You can learn more about
-LESS at http://lesscss.org.
-
-If you are serving your CSS from the same domain as the page, you don't
-need to do anything.  Otherwise, see "Installing LESS (alternative)" below.
-
-You can make the CSS live refresh on save by adding ``#!watch`` to the URL or by
-adding the following to your ``settings_local.py``::
-
-    LESS_LIVE_REFRESH = True
-
-If you want syntax highlighting, try:
- * vim: http://leafo.net/lessphp/vim/
- * emacs: http://jdhuntington.com/emacs/less-css-mode.el
- * TextMate: https://github.com/appden/less.tmbundle
- * Coda: http://groups.google.com/group/coda-users/browse_thread/thread/b3327b0cb893e439?pli=1
-
-
-Installing LESS (alternative)
-*****************************
-
-You only need to do this if your CSS is being served from a separate domain, or
-if you're using zamboni in production and running the build scripts.
-
-If you aren't serving your CSS from the same domain as zamboni, you'll need
-to install node so that we can compile it on the fly.
-
-First, we need to install node, npm and LESS::
-
-    brew install node
-    curl http://npmjs.org/install.sh | sh
-
-Install all of zamboni's dependencies locally::
-
-    cd zamboni
-    npm install
-
-Make the local scripts available on your path if you don't already have this in
-your profile::
-
-    export PATH="./node_modules/.bin/:${PATH}"
-
-If you type ``lessc``, it should say "lessc: no input files."
-
-Next, add this to your settings_local.py::
-
-    LESS_PREPROCESS = True
-    LESS_BIN = 'lessc'
-
-Make sure ``LESS_BIN`` is correct.
-
-Not working?
- * If you're having trouble installing node, try http://shapeshed.com/journal/setting-up-nodejs-and-npm-on-mac-osx/.  You need brew, which we used earlier.
- * If you're having trouble with npm, check out the README on https://github.com/isaacs/npm
- * If you can't run LESS after installing, make sure it's in your PATH.  You should be
-   able to type "lessc", and have "lessc: no input files" returned.

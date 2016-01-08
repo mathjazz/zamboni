@@ -1,4 +1,20 @@
+// Send the Authorization header to local URLs.
+(function (require) {
+    $(document).ajaxSend(function(event, xhr, ajaxSettings) {
+        var userToken = require('login').userToken();
+        if (isLocalUrl(ajaxSettings.url) && userToken) {
+            xhr.setRequestHeader('Authorization', 'mkt-shared-secret ' + userToken);
+        }
+    });
+})(require);
+
 $(document).ready(function() {
+
+    // Show daily message if it hasn't been seen yet
+    if ($('.daily-message').length) {
+        initDailyMessage();
+    }
+
     // Edit Add-on
     if (document.getElementById('edit-addon')) {
         initEditAddon();
@@ -13,17 +29,14 @@ $(document).ready(function() {
     //Ownership
     if (document.getElementById('author_list')) {
         initAuthorFields();
-        initLicenseFields();
     }
 
-    //Payments
-    if ($('.payments').length) {
-        initPayments();
+    if ($('#submit-api').length) {
+        initAPI();
     }
 
     // Submission process
     if ($('.addon-submission-process').length) {
-        initLicenseFields();
         initCharCount();
         initSubmit();
     }
@@ -62,7 +75,7 @@ $(document).ready(function() {
         $validate_form = $('#validate-field'),
         $validate_button = $('#validate_app'),
         $webapp_features = $('#upload-webapp-features'),
-        $submit_footer = $upload_form.find('footer');
+        $submit_footer = $upload_form.find('.listing-footer');
 
     // Handlers for buchet requirements.
     $(document.body).on('change', '.feature-choices input', function() {
@@ -74,6 +87,11 @@ $(document).ready(function() {
 
     // Prechecked requirements should get initialised.
     $('.feature-choices input:checked').trigger('change');
+
+    // Show app visibility limited checkbox if 'Unlisted' is chosen.
+    $('input[name=publish_type]').on('change', function() {
+        $('.field-limited').toggle($('#id_publish_type_1').is(':checked'));
+    }).trigger('change');
 
     if ($webapp_url.length) {
         if (!$webapp_url.val() && z.capabilities.sessionStorage) {
@@ -126,10 +144,14 @@ $(document).ready(function() {
                 $eb_messages = $("<ul>", {'id': 'upload_errors'}),
                 messages = r.validation.messages || [];
 
-            $error_box.append($("<strong>", {'text': message}));
+            // Set text and retrieve html to escape everything first.
+            $error_message = $("<strong>", {'text': message});
+            $error_message.html($error_message.html().replace(/\n/g, "<br>"));
+            $error_box.append($error_message);
             $error_box.append($eb_messages);
 
             $.each(messages, function(i, m) {
+                // Make sure that all the text in `m.message` is properly escaped!
                 var li = $('<li>', {'html': m.message});
                 $eb_messages.append(li);
             });
@@ -306,8 +328,6 @@ $(document).ready(function() {
                     } else if (status == 4) {  // PUBLIC
                         $('#last-version-public').show();
                     }
-                } else {
-                    $('#not-last-version').show();
                 }
             }
         });
@@ -396,10 +416,13 @@ function addonFormSubmit() {
             var $document = $(document),
                 scrollBottom = $document.height() - $document.scrollTop(),
                 $form = $(this),
-                hasErrors = $form.find('.errorlist').length;
+                hasErrors;
 
             $.post($form.attr('action'), $form.serialize(), function(d) {
                 parent_div.html(d).each(addonFormSubmit);
+                // The HTML has changed, update $form and calculate hasErrors.
+                $form = $('form', parent_div);
+                hasErrors = $form.find('.errorlist').length;
                 if (!hasErrors && old_baseurl && old_baseurl !== baseurl()) {
                     document.location = baseurl();
                 }
@@ -434,16 +457,34 @@ function addonFormSubmit() {
 $("#user-form-template .email-autocomplete")
     .attr("placeholder", gettext("Enter a new team member's email address"));
 
+var notification = require('notification');
+
 function addManifestRefresh() {
-    z.page.on('click', '#manifest-url a.button', _pd(function(e) {
-        $('#manifest-url th.label span.hint').remove();
+    var originalManifestUrl = $('#manifest-url input').val();
+    z.page.on('click', '#manifest-url a.button', _pd(function () {
+        var $this = $(this);
+        $this.addClass('disabled');
         $.post(
-            $(e.target).data("url")
-        ).then(function() {
-            var refreshed = gettext('Refreshed');
-            $('#manifest-url th.label').append('<span class="hint">' + refreshed + '</span>');
+            $this.data('url')
+        ).done(function () {
+            notification({
+                message: gettext('Manifest refreshed'),
+                timeout: 2000
+            });
+        }).fail(function () {
+            notification({
+                message: gettext('Could not refresh manifest. Try again later.'),
+                timeout: 2000
+            });
+        }).always(function() {
+            $this.removeClass('disabled');
         });
-    }));
+    })).on('input', '#manifest-url input', function () {
+        // Hide the "Refresh" button if the manifest URL changes (because when
+        // we will trigger a refresh after the form is POSTed and saved).
+        // TODO(bug 1023575): Consider changing the behaviour of this button.
+        $('#manifest-url a.button').toggle($(this).val() === originalManifestUrl);
+    });
 }
 
 function initEditAddon() {
@@ -730,8 +771,6 @@ function initUploadIcon() {
             $('#id_unsaved_icon_data').val(file.dataURL);
 
             $('#icons_default input:checked').attr('checked', false);
-            $('input[name="icon_type"][value="'+file.type+'"]')
-                    .attr('checked', true);
         },
 
         upload_start = function(e, file) {
@@ -778,12 +817,12 @@ function initUploadImages() {
         // Remove old errors.
         $(this).closest('.image_preview').find('.errorlist').hide();
         // Don't let users submit a form.
-        $('.edit-media-button button, #submit-media button.prominent').attr('disabled', true);
+        $('.edit-media-button button, #submit-media button.prominent').prop('disabled', true).addClass('spinner');
     }
 
     function upload_finished_all(e) {
         // They can submit again
-        $('.edit-media-button button, #submit-media button.prominent').attr('disabled', false);
+        $('.edit-media-button button, #submit-media button.prominent').prop('disabled', false).removeClass('spinner');
     }
 
     function upload_start(e, file) {
@@ -869,126 +908,35 @@ function generateErrorList(o) {
 }
 
 
-function initPayments(delegate) {
-  var $delegate = $(delegate || document.body);
-    if (z.noEdit) return;
-    var previews = [
-        'img/zamboni/contributions/passive.png',
-        'img/zamboni/contributions/after.png',
-        'img/zamboni/contributions/roadblock.png'
-    ],
-        media_url = $("body").attr("data-media-url"),
-        to = false,
-        img = $("<img id='contribution-preview'/>");
-        moz = $("input[value='moz']");
-    img.hide().appendTo($("body"));
-    moz.parent().after(
-        $("<a class='extra' target='_blank' href='http://www.mozilla.org/foundation/'>"+gettext('Learn more')+"</a>"));
-    $(".nag li label").each(function (i,v) {
-        var pl = new Image();
-        pl.src = media_url + previews[i];
-        $(this).after(format(" &nbsp;<a class='extra' href='{0}{1}'>{2}</a>", [media_url, previews[i], gettext('Example')]));
-    });
-    $(".nag").delegate("a.extra", "mouseover", function(e) {
-        var tgt = $(this);
-        img.attr("src", tgt.attr("href")).css({
-            position: 'absolute',
-            'pointer-events': 'none',
-            top: tgt.offset().top-350,
-            left: ($(document).width()-755)/2
-        });
-        clearTimeout(to);
-        to = setTimeout(function() {
-            img.fadeIn(100);
-        }, 300);
-    }).delegate("a.extra", "mouseout", function(e) {
-        clearTimeout(to);
-        img.fadeOut(100);
-    })
-    .delegate("a.extra", "click", function(e) {
-        e.preventDefault();
-    });
-    $("#do-setup").click(_pd(function (e) {
-        $("#setup").removeClass("hidden").show();
-        $(".intro, .intro-blah").hide();
-    }));
-    $("#setup-cancel").click(_pd(function (e) {
-        $(".intro, .intro-blah").show();
-        $("#setup").hide();
-    }));
-    $("#do-marketplace").click(_pd(function (e) {
-        $("#marketplace-confirm").removeClass("hidden").show();
-        $(".intro, .intro-blah").hide();
-    }));
-    $("#marketplace-cancel").click(_pd(function (e) {
-        $(".intro, .intro-blah").show();
-        $("#marketplace-confirm").hide();
-    }));
-    $(".recipient").change(function (e) {
-        var v = $(this).val();
-        $(".paypal").hide(200);
-        $(format("#org-{0}", [v])).removeClass("hidden").show(200);
-    });
-    $("#id_enable_thankyou").change(function (e) {
-        if ($(this).attr("checked")) {
-            $(".thankyou-note").show().removeClass("hidden");
-        } else {
-            $(".thankyou-note").hide();
-        }
-    }).change();
-    $delegate.find('#id_text, #id_free').focus(function(e) {
-        $delegate.find('#id_do_upsell_1').attr('checked', true);
-    });
+function initAPI() {
+    // As the "Client type" changes, alter the form.
+    var leg = $('#id_oauth_leg');
+    var update = function update() {
+      if (leg.val() === 'command') {
+        $('tr.api-oauth-website').hide();
+      } else {
+        $('tr.api-oauth-website').show();
+      }
+    };
+    leg.on('change', update);
+    update();
 }
 
 function initCatFields(delegate) {
     var $delegate = $(delegate || '#addon-categories-edit');
     $delegate.find('div.addon-app-cats').each(function() {
         var $parent = $(this).closest("[data-max-categories]"),
-            $main = $(this).find(".addon-categories"),
-            $misc = $(this).find(".addon-misc-category"),
+            $categories = $(this).find(".addon-categories"),
             maxCats = parseInt($parent.attr("data-max-categories"), 10);
-        var checkMainDefault = function() {
-            var checkedLength = $("input:checked", $main).length,
+
+        var checkNumberOfCategories = function() {
+            var checkedLength = $("input:checked", $categories).length,
                 disabled = checkedLength >= maxCats;
-            $("input:not(:checked)", $main).attr("disabled", disabled);
+            $("input:not(:checked)", $categories).attr("disabled", disabled);
             return checkedLength;
         };
-        var checkMain = function() {
-            var checkedLength = checkMainDefault();
-            $("input", $misc).attr("checked", checkedLength <= 0);
-        };
-        var checkOther = function() {
-            $("input", $main).attr("checked", false).attr("disabled", false);
-        };
-        checkMainDefault();
-        $('input', $main).on('change', checkMain);
-        $('input', $misc).on('change', checkOther);
-    });
-}
-
-function initLicenseFields() {
-    $("#id_has_eula").change(function (e) {
-        if ($(this).attr("checked")) {
-            $(".eula").show().removeClass("hidden");
-        } else {
-            $(".eula").hide();
-        }
-    });
-    $("#id_has_priv").change(function (e) {
-        if ($(this).attr("checked")) {
-            $(".priv").show().removeClass("hidden");
-        } else {
-            $(".priv").hide();
-        }
-    });
-    var other_val = $(".license-other").attr("data-val");
-    $(".license").click(function (e) {
-        if ($(this).val() == other_val) {
-            $(".license-other").show().removeClass("hidden");
-        } else {
-            $(".license-other").hide();
-        }
+        checkNumberOfCategories();
+        $('input', $categories).on('change', checkNumberOfCategories);
     });
 }
 
@@ -999,9 +947,9 @@ function initAuthorFields() {
         overlay.html($('#author-roles-help-template').html())
                .addClass('show');
         overlay.on('click', '.close', _pd(function() {
-            overlay.trigger('overlay_dismissed')
+            overlay.trigger('overlay_dismissed');
         }));
-    }))
+    }));
 
     if (z.noEdit) return;
 
@@ -1284,6 +1232,28 @@ function hideSameSizedIcons() {
     //     }
     //     icon_sizes.push(size);
     // });
+}
+
+function initDailyMessage() {
+    var motd = $('.daily-message');
+    if (!motd.length || $('#editor-motd').length) {
+        // We don't show the message on the page where we edit the message
+        // so no point in adding the close button or handler.
+        // Nor, of course, if we don't have a daily-message on the page.
+        return;
+    }
+    var storage = z.Storage();
+    var messageText = $('p', motd).text();
+    var messageType = motd.data('message-type');
+    var messageKey = 'motd_closed_' + messageType;
+    motd.find('.close').show().click(_pd(function(e) {
+        storage.set(messageKey, messageText);
+        motd.slideUp();
+    }));
+    if (storage.get(messageKey) !== messageText) {
+        // You haven't read this spam yet? Here, I have something to show you.
+        motd.slideDown();
+    }
 }
 
 

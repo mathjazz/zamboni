@@ -1,5 +1,8 @@
 import json
-from amo.tests import TestCase
+
+from django.db import transaction
+
+from mkt.site.tests import TestCase
 
 
 class BaseAPI(TestCase):
@@ -18,14 +21,15 @@ class BaseAPI(TestCase):
             if verb in allowed:
                 continue
             try:
-                res = getattr(self.client, verb)(url)
+                with transaction.atomic():
+                    res = getattr(self.client, verb)(url)
             except AttributeError:
                 # Not all clients have patch.
                 if verb != 'patch':
                     raise
-            assert res.status_code in (401, 405), (
-                '%s: %s not 401 or 405' % (verb.upper(), res.status_code))
+            msg = 'Expected 40{1,3,5} for %s, got %s' % (verb.upper(),
+                                                         res.status_code)
+            assert res.status_code in (401, 403, 405), msg
 
     def get_error(self, response):
         return json.loads(response.content)['error_message']
-

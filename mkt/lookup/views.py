@@ -1,62 +1,67 @@
-import hashlib
 import json
 import uuid
 from datetime import datetime, timedelta
 
 from django.conf import settings
+from django.contrib import messages
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.urlresolvers import reverse
 from django.db import connection
 from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 import commonware.log
-import jingo
 from babel import numbers
+from elasticsearch_dsl import Q as ES_Q, query
 from slumber.exceptions import HttpClientError, HttpServerError
-from tower import ugettext as _
+from django.utils.translation import ugettext as _
 
-import amo
-from addons.models import Addon
-from amo.decorators import (json_view, login_required, permission_required,
-                            post_required)
-from amo.search import TempS as S
-from amo.urlresolvers import reverse
-from amo.utils import paginate
-from apps.access import acl
-from apps.bandwagon.models import Collection
-from devhub.models import ActivityLog
-from lib.pay_server import client
-from market.models import AddonPaymentData, Refund
+import mkt
 import mkt.constants.lookup as lkp
-from mkt.constants.payments import (COMPLETED, FAILED, PENDING,
-                                    REFUND_STATUSES)
+from lib.pay_server import client
+from mkt.access import acl
+from mkt.access.models import Group
 from mkt.account.utils import purchase_list
-from mkt.developers.models import AddonPaymentAccount
+from mkt.api.permissions import GroupPermission
+from mkt.constants.payments import (COMPLETED, FAILED, PENDING, PROVIDER_BANGO,
+                                    PROVIDER_LOOKUP, SOLITUDE_REFUND_STATUSES)
+from mkt.developers.models import ActivityLog, AddonPaymentAccount
+from mkt.developers.providers import get_provider
+from mkt.developers.utils import prioritize_app
 from mkt.developers.views_payments import _redirect_to_bango_portal
-from mkt.lookup.forms import (DeleteUserForm, TransactionRefundForm,
-                              TransactionSearchForm)
-from mkt.lookup.tasks import (email_buyer_refund_approved,
-                              email_buyer_refund_pending)
-from mkt.site import messages
-from mkt.webapps.models import Installed, WebappIndexer
-from stats.models import Contribution, DownloadCount
-from users.models import UserProfile
+from mkt.lookup.forms import (APIFileStatusForm, APIGroupMembershipFormSet,
+                              APIStatusForm, DeleteUserForm,
+                              TransactionRefundForm, TransactionSearchForm,
+                              PromoImgForm)
+from mkt.lookup.serializers import AppLookupSerializer, WebsiteLookupSerializer
+from mkt.prices.models import AddonPaymentData, Refund
+from mkt.purchase.models import Contribution
+from mkt.reviewers.models import QUEUE_TARAKO
+from mkt.search.filters import SearchQueryFilter
+from mkt.search.views import SearchView
+from mkt.site.decorators import json_view, permission_required
+from mkt.site.utils import paginate
+from mkt.tags.models import attach_tags
+from mkt.users.models import UserProfile
+from mkt.webapps.models import Webapp
+from mkt.websites.models import Website
+from mkt.websites.forms import WebsiteForm
+from mkt.websites.views import WebsiteSearchView
+
 
 log = commonware.log.getLogger('z.lookup')
 
 
-@login_required
-@permission_required('Lookup', 'View')
+@permission_required([('Lookup', 'View')])
 def home(request):
     tx_form = TransactionSearchForm()
 
-    return jingo.render(request, 'lookup/home.html', {
-        'tx_form': tx_form
-    })
+    return render(request, 'lookup/home.html', {'tx_form': tx_form})
 
 
-@login_required
-@permission_required('AccountLookup', 'View')
+@permission_required([('AccountLookup', 'View')])
 def user_summary(request, user_id):
     user = get_object_or_404(UserProfile, pk=user_id)
     is_admin = acl.action_allowed(request, 'Users', 'Edit')
@@ -64,17 +69,11 @@ def user_summary(request, user_id):
     # All refunds that this user has requested (probably as a consumer).
     req = Refund.objects.filter(contribution__user=user)
     # All instantly-approved refunds that this user has requested.
-    appr = req.filter(status=amo.REFUND_APPROVED_INSTANT)
+    appr = req.filter(status=mkt.REFUND_APPROVED_INSTANT)
     refund_summary = {'approved': appr.count(),
                       'requested': req.count()}
-    # TODO: This should return all `addon` types and not just webapps.
-    # -- currently get_details_url() fails on non-webapps so this is a
-    # temp fix.
-    user_addons = (user.addons.filter(type=amo.ADDON_WEBAPP)
-                              .order_by('-created'))
+    user_addons = user.addons.order_by('-created')
     user_addons = paginate(request, user_addons, per_page=15)
-    paypal_ids = set(user.addons.exclude(paypal_id='')
-                                .values_list('paypal_id', flat=True))
 
     payment_data = (AddonPaymentData.objects.filter(addon__authors=user)
                     .values(*AddonPaymentData.address_fields())
@@ -83,44 +82,41 @@ def user_summary(request, user_id):
     # If the user is deleted, get the log detailing the delete.
     try:
         delete_log = ActivityLog.objects.for_user(user).filter(
-            action=amo.LOG.DELETE_USER_LOOKUP.id)[0]
+            action=mkt.LOG.DELETE_USER_LOOKUP.id)[0]
     except IndexError:
         delete_log = None
 
-    payment_accounts = user.paymentaccount_set.all()
-    return jingo.render(request, 'lookup/user_summary.html',
-                        {'account': user,
-                         'app_summary': app_summary,
-                         'delete_form': DeleteUserForm(),
-                         'delete_log': delete_log,
-                         'is_admin': is_admin,
-                         'refund_summary': refund_summary,
-                         'user_addons': user_addons,
-                         'payment_data': payment_data,
-                         'paypal_ids': paypal_ids,
-                         'payment_accounts': payment_accounts})
+    group_membership_formset = APIGroupMembershipFormSet()
 
-@login_required
-@permission_required('AccountLookup', 'View')
+    provider_portals = get_payment_provider_portals(user=user)
+    return render(request, 'lookup/user_summary.html',
+                  {'account': user, 'app_summary': app_summary,
+                   'delete_form': DeleteUserForm(), 'delete_log': delete_log,
+                   'is_admin': is_admin, 'refund_summary': refund_summary,
+                   'user_addons': user_addons, 'payment_data': payment_data,
+                   'provider_portals': provider_portals,
+                   'group_membership_formset': group_membership_formset})
+
+
+@permission_required([('AccountLookup', 'View')])
 def user_delete(request, user_id):
     delete_form = DeleteUserForm(request.POST)
     if not delete_form.is_valid():
         messages.error(request, delete_form.errors)
         return HttpResponseRedirect(reverse('lookup.user_summary',
-                                    args=[user_id]))
+                                            args=[user_id]))
 
     user = get_object_or_404(UserProfile, pk=user_id)
     user.deleted = True
     user.save()  # Must call the save function to delete user.
-    amo.log(amo.LOG.DELETE_USER_LOOKUP, user,
+    mkt.log(mkt.LOG.DELETE_USER_LOOKUP, user,
             details={'reason': delete_form.cleaned_data['delete_reason']},
-            user=request.amo_user)
+            user=request.user)
 
     return HttpResponseRedirect(reverse('lookup.user_summary', args=[user_id]))
 
 
-@login_required
-@permission_required('Transaction', 'View')
+@permission_required([('Transaction', 'View')])
 def transaction_summary(request, tx_uuid):
     tx_data = _transaction_summary(tx_uuid)
     if not tx_data:
@@ -129,48 +125,75 @@ def transaction_summary(request, tx_uuid):
     tx_form = TransactionSearchForm()
     tx_refund_form = TransactionRefundForm()
 
-    return jingo.render(request, 'lookup/transaction_summary.html',
-                        dict({'uuid': tx_uuid, 'tx_form': tx_form,
-                              'tx_refund_form': tx_refund_form}.items() +
-                             tx_data.items()))
+    return render(request, 'lookup/transaction_summary.html',
+                  dict({'uuid': tx_uuid, 'tx_form': tx_form,
+                        'tx_refund_form': tx_refund_form}.items() +
+                       tx_data.items()))
 
 
 def _transaction_summary(tx_uuid):
     """Get transaction details from Solitude API."""
     contrib = get_object_or_404(Contribution, uuid=tx_uuid)
+    contrib_id = contrib.transaction_id
     refund_contribs = contrib.get_refund_contribs()
     refund_contrib = refund_contribs[0] if refund_contribs.exists() else None
 
+    lookup = {'status': True, 'transaction': True}
+    pay = {}
+    try:
+        pay = client.api.generic.transaction.get_object_or_404(uuid=contrib_id)
+    except ObjectDoesNotExist:
+        log.warning('Transaction not found in solitude: {0}'.format(tx_uuid))
+        lookup['transaction'] = False
+
+    if pay.get('provider') == PROVIDER_BANGO:
+        # If we are processing a Bango refund, then support would also like to
+        # know the package id.
+        try:
+            pay['package_id'] = (client.api.by_url(pay['seller'])
+                                 .get_object_or_404()['bango']['package_id'])
+        except (KeyError, ObjectDoesNotExist):
+            log.warning('Failed to find Bango package_id: {0}'.format(tx_uuid))
+
     # Get refund status.
     refund_status = None
-    if refund_contrib and refund_contrib.refund.status == amo.REFUND_PENDING:
+    if refund_contrib and refund_contrib.refund.status == mkt.REFUND_PENDING:
         try:
-            refund_status = REFUND_STATUSES[client.api.bango.refund.status.get(
-                data={'uuid': refund_contrib.transaction_id})['status']]
-        except HttpServerError:
-            refund_status = _('Currently unable to retrieve refund status.')
+            status = client.api.bango.refund.get_object_or_404(
+                data={'uuid': refund_contrib.transaction_id})
+            refund_status = SOLITUDE_REFUND_STATUSES[status['status']]
+        except (KeyError, HttpServerError):
+            lookup['status'] = False
+            log.warning('Refund lookup failed: {0}'.format(tx_uuid))
 
     return {
         # Solitude data.
+        'lookup': lookup,
+        'amount': pay.get('amount'),
+        'currency': pay.get('currency'),
+        'package_id': pay.get('package_id'),
+        'provider': PROVIDER_LOOKUP.get(pay.get('provider')),
         'refund_status': refund_status,
+        'support': pay.get('uid_support'),
+        'timestamp': pay.get('created'),
 
         # Zamboni data.
         'app': contrib.addon,
         'contrib': contrib,
         'related': contrib.related,
-        'type': amo.CONTRIB_TYPES.get(contrib.type, _('Incomplete')),
-        # Whitelist what is refundable.
-        'is_refundable': ((contrib.type == amo.CONTRIB_PURCHASE)
-                          and not refund_contrib),
+        'type': mkt.CONTRIB_TYPES.get(contrib.type, _('Incomplete')),
+
+        # Filter what is refundable.
+        'is_refundable': ((contrib.type == mkt.CONTRIB_PURCHASE) and
+                          not refund_contrib),
     }
 
 
-@post_required
-@login_required
-@permission_required('Transaction', 'Refund')
+@require_POST
+@permission_required([('Transaction', 'Refund')])
 def transaction_refund(request, tx_uuid):
     contrib = get_object_or_404(Contribution, uuid=tx_uuid,
-                                type=amo.CONTRIB_PURCHASE)
+                                type=mkt.CONTRIB_PURCHASE)
     refund_contribs = contrib.get_refund_contribs()
     refund_contrib = refund_contribs[0] if refund_contribs.exists() else None
 
@@ -180,13 +203,13 @@ def transaction_refund(request, tx_uuid):
 
     form = TransactionRefundForm(request.POST)
     if not form.is_valid():
-        return jingo.render(
-            request, 'lookup/transaction_summary.html',
-            dict({'uuid': tx_uuid, 'tx_refund_form': form,
-                  'tx_form': TransactionSearchForm()}.items() +
-                 _transaction_summary(tx_uuid).items()))
+        return render(request, 'lookup/transaction_summary.html',
+                      dict({'uuid': tx_uuid, 'tx_refund_form': form,
+                            'tx_form': TransactionSearchForm()}.items() +
+                           _transaction_summary(tx_uuid).items()))
 
-    data = {'uuid': contrib.transaction_id}
+    data = {'uuid': contrib.transaction_id,
+            'manual': form.cleaned_data['manual']}
     if settings.BANGO_FAKE_REFUNDS:
         data['fake_response_status'] = {'responseCode':
                                         form.cleaned_data['fake']}
@@ -206,28 +229,29 @@ def transaction_refund(request, tx_uuid):
         refund_contrib = Contribution.objects.get(id=contrib.id)
         refund_contrib.id = None
         refund_contrib.save()
+        log.info('Creating refund transaction from: {0} '
+                 'with transaction_id of: {1}'
+                 .format(contrib.id, res['uuid']))
         refund_contrib.update(
-            type=amo.CONTRIB_REFUND, related=contrib,
-            uuid=hashlib.md5(str(uuid.uuid4())).hexdigest(),
+            type=mkt.CONTRIB_REFUND, related=contrib,
+            uuid=str(uuid.uuid4()),
             amount=-refund_contrib.amount if refund_contrib.amount else None,
-            transaction_id=client.get(res['transaction'])['uuid'])
+            transaction_id=res['uuid'])
 
     if res['status'] == PENDING:
         # Create pending Refund.
         refund_contrib.enqueue_refund(
-            amo.REFUND_PENDING, request.amo_user,
+            mkt.REFUND_PENDING, request.user,
             refund_reason=form.cleaned_data['refund_reason'])
         log.info('Refund pending: %s' % tx_uuid)
-        email_buyer_refund_pending(contrib)
         messages.success(
             request, _('Refund for this transaction now pending.'))
     elif res['status'] == COMPLETED:
         # Create approved Refund.
         refund_contrib.enqueue_refund(
-            amo.REFUND_APPROVED, request.amo_user,
+            mkt.REFUND_APPROVED, request.user,
             refund_reason=form.cleaned_data['refund_reason'])
         log.info('Refund approved: %s' % tx_uuid)
-        email_buyer_refund_approved(contrib)
         messages.success(
             request, _('Refund for this transaction successfully approved.'))
     elif res['status'] == FAILED:
@@ -239,13 +263,31 @@ def transaction_refund(request, tx_uuid):
     return redirect(reverse('lookup.transaction_summary', args=[tx_uuid]))
 
 
-@login_required
-@permission_required('AppLookup', 'View')
+@permission_required([('AppLookup', 'View')])
 def app_summary(request, addon_id):
-    app = get_object_or_404(Addon.with_deleted, pk=addon_id)
-    authors = (app.authors.filter(addonuser__role__in=(amo.AUTHOR_ROLE_DEV,
-                                                       amo.AUTHOR_ROLE_OWNER))
-                          .order_by('display_name'))
+    if unicode(addon_id).isdigit():
+        query = {'pk': addon_id}
+    else:
+        query = {'app_slug': addon_id}
+    app = get_object_or_404(Webapp.with_deleted, **query)
+
+    if request.FILES:
+        promo_img_form = PromoImgForm(request.POST, request.FILES)
+    else:
+        promo_img_form = PromoImgForm()
+    if 'promo_img' in request.FILES and promo_img_form.is_valid():
+        promo_img_form.save(app)
+        messages.success(
+            request, 'Promo image successfully uploaded.'
+            ' You may have to refresh the page again to see it below.')
+        return redirect(reverse('lookup.app_summary', args=[app.pk]))
+
+    if 'prioritize' in request.POST and not app.priority_review:
+        prioritize_app(app, request.user)
+
+    authors = (app.authors.filter(addonuser__role__in=(mkt.AUTHOR_ROLE_DEV,
+                                                       mkt.AUTHOR_ROLE_OWNER))
+               .order_by('display_name'))
 
     if app.premium and app.premium.price:
         price = app.premium.price
@@ -253,25 +295,97 @@ def app_summary(request, addon_id):
         price = None
 
     purchases, refunds = _app_purchases_and_refunds(app)
-    try:
-        payment_account = app.app_payment_account.payment_account
-    except AddonPaymentAccount.DoesNotExist:
-        payment_account = False
-    return jingo.render(request, 'lookup/app_summary.html',
-                        {'abuse_reports': app.abuse_reports.count(),
-                         'app': app,
-                         'authors': authors,
-                         'downloads': _app_downloads(app),
-                         'purchases': purchases,
-                         'refunds': refunds,
-                         'price': price,
-                         'payment_account': payment_account})
+    provider_portals = get_payment_provider_portals(app=app)
+    versions = None
+
+    status_form = APIStatusForm(initial={
+        'status': mkt.STATUS_CHOICES_API[app.status]
+    })
+    version_status_forms = {}
+    if app.is_packaged:
+        versions = app.versions.all().order_by('-created')
+        for v in versions:
+            version_status_forms[v.pk] = APIFileStatusForm(initial={
+                'status': mkt.STATUS_CHOICES_API[v.all_files[0].status]
+            })
+
+    permissions = {}
+    if app.latest_version:
+        permissions = app.latest_version.manifest.get('permissions', {})
+
+    return render(request, 'lookup/app_summary.html', {
+        'abuse_reports': app.abuse_reports.count(), 'app': app,
+        'authors': authors, 'purchases': purchases, 'refunds': refunds,
+        'price': price, 'provider_portals': provider_portals,
+        'status_form': status_form, 'versions': versions,
+        'is_tarako': app.tags.filter(tag_text=QUEUE_TARAKO).exists(),
+        'tarako_review':
+            app.additionalreview_set.latest_for_queue(QUEUE_TARAKO),
+        'version_status_forms': version_status_forms,
+        'permissions': permissions,
+        'promo_img_form': promo_img_form,
+    })
 
 
-@login_required
-@permission_required('BangoPortal', 'Redirect')
+@permission_required([('WebsiteLookup', 'View')])
+def website_summary(request, addon_id):
+    website = get_object_or_404(Website, pk=addon_id)
+
+    if request.FILES:
+        promo_img_form = PromoImgForm(request.POST, request.FILES)
+    else:
+        promo_img_form = PromoImgForm()
+    if 'promo_img' in request.FILES and promo_img_form.is_valid():
+        promo_img_form.save(website)
+        messages.success(request, 'Promo image successfully uploaded.')
+        return redirect(reverse('lookup.website_summary', args=[website.pk]))
+
+    if not hasattr(website, 'keywords_list'):
+        attach_tags([website])
+
+    return render(request, 'lookup/website_summary.html', {
+        'website': website,
+        'promo_img_form': promo_img_form,
+    })
+
+
+@permission_required([('WebsiteLookup', 'View')])
+def website_edit(request, addon_id):
+    website = get_object_or_404(Website, pk=addon_id)
+    form = WebsiteForm(request.POST or None, request=request, instance=website)
+
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, _('Website saved.'))
+        return redirect(
+            reverse('lookup.website_summary', args=[website.pk]))
+
+    return render(request, 'lookup/website_edit.html', {
+        'website': website,
+        'form': form,
+    })
+
+
+@permission_required([('AccountLookup', 'View')])
+def app_activity(request, addon_id):
+    """Shows the app activity age for single app."""
+    app = get_object_or_404(Webapp.with_deleted, pk=addon_id)
+
+    user_items = ActivityLog.objects.for_apps([app]).exclude(
+        action__in=mkt.LOG_HIDE_DEVELOPER)
+    admin_items = ActivityLog.objects.for_apps([app]).filter(
+        action__in=mkt.LOG_HIDE_DEVELOPER)
+
+    user_items = paginate(request, user_items, per_page=20)
+    admin_items = paginate(request, admin_items, per_page=20)
+
+    return render(request, 'lookup/app_activity.html', {
+        'admin_items': admin_items, 'app': app, 'user_items': user_items})
+
+
+@permission_required([('BangoPortal', 'Redirect')])
 def bango_portal_from_package(request, package_id):
-    response = _redirect_to_bango_portal(int(package_id),
+    response = _redirect_to_bango_portal(package_id,
                                          'package_id: %s' % package_id)
     if 'Location' in response:
         return HttpResponseRedirect(response['Location'])
@@ -282,163 +396,124 @@ def bango_portal_from_package(request, package_id):
         return HttpResponseRedirect(reverse('lookup.home'))
 
 
-@login_required
-@permission_required('AccountLookup', 'View')
+@permission_required([('AccountLookup', 'View')])
 def user_purchases(request, user_id):
     """Shows the purchase page for another user."""
     user = get_object_or_404(UserProfile, pk=user_id)
     is_admin = acl.action_allowed(request, 'Users', 'Edit')
-    products, contributions, listing = purchase_list(request, user, None)
-    return jingo.render(request, 'lookup/user_purchases.html',
-                        {'pager': products,
-                         'account': user,
-                         'is_admin': is_admin,
-                         'listing_filter': listing,
-                         'contributions': contributions,
-                         'single': bool(None),
-                         'show_link': False})
+    products = purchase_list(request, user)
+    return render(request, 'lookup/user_purchases.html',
+                  {'pager': products, 'account': user, 'is_admin': is_admin,
+                   'single': bool(None), 'show_link': False})
 
 
-@login_required
-@permission_required('AccountLookup', 'View')
+@permission_required([('AccountLookup', 'View')])
 def user_activity(request, user_id):
     """Shows the user activity page for another user."""
     user = get_object_or_404(UserProfile, pk=user_id)
-    products, contributions, listing = purchase_list(request, user, None)
+    products = purchase_list(request, user)
     is_admin = acl.action_allowed(request, 'Users', 'Edit')
 
-    collections = Collection.objects.filter(author=user_id)
     user_items = ActivityLog.objects.for_user(user).exclude(
-        action__in=amo.LOG_HIDE_DEVELOPER)
+        action__in=mkt.LOG_HIDE_DEVELOPER)
     admin_items = ActivityLog.objects.for_user(user).filter(
-        action__in=amo.LOG_HIDE_DEVELOPER)
-    amo.log(amo.LOG.ADMIN_VIEWED_LOG, request.amo_user, user=user)
-    return jingo.render(request, 'lookup/user_activity.html',
-                        {'pager': products,
-                         'account': user,
-                         'is_admin': is_admin,
-                         'listing_filter': listing,
-                         'collections': collections,
-                         'contributions': contributions,
-                         'single': bool(None),
-                         'user_items': user_items,
-                         'admin_items': admin_items,
-                         'show_link': False})
+        action__in=mkt.LOG_HIDE_DEVELOPER)
+    mkt.log(mkt.LOG.ADMIN_VIEWED_LOG, request.user, user=user)
+    return render(request, 'lookup/user_activity.html',
+                  {'pager': products, 'account': user, 'is_admin': is_admin,
+                   'single': bool(None),
+                   'user_items': user_items, 'admin_items': admin_items,
+                   'show_link': False})
 
 
 def _expand_query(q, fields):
-    query = {}
-    rules = [
-        ('term', {'value': q, 'boost': 10}),
-        ('match', {'query': q, 'boost': 4, 'type': 'phrase'}),
-        ('match', {'query': q, 'boost': 3}),
-        ('fuzzy', {'value': q, 'boost': 2, 'prefix_length': 4}),
-        ('startswith', {'value': q, 'boost': 1.5}),
-    ]
-    for k, v in rules:
-        for field in fields:
-            query['%s__%s' % (field, k)] = v
-    return query
+    should = []
+    for field in fields:
+        should.append(ES_Q('term', **{field: {'value': q, 'boost': 10}}))
+        should.append(ES_Q('match', **{field: {'query': q, 'boost': 4,
+                                               'type': 'phrase'}}))
+        should.append(ES_Q('match', **{field: {'query': q, 'boost': 3}}))
+        should.append(ES_Q('fuzzy', **{field: {'value': q, 'boost': 2,
+                                               'prefix_length': 4}}))
+        should.append(ES_Q('prefix', **{field: {'value': q, 'boost': 1.5}}))
+    return query.Bool(should=should)
 
 
-@login_required
-@permission_required('AccountLookup', 'View')
+@permission_required([('AccountLookup', 'View')])
 @json_view
 def user_search(request):
     results = []
     q = request.GET.get('q', u'').lower().strip()
-    fields = ('username', 'display_name', 'email')
+    search_fields = ('fxa_uid', 'display_name', 'email')
+    fields = ('id',) + search_fields
 
     if q.isnumeric():
         # id is added implictly by the ES filter. Add it explicitly:
-        fields = ['id'] + list(fields)
         qs = UserProfile.objects.filter(pk=q).values(*fields)
     else:
-        qs = (UserProfile.search().query(or_=_expand_query(q, fields))
-                                  .values_dict(*fields))
+        qs = UserProfile.objects.all()
+        filters = Q()
+        for field in search_fields:
+            filters = filters | Q(**{'%s__icontains' % field: q})
+        qs = qs.filter(filters)
+        qs = qs.values(*fields)
         qs = _slice_results(request, qs)
     for user in qs:
         user['url'] = reverse('lookup.user_summary', args=[user['id']])
-        user['name'] = user['username']
         results.append(user)
-    return {'results': results}
+    return {'objects': results}
 
 
-@login_required
-@permission_required('Transaction', 'View')
+@permission_required([('Transaction', 'View')])
 def transaction_search(request):
     tx_form = TransactionSearchForm(request.GET)
     if tx_form.is_valid():
         return redirect(reverse('lookup.transaction_summary',
                                 args=[tx_form.cleaned_data['q']]))
     else:
-        return jingo.render(request, 'lookup/home.html', {'tx_form': tx_form})
+        return render(request, 'lookup/home.html', {'tx_form': tx_form})
 
 
-@login_required
-@permission_required('AppLookup', 'View')
-@json_view
-def app_search(request):
-    results = []
-    q = request.GET.get('q', u'').lower().strip()
-    addon_type = int(request.GET.get('type', amo.ADDON_WEBAPP))
-    fields = ('name', 'app_slug')
-    non_es_fields = ['id', 'name__localized_string'] + list(fields)
-    if q.isnumeric():
-        qs = (Addon.objects.filter(type=addon_type, pk=q)
-                           .values(*non_es_fields))
-    else:
-        # Try to load by GUID:
-        qs = (Addon.objects.filter(type=addon_type, guid=q)
-                           .values(*non_es_fields))
-        if not qs.count():
-            if addon_type == amo.ADDON_WEBAPP:
-                qs = S(WebappIndexer)
+class AppLookupSearchView(SearchView):
+    permission_classes = [GroupPermission('AppLookup', 'View')]
+    filter_backends = [SearchQueryFilter]
+    serializer_class = AppLookupSerializer
+    paginate_by = lkp.SEARCH_LIMIT
+    max_paginate_by = lkp.MAX_RESULTS
+
+    def paginate_queryset(self, queryset):
+        self.paginator.default_limit = self.paginate_by
+        orig_get_limit = self.paginator.get_limit
+
+        def get_limit(request):
+            if (request.query_params.get(
+                    self.paginator.limit_query_param) == 'max'):
+                return self.max_paginate_by
             else:
-                qs = S(Addon)
-            qs = (qs.filter(type=addon_type)
-                    .query(should=True, **_expand_query(q, fields))
-                    .values_dict(*fields))
-        qs = _slice_results(request, qs)
-    for app in qs:
-        app['url'] = reverse('lookup.app_summary', args=[app['id']])
-        # ES returns a list of localized names but database queries do not.
-        if type(app['name']) != list:
-            app['name'] = [app['name__localized_string']]
-        for name in app['name']:
-            dd = app.copy()
-            dd['name'] = name
-            results.append(dd)
-    return {'results': results}
+                return orig_get_limit(request)
+        self.paginator.get_limit = get_limit
+        return super(AppLookupSearchView, self).paginate_queryset(queryset)
 
 
-def _app_downloads(app):
-    stats = {'last_7_days': 0,
-             'last_24_hours': 0,
-             'alltime': 0}
-    if app.is_webapp():
-        Data = Installed
-    else:
-        Data = DownloadCount
-    _7_days_ago = datetime.now() - timedelta(days=7)
-    qs = Data.objects.filter(addon=app)
-    if app.is_webapp():
-        _24_hr_ago = datetime.now() - timedelta(hours=24)
-        stats['last_24_hours'] = (qs.filter(created__gte=_24_hr_ago)
-                                    .count())
-        stats['last_7_days'] = app.weekly_downloads
-        stats['alltime'] = qs.count()
-    else:
-        # Non-app add-ons.
+class WebsiteLookupSearchView(WebsiteSearchView):
+    permission_classes = [GroupPermission('WebsiteLookup', 'View')]
+    filter_backends = [SearchQueryFilter]
+    serializer_class = WebsiteLookupSerializer
+    paginate_by = lkp.SEARCH_LIMIT
+    max_paginate_by = lkp.MAX_RESULTS
 
-        def sum_(qs):
-            return qs.aggregate(total=Sum('count'))['total'] or 0
+    def paginate_queryset(self, queryset):
+        self.paginator.default_limit = self.paginate_by
+        orig_get_limit = self.paginator.get_limit
 
-        yesterday = datetime.now().date() - timedelta(days=1)
-        stats['last_24_hours'] = sum_(qs.filter(date__gt=yesterday))
-        stats['last_7_days'] = sum_(qs.filter(date__gte=_7_days_ago.date()))
-        stats['alltime'] = sum_(qs)
-    return stats
+        def get_limit(request):
+            if (request.query_params.get(
+                    self.paginator.limit_query_param) == 'max'):
+                return self.max_paginate_by
+            else:
+                return orig_get_limit(request)
+        self.paginator.get_limit = get_limit
+        return super(WebsiteLookupSearchView, self).paginate_queryset(queryset)
 
 
 def _app_summary(user_id):
@@ -454,7 +529,7 @@ def _app_summary(user_id):
     """
     cursor = connection.cursor()
     cursor.execute(sql, {'user_id': user_id,
-                         'purchase': amo.CONTRIB_PURCHASE})
+                         'purchase': mkt.CONTRIB_PURCHASE})
     summary = {'app_total': 0,
                'app_amount': {}}
     cols = [cd[0] for cd in cursor.description]
@@ -478,9 +553,9 @@ def _app_purchases_and_refunds(addon):
                            .annotate(total=Count('id'),
                                      amount=Sum('amount'))
                            .filter(addon=addon)
-                           .exclude(type__in=[amo.CONTRIB_REFUND,
-                                              amo.CONTRIB_CHARGEBACK,
-                                              amo.CONTRIB_PENDING]))
+                           .exclude(type__in=[mkt.CONTRIB_REFUND,
+                                              mkt.CONTRIB_CHARGEBACK,
+                                              mkt.CONTRIB_PENDING]))
     for typ, start_date in (('last_24_hours', now - timedelta(hours=24)),
                             ('last_7_days', now - timedelta(days=7)),
                             ('alltime', None),):
@@ -493,7 +568,7 @@ def _app_purchases_and_refunds(addon):
                                                               s['currency'])
                                       for s in sums if s['currency']]}
     refunds = {}
-    rejected_q = Q(status=amo.REFUND_DECLINED) | Q(status=amo.REFUND_FAILED)
+    rejected_q = Q(status=mkt.REFUND_DECLINED) | Q(status=mkt.REFUND_FAILED)
     qs = Refund.objects.filter(contribution__addon=addon)
 
     refunds['requested'] = qs.exclude(rejected_q).count()
@@ -502,16 +577,77 @@ def _app_purchases_and_refunds(addon):
     if total:
         percent = (refunds['requested'] / float(total)) * 100.0
     refunds['percent_of_purchases'] = '%.1f%%' % percent
-    refunds['auto-approved'] = (qs.filter(status=amo.REFUND_APPROVED_INSTANT)
+    refunds['auto-approved'] = (qs.filter(status=mkt.REFUND_APPROVED_INSTANT)
                                 .count())
-    refunds['approved'] = qs.filter(status=amo.REFUND_APPROVED).count()
+    refunds['approved'] = qs.filter(status=mkt.REFUND_APPROVED).count()
     refunds['rejected'] = qs.filter(rejected_q).count()
 
     return purchases, refunds
 
 
 def _slice_results(request, qs):
-    if request.GET.get('all_results'):
+    if request.GET.get('limit') == 'max':
         return qs[:lkp.MAX_RESULTS]
     else:
         return qs[:lkp.SEARCH_LIMIT]
+
+
+def get_payment_provider_portals(app=None, user=None):
+    """
+    Get a list of dicts describing the payment portals for this app or user.
+
+    Either app or user is required.
+    """
+    provider_portals = []
+    if app:
+        q = dict(addon=app)
+    elif user:
+        q = dict(payment_account__user=user)
+    else:
+        raise ValueError('user or app is required')
+
+    for acct in (AddonPaymentAccount.objects.filter(**q)
+                 .select_related('payment_account')):
+        provider = get_provider(id=acct.payment_account.provider)
+        portal_url = provider.get_portal_url(acct.addon.app_slug)
+        if portal_url:
+            provider_portals.append({
+                'provider': provider,
+                'app': acct.addon,
+                'portal_url': portal_url,
+                'payment_account': acct.payment_account
+            })
+    return provider_portals
+
+
+@permission_required([('AccountLookup', 'View')])
+def group_summary(request, group_id):
+    group = get_object_or_404(Group, pk=group_id)
+
+    return render(request, 'lookup/group_summary.html',
+                  {'group': group})
+
+
+@permission_required([('AccountLookup', 'View')])
+@json_view
+def group_search(request):
+    results = []
+    q = request.GET.get('q', u'').lower().strip()
+    search_fields = ('name', 'rules')
+    fields = ('id',) + search_fields
+
+    if q.isnumeric():
+        # id is added implictly by the ES filter. Add it explicitly:
+        qs = Group.objects.filter(pk=q).values(*fields)
+    else:
+        qs = Group.objects.all()
+        filters = Q()
+        for field in search_fields:
+            filters = filters | Q(**{'%s__icontains' % field: q})
+        qs = qs.filter(filters)
+        qs = qs.values(*fields)
+        qs = _slice_results(request, qs)
+    for user in qs:
+        user['url'] = reverse('lookup.group_summary', args=[user['id']])
+        results.append(user)
+    return {'objects': results}

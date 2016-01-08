@@ -1,0 +1,13 @@
+{% extends 'comm/emails/base.html' %}
+
+{% block content %}
+
+Congratulations! {{ obj.name }} has been approved for the Firefox Marketplace.
+
+Your {{ obj_type }} is now in a private state, because you either requested that the {{ obj_type }} not be automatically published after approval, or we noticed something during review that we didn't think was serious enough to warrant rejecting your {{ obj_type }}, but wanted to give you the option to fix it if you'd like.
+
+To publish your {{ obj_type }}, visit its Manage Status page: {{ status_url }}.
+
+{% include 'comm/emails/includes/details.html' %}
+{% include 'comm/emails/includes/questions.html' %}
+{% endblock %}

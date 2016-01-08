@@ -1,28 +1,58 @@
 from django.forms.fields import BooleanField
+from django.test.client import RequestFactory
+from django.utils.safestring import SafeText
 from django.utils.translation import ugettext_lazy as _
 
 import mock
 from nose.tools import eq_, ok_
-from test_utils import RequestFactory
 
-import amo
-import amo.tests
-from devhub.models import AppLog
-from editors.models import RereviewQueue
-from files.models import FileUpload
-from users.models import UserProfile
-
+import mkt
+import mkt.site.tests
+from mkt.comm.models import CommunicationNote
 from mkt.constants.features import APP_FEATURES
+from mkt.developers.models import AppLog
+from mkt.files.models import FileUpload
+from mkt.reviewers.models import RereviewQueue
 from mkt.site.fixtures import fixture
+from mkt.site.tests import user_factory
 from mkt.submit import forms
+from mkt.users.models import UserProfile
 from mkt.webapps.models import AppFeatures, Webapp
 
 
-class TestNewWebappForm(amo.tests.TestCase):
+class TestNewWebappForm(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.request = RequestFactory().get('/')
+        self.request.user = user_factory()
         self.file = FileUpload.objects.create(valid=True)
+        self.file.user = self.request.user
+        self.file.save()
+
+    def test_no_user(self):
+        self.file.user = None
+        self.file.save()
+        form = forms.NewWebappForm({'free_platforms': ['free-firefoxos'],
+                                    'upload': self.file.uuid},
+                                   request=self.request)
+        assert not form.is_valid()
+        eq_(form.ERRORS['user'], form.errors['free_platforms'])
+        eq_(form.ERRORS['user'], form.errors['paid_platforms'])
+
+    def test_correct_user(self):
+        form = forms.NewWebappForm({'free_platforms': ['free-firefoxos'],
+                                    'upload': self.file.uuid},
+                                   request=self.request)
+        assert form.is_valid(), form.errors
+
+    def test_incorrect_user(self):
+        self.file.user = user_factory()
+        self.file.save()
+        form = forms.NewWebappForm({'upload': self.file.uuid},
+                                   request=self.request)
+        assert not form.is_valid()
+        eq_(form.ERRORS['user'], form.errors['free_platforms'])
+        eq_(form.ERRORS['user'], form.errors['paid_platforms'])
 
     def test_not_free_or_paid(self):
         form = forms.NewWebappForm({})
@@ -30,38 +60,29 @@ class TestNewWebappForm(amo.tests.TestCase):
         eq_(form.ERRORS['none'], form.errors['free_platforms'])
         eq_(form.ERRORS['none'], form.errors['paid_platforms'])
 
-    def test_not_paid(self):
-        form = forms.NewWebappForm({'paid_platforms': ['paid-firefoxos']})
-        assert not form.is_valid()
-        eq_(form.ERRORS['none'], form.errors['free_platforms'])
-        eq_(form.ERRORS['none'], form.errors['paid_platforms'])
-
     def test_paid(self):
-        self.create_flag('allow-b2g-paid-submission')
         form = forms.NewWebappForm({'paid_platforms': ['paid-firefoxos'],
                                     'upload': self.file.uuid},
                                    request=self.request)
         assert form.is_valid()
-        eq_(form.get_paid(), amo.ADDON_PREMIUM)
+        eq_(form.get_paid(), mkt.ADDON_PREMIUM)
 
     def test_free(self):
-        self.create_flag('allow-b2g-paid-submission')
         form = forms.NewWebappForm({'free_platforms': ['free-firefoxos'],
                                     'upload': self.file.uuid})
         assert form.is_valid()
-        eq_(form.get_paid(), amo.ADDON_FREE)
+        eq_(form.get_paid(), mkt.ADDON_FREE)
 
     def test_platform(self):
-        self.create_flag('allow-b2g-paid-submission')
         mappings = (
-            ({'free_platforms': ['free-firefoxos']}, [amo.DEVICE_GAIA]),
-            ({'paid_platforms': ['paid-firefoxos']}, [amo.DEVICE_GAIA]),
+            ({'free_platforms': ['free-firefoxos']}, [mkt.DEVICE_GAIA]),
+            ({'paid_platforms': ['paid-firefoxos']}, [mkt.DEVICE_GAIA]),
             ({'free_platforms': ['free-firefoxos',
                                  'free-android-mobile']},
-             [amo.DEVICE_GAIA, amo.DEVICE_MOBILE]),
+             [mkt.DEVICE_GAIA, mkt.DEVICE_MOBILE]),
             ({'free_platforms': ['free-android-mobile',
                                  'free-android-tablet']},
-             [amo.DEVICE_MOBILE, amo.DEVICE_TABLET]),
+             [mkt.DEVICE_MOBILE, mkt.DEVICE_TABLET]),
         )
         for data, res in mappings:
             data['upload'] = self.file.uuid
@@ -70,7 +91,6 @@ class TestNewWebappForm(amo.tests.TestCase):
             self.assertSetEqual(res, form.get_devices())
 
     def test_both(self):
-        self.create_flag('allow-b2g-paid-submission')
         form = forms.NewWebappForm({'paid_platforms': ['paid-firefoxos'],
                                     'free_platforms': ['free-firefoxos']},
                                    request=self.request)
@@ -90,29 +110,9 @@ class TestNewWebappForm(amo.tests.TestCase):
         assert form.is_valid(), form.errors
         assert not form.is_packaged()
 
-    def test_not_packaged_allowed(self):
-        form = forms.NewWebappForm({'free_platforms': ['free-firefoxos'],
-                                    'upload': self.file.uuid})
-        assert form.is_valid(), form.errors
-        assert not form.is_packaged()
-
-    @mock.patch('mkt.submit.forms.parse_addon',
-                lambda *args: {'version': None})
-    def test_packaged_disallowed_behind_flag(self):
-        for device in ('free-desktop',
-                       'free-android-mobile',
-                       'free-android-tablet'):
-            form = forms.NewWebappForm({'free_platforms': [device],
-                                        'upload': self.file.uuid,
-                                        'packaged': True})
-            assert not form.is_valid(), form.errors
-            eq_(form.ERRORS['packaged'], form.errors['paid_platforms'])
-
     @mock.patch('mkt.submit.forms.parse_addon',
                 lambda *args: {'version': None})
     def test_packaged_allowed_everywhere(self):
-        self.create_flag('android-packaged')
-        self.create_flag('desktop-packaged')
         for device in ('free-firefoxos',
                        'free-desktop',
                        'free-android-tablet',
@@ -124,8 +124,29 @@ class TestNewWebappForm(amo.tests.TestCase):
             assert form.is_valid(), form.errors
             assert form.is_packaged()
 
+    @mock.patch('mkt.submit.forms.parse_addon',
+                lambda *args: {'version': None, 'role': 'homescreen'})
+    def test_homescreen_device(self):
+        form = forms.NewWebappForm({'upload': self.file.uuid,
+                                    'free_platforms': ['free-firefoxos'],
+                                    'packaged': True},
+                                   request=self.request)
+        assert form.is_valid()
 
-class TestNewWebappVersionForm(amo.tests.TestCase):
+    @mock.patch('mkt.submit.forms.parse_addon',
+                lambda *args: {'version': None, 'role': 'homescreen'})
+    def test_homescreen_wrong_device(self):
+        form = forms.NewWebappForm({'upload': self.file.uuid,
+                                    'free_platforms': ['free-firefoxos',
+                                                       'free-desktop'],
+                                    'packaged': True},
+                                   request=self.request)
+        assert not form.is_valid()
+        eq_(form.ERRORS['homescreen'], form.errors['free_platforms'])
+        eq_(form.ERRORS['homescreen'], form.errors['paid_platforms'])
+
+
+class TestNewWebappVersionForm(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.request = RequestFactory().get('/')
@@ -150,7 +171,7 @@ class TestNewWebappVersionForm(amo.tests.TestCase):
     @mock.patch('mkt.submit.forms.parse_addon',
                 lambda *args: {"origin": "app://hy.fr"})
     def test_verify_app_domain_exclude_same(self):
-        app = amo.tests.app_factory(app_domain='app://hy.fr')
+        app = mkt.site.tests.app_factory(app_domain='app://hy.fr')
         form = forms.NewWebappVersionForm(
             {'upload': self.file.uuid}, request=self.request, is_packaged=True,
             addon=app)
@@ -159,51 +180,141 @@ class TestNewWebappVersionForm(amo.tests.TestCase):
     @mock.patch('mkt.submit.forms.parse_addon',
                 lambda *args: {"origin": "app://hy.fr"})
     def test_verify_app_domain_exclude_different(self):
-        app = amo.tests.app_factory(app_domain='app://yo.lo')
-        amo.tests.app_factory(app_domain='app://hy.fr')
+        app = mkt.site.tests.app_factory(app_domain='app://yo.lo')
+        mkt.site.tests.app_factory(app_domain='app://hy.fr')
         form = forms.NewWebappVersionForm(
             {'upload': self.file.uuid}, request=self.request, is_packaged=True,
             addon=app)
         assert not form.is_valid(), form.errors
-        assert 'An app already exists' in ''.join(form.errors['upload'])
+        assert ('An app already exists on this domain; '
+                'only one app per domain is allowed.' in form.errors['upload'])
 
 
-class TestAppDetailsBasicForm(amo.tests.TestCase):
+class TestAppDetailsBasicForm(mkt.site.tests.TestCase):
     fixtures = fixture('user_999', 'webapp_337141')
 
     def setUp(self):
         self.request = mock.Mock()
-        self.request.amo_user = UserProfile.objects.get(id=999)
+        self.request.user = UserProfile.objects.get(id=999)
+        self.request.groups = ()
 
-    def test_prefill_support_email(self):
-        form = forms.AppDetailsBasicForm({}, request=self.request)
-        eq_(form.initial, {'support_email': {'en-us': 'regular@mozilla.com'}})
+    def get_app(self):
+        return Webapp.objects.get(pk=337141)
+
+    def get_data(self, **kwargs):
+        default = {
+            'app_slug': 'thisIsAslug',
+            'description': '...',
+            'privacy_policy': '...',
+            'support_email': 'test@example.com',
+            'notes': '',
+            'publish_type': mkt.PUBLISH_IMMEDIATE,
+        }
+        default.update(kwargs)
+        return default
 
     def test_slug(self):
-        app = Webapp.objects.get(pk=337141)
-        data = {
-            'app_slug': 'thisIsAslug',
-            'description': '.',
-            'privacy_policy': '.',
-            'support_email': 'test@example.com',
-        }
-        form = forms.AppDetailsBasicForm(data, request=self.request,
+        app = self.get_app()
+        form = forms.AppDetailsBasicForm(self.get_data(), request=self.request,
                                          instance=app)
-        assert form.is_valid()
+        assert form.is_valid(), form.errors
         form.save()
-        app.reload()
         eq_(app.app_slug, 'thisisaslug')
 
+    def test_comm_thread(self):
+        app = self.get_app()
+        note_body = 'please approve this app'
+        form = forms.AppDetailsBasicForm(self.get_data(notes=note_body),
+                                         request=self.request, instance=app)
+        assert form.is_valid(), form.errors
+        form.save()
+        notes = CommunicationNote.objects.all()
+        eq_(notes.count(), 1)
+        eq_(notes[0].body, note_body)
 
-class TestAppFeaturesForm(amo.tests.TestCase):
+    def test_publish_type(self):
+        app = self.get_app()
+        form = forms.AppDetailsBasicForm(
+            self.get_data(publish_type=mkt.PUBLISH_PRIVATE),
+            request=self.request, instance=app)
+        assert form.is_valid(), form.errors
+        form.save()
+        eq_(app.publish_type, mkt.PUBLISH_PRIVATE)
+
+    def test_help_text_uses_safetext_and_includes_url(self):
+        app = self.get_app()
+        form = forms.AppDetailsBasicForm(
+            self.get_data(publish_type=mkt.PUBLISH_PRIVATE),
+            request=self.request, instance=app)
+
+        help_text = form.base_fields['privacy_policy'].help_text
+        eq_(type(help_text), SafeText)
+        ok_('{url}' not in help_text)
+        ok_(form.PRIVACY_MDN_URL in help_text)
+
+    def test_is_offline_guess_false(self):
+        app = self.get_app()
+        app.guess_is_offline = lambda: False
+        assert not app.is_offline
+        forms.AppDetailsBasicForm(
+            self.get_data(),
+            request=self.request,
+            instance=app)
+        assert not app.is_offline
+
+    def test_is_offline_guess_false_override(self):
+        app = self.get_app()
+        app.guess_is_offline = lambda: False
+        form = forms.AppDetailsBasicForm(
+            self.get_data(is_offline=True),
+            request=self.request,
+            instance=app)
+        assert form.is_valid(), form.errors
+        form.save()
+        eq_(app.is_offline, True)
+
+    def test_is_offline_guess_true(self):
+        app = self.get_app()
+        app.guess_is_offline = lambda: True
+        assert not app.is_offline
+        forms.AppDetailsBasicForm(
+            self.get_data(is_offline=None),
+            request=self.request,
+            instance=app)
+        assert app.is_offline
+
+    def test_is_offline_guess_true_override(self):
+        app = self.get_app()
+        app.guess_is_offline = lambda: True
+        form = forms.AppDetailsBasicForm(
+            self.get_data(is_offline=False),
+            request=self.request,
+            instance=app)
+        assert form.is_valid(), form.errors
+        form.save()
+        eq_(app.is_offline, False)
+
+    def test_tags(self):
+        app = self.get_app()
+        form = forms.AppDetailsBasicForm(
+            self.get_data(tags='card games, poker'), request=self.request,
+            instance=app)
+        assert form.is_valid(), form.errors
+        form.save()
+        eq_(app.tags.count(), 2)
+        self.assertSetEqual(
+            app.tags.values_list('tag_text', flat=True),
+            ['card games', 'poker'])
+
+
+class TestAppFeaturesForm(mkt.site.tests.TestCase):
     fixtures = fixture('user_999', 'webapp_337141')
 
     def setUp(self):
-        amo.set_user(UserProfile.objects.all()[0])
+        mkt.set_user(UserProfile.objects.all()[0])
         self.form = forms.AppFeaturesForm()
         self.app = Webapp.objects.get(pk=337141)
         self.features = self.app.current_version.features
-        self.create_switch('buchets')
 
     def _check_log(self, action):
         assert AppLog.objects.filter(
@@ -241,9 +352,9 @@ class TestAppFeaturesForm(amo.tests.TestCase):
         ok_(self.features.has_apps)
         ok_(not self.features.has_sms)
         ok_(not self.features.has_contacts)
-        action_id = amo.LOG.REREVIEW_FEATURES_CHANGED.id
+        action_id = mkt.LOG.REREVIEW_FEATURES_CHANGED.id
         assert AppLog.objects.filter(addon=self.app,
-            activity_log__action=action_id).exists()
+                                     activity_log__action=action_id).exists()
         eq_(RereviewQueue.objects.count(), 1)
 
     def test_no_changes_not_marked_for_rereview(self):
@@ -254,9 +365,10 @@ class TestAppFeaturesForm(amo.tests.TestCase):
         ok_(not self.features.has_apps)
         ok_(self.features.has_sms)
         eq_(RereviewQueue.objects.count(), 0)
-        action_id = amo.LOG.REREVIEW_FEATURES_CHANGED.id
-        assert not AppLog.objects.filter(addon=self.app,
-             activity_log__action=action_id).exists()
+        action_id = mkt.LOG.REREVIEW_FEATURES_CHANGED.id
+        assert not AppLog.objects.filter(
+            addon=self.app,
+            activity_log__action=action_id).exists()
 
     def test_changes_mark_for_rereview_bypass(self):
         self.features.update(has_sms=True)
@@ -266,6 +378,7 @@ class TestAppFeaturesForm(amo.tests.TestCase):
         ok_(self.features.has_apps)
         ok_(not self.features.has_sms)
         eq_(RereviewQueue.objects.count(), 0)
-        action_id = amo.LOG.REREVIEW_FEATURES_CHANGED.id
-        assert not AppLog.objects.filter(addon=self.app,
-             activity_log__action=action_id).exists()
+        action_id = mkt.LOG.REREVIEW_FEATURES_CHANGED.id
+        assert not AppLog.objects.filter(
+            addon=self.app,
+            activity_log__action=action_id).exists()

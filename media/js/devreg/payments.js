@@ -10,24 +10,37 @@ define('payments', [], function() {
 
     var allPaidRegionIds = regionsData.allPaidRegionIds;
     var apiErrorMsg = regionsData.apiErrorMsg;
-    var disabledRegions = regionsData.disabledRegions;
     var tierZeroId = regionsData.tierZeroId;
     var notApplicableMsg = regionsData.notApplicableMsg;
     var paymentMethods = regionsData.paymentMethods || {};
     var pricesApiEndpoint = regionsData.pricelistApiUrl + '{0}/';
     var $tdNodes = $('<td class="cb"></td><td class="lp"></td><td class="lm"></td>');
     var $paidRegionTableTbody = $('#paid-regions tbody');
+    var providerLookup = regionsData.providerLookup;
+    var enabledProviderIds = regionsData.enabledProviderIds;
+
+    var providerIdLookup = {};
+    if (providerLookup) {
+        Object.keys(providerLookup).forEach(function(k) {
+            providerIdLookup[providerLookup[k]] = k;
+        });
+    }
 
     function getOverlay(opts) {
         var id = opts;
         if (_.isObject(opts)) {
-            id = opts.id;
+            if (opts.provider) {
+                id = [opts.provider, opts.id].join('-');
+            } else {
+                id = opts.id;
+            }
         }
         $('.overlay').remove();
         z.body.addClass('overlayed');
         var overlay = makeOrGetOverlay(opts);
         overlay.html($('#' + id + '-template').html())
                .addClass('show')
+               .data('provider', opts.provider)
                .on('click', '.close', _pd(function() {
                    overlay.trigger('overlay_dismissed').remove();
                }));
@@ -37,7 +50,11 @@ define('payments', [], function() {
     function setupPaymentAccountOverlay($overlay, onsubmit) {
         $overlay.on('submit', 'form', _pd(function() {
             var $form = $(this);
-            var $waiting_overlay = getOverlay('bango-waiting');
+            var $waiting_overlay = getOverlay({
+                id: 'payment-account-waiting',
+                class: 'payment-account-overlay',
+                provider: $overlay.data('provider'),
+            });
             var $old_overlay = $overlay.children('section');
             $old_overlay.detach();
             $form.find('.error').remove();
@@ -67,7 +84,7 @@ define('payments', [], function() {
                     // If the error occurred on an unknown field,
                     // stick the error at the top. Maybe with more detail.
                     if (parsed_errors.__all__ !== null) {
-                        var target = $old_overlay.find('#bango-account-errors');
+                        var target = $old_overlay.find('#payment-account-errors');
                         $('<div>').addClass('error')
                                   .insertAfter(target)
                                   .text(parsed_errors.__all__);
@@ -75,8 +92,9 @@ define('payments', [], function() {
                 } catch(err) {
                     // There was a JSON parse error, just stick the error
                     // message on the form.
-                    $old_overlay.find('#bango-account-errors')
-                                .html(error_data.responseText);
+                    console.error('Got', err, 'when parsing', error_data.responseText);
+                    $old_overlay.find('#payment-account-errors')
+                                .append($('<p class="error"></p>').text(apiErrorMsg));
                 }
 
                 // Re-initialize the form submit binding.
@@ -111,33 +129,22 @@ define('payments', [], function() {
         });
     }
 
-    function createTableRow(checkBox, ident, localPriceText, localMethodText) {
+    function createTableRow(checkBox, ident, localPriceText, localMethodText, provider) {
         var $tds = $tdNodes.clone();
         var $tr = $paidRegionTableTbody.find('tr[data-region="' + ident + '"]');
         var $checkBoxContainer = $($tds[0]);
         var $localPriceContainer = $($tds[1]);
         var $localMethodContainer = $($tds[2]);
-        $localMethodContainer.text(localMethodText);
+        $localMethodContainer.text(localMethodText + ' (' + provider + ')');
         $localPriceContainer.text(localPriceText);
         $tr.append($tds);
         return $tr;
     }
 
-    function disableCheckbox() {
-        /*jshint validthis:true */
-        var $this = $(this);
-
-        $this.prop('disabled', true)
-             .closest('label').addClass('disabled');
-
-        // Remove the text, where it shouldn't be displayed.
-        $this.closest('tr').find('.local-retail, .local-method').text('');
-    }
-
-
-    function updatePrices() {
+    function updatePrices(force) {
 
         /*jshint validthis:true */
+
         var $this = $(this);
         var selectedPrice = $this.val();
 
@@ -166,7 +173,7 @@ define('payments', [], function() {
         selectedPrice = parseInt(selectedPrice, 10);
 
         // No-op if nothing else has changed.
-        if (currentPrice === selectedPrice) {
+        if (currentPrice === selectedPrice && !force) {
             return;
         }
 
@@ -178,33 +185,55 @@ define('payments', [], function() {
             success: function(data) {
                 var moveQueue = [];
                 var prices = data.prices || [];
-                var seen = [];
+                var seenCheckBoxes = [];
+                var seenRegions = [];
                 var tierPrice = data.price;
 
                 // Iterate over the prices for the regions
                 for (var i=0, j=prices.length; i<j; i++) {
                     var price = prices[i];
                     var regionId = price.region;
-                    var billingMethodText = paymentMethods[parseInt(price.method, 10)] || '';
+                    var regionSeen = seenRegions.indexOf(regionId) > -1;
 
+                    if (enabledProviderIds.indexOf(price.provider) === -1) {
+                        continue;
+                    }
+
+                    if (!regionSeen) {
+                        seenRegions.push(regionId);
+                    }
+
+                    var billingMethodText = paymentMethods[parseInt(price.method, 10)] || '';
                     var localPrice = price.price + ' ' + price.currency;
                     var localMethod = selectedPrice === tierZeroId ? notApplicableMsg : billingMethodText;
+
+                    var provider = providerLookup[price.provider];
+                    if (provider) {
+                        provider = provider.charAt(0).toUpperCase() + provider.substring(1);
+                    }
 
                     // If the checkbox we're interested is already in the table just update it.
                     // Otherwise we need to create a new tableRow and move it into position.
                     var $chkbox = $regions.find('input:checkbox[value=' + regionId + ']');
                     var $row = $('#paid-regions tr[data-region=' + regionId + ']');
 
+                    // If we've already dealt with this region append this provider to existing row and continue.
+                    if (regionSeen && $row.length) {
+                        var $billingMethodCell = $row.find('.lm');
+                        $billingMethodCell.text($billingMethodCell.text() + ', ' + localMethod + ' (' + provider + ')');
+                        continue;
+                    }
+
                     if ($row.length) {
                         if ($row.find('td').length) {
                             $row.find('.lp').text(localPrice);
-                            $row.find('.lm').text(localMethod);
+                            $row.find('.lm').text(localMethod + ' (' + provider + ')');
                         } else {
-                            var $tr = createTableRow($chkbox.closest('label'), regionId, localPrice, localMethod);
+                            var $tr = createTableRow($chkbox.closest('label'), regionId, localPrice, localMethod, provider);
                             moveQueue.push([$chkbox.closest('label'), $tr.find('.cb')]);
                             $chkbox.closest('li').hide(500);
                         }
-                        seen.push($chkbox[0]);
+                        seenCheckBoxes.push($chkbox[0]);
                     } else {
                         console.log('No row found with regionId "' + regionId + '" (noop)');
                     }
@@ -215,7 +244,7 @@ define('payments', [], function() {
                     moveAnimate(current[0], current[1]);
                 }
 
-                $('#paid-regions input[type=checkbox]').not(seen).each(function() {
+                $('#paid-regions input[type=checkbox]').not(seenCheckBoxes).each(function() {
                     // If the item we don't want here is in the table then we need to move it back
                     // out of the table and destroy the row contents.
                     var $chkbox = $(this);
@@ -230,6 +259,8 @@ define('payments', [], function() {
                         moveAnimate($label, $newParent, $tds);
                     }
                 });
+
+                $('.paid-regions input[name="regions"][value="1"]:checked').trigger('change', [true]);
             },
             dataType: "json"
         }).fail(function() {
@@ -256,6 +287,40 @@ define('payments', [], function() {
             $free_island.toggle(tab.id == 'free-tab-header');
         });
 
+        // Special cases for special regions.
+        var regionData = $('#region-list').data();
+        var regionStatuses = regionData.specialRegionStatuses;
+        var regionLabels = regionData.specialRegionL10n;
+        z.doc.on('change', '#regions input[name="special_regions"]', function() {
+            var $this = $(this);
+            // Check/uncheck the visible checkboxes.
+            $('input.special[value="' + $this.val() + '"]')
+                .prop('checked', $this.is(':checked')).trigger('change');
+        }).on('change', '#regions input.special', function() {
+            var $this = $(this);
+            var checked = $this.is(':checked');
+            var region = $this.val();
+            var status = regionStatuses[region];
+            var labels = regionLabels;
+
+            // Check/uncheck the hidden checkbox. (Notice we're not triggering `change`.)
+            $('input[name="special_regions"][value="' + region + '"]').prop('checked', checked);
+
+            // Based on the region's status, show the appropriate label for the special region:
+            // - unchecked and not public: "requires additional review"
+            // - pending:                  "awaiting approval"
+            // - rejected:                 "rejected"
+            if (status != 'public') {
+                status = checked ? 'pending' : 'unavailable';
+            }
+            $this.closest('li').find('.status-label').text(labels[status] || '');
+        }).on('change', '.paid-regions input[name="regions"][value="1"]', function() {
+            $('#regions .rest-of-world').toggle();
+        });
+
+        // Initialize special checkboxes.
+        z.doc.find('#regions input.special').trigger('change');
+
         if ($('#paid-regions-island').length) {
             // Paid apps for the time being must be restricted.
             var $restricted = $('input[name=restricted]');
@@ -272,26 +337,47 @@ define('payments', [], function() {
             // otherwise hidden (for free apps).
             $('.restricted').removeClass('hidden');
         } else {
+            // Clone the special regions' checkboxes from the restricted section.
+            var $specials = $('#regions .region-cb.special').closest('li').clone().wrap('<ul class="special-regions-unrestricted unrestricted">').parent();
+            $specials.find('.restricted').removeClass('restricted');
+            $specials.insertAfter($('input[name="restricted"][value="0"]').closest('label'));
+
+            // Clone the "Learn why some regions are restricted" choice.
+            var $unrestrictedList = $('ul.special-regions-unrestricted');
+            $('header.unrestricted').clone().removeClass('hidden').insertBefore($unrestrictedList);
+            // Remove the old one.
+            $('header.unrestricted.hidden').remove();
+            $('.disabled-regions').clone().insertAfter($unrestrictedList).addClass('unrestricted');
+
             // Free apps can toggle between restricted and not.
-            z.doc.on('change', '#regions input[name=restricted]:checked', function() {
+            z.doc.on('change', '#regions input[name=restricted]:checked', function(e, init) {
                 // Coerce string ('0' or '1') to boolean ('true' or 'false').
                 var restricted = !!+$(this).val();
                 $('.restricted').toggle(restricted);
-                if (!restricted) {
-                    $('input.restricted:not([disabled])').prop('checked', true);
-                    $('input[name="enable_new_regions"]').prop('checked', true);
+                $('.unrestricted').toggle(!restricted);
+                if (!init) {
+                    window.location.hash = 'regions-island';
                 }
-                window.location.hash = 'regions-island';
             });
-            $('#regions input[name=restricted]:checked').trigger('change');
+            $('#regions input[name=restricted]:checked').trigger('change', [true]);
         }
 
-        // Only update if we can edit. If the user can't edit all fields will be disabled.
-        if (!z.body.hasClass('no-edit')) {
-            $priceSelect.on('change', updatePrices);
-            updatePrices.call($priceSelect[0]);
-        }
+        // Update prices to reflect the regions available.
+        $priceSelect.on('change', updatePrices);
+        updatePrices.call($priceSelect[0]);
     }
+
+    $('body').on('app-payment-account-deletion', function(e, data) {
+        var providerId = providerIdLookup[data.provider];
+        if (providerId) {
+            var idx = enabledProviderIds.indexOf(parseInt(providerId, 10));
+            if (idx > -1) {
+                enabledProviderIds.splice(idx, 1);
+                console.log('Updating prices');
+                updatePrices.call($('#id_price')[0], true);
+            }
+        }
+    });
 
     return {
         getOverlay: getOverlay,

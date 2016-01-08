@@ -1,471 +1,405 @@
-import datetime
-from datetime import date, timedelta
-from dateutil.relativedelta import relativedelta
-import logging
+from django import http
 
-from django.core.exceptions import PermissionDenied
-from django.shortcuts import redirect
+import commonware
+import requests
+from rest_framework.exceptions import ParseError
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-import jingo
-from waffle.decorators import waffle_switch
-import waffle
-
-from access import acl
-import amo
-from amo.decorators import json_view, login_required, permission_required
-from amo.urlresolvers import reverse
+import mkt
 from lib.metrics import get_monolith_client
-from mkt.webapps.decorators import app_view, app_view_factory
-from mkt.webapps.models import Installed, Webapp
-from stats.models import Contribution, UpdateCount
-from stats.views import (check_series_params_or_404, daterange,
-                         get_report_view, render_csv, render_json)
+from mkt.api.authentication import (RestOAuthAuthentication,
+                                    RestSharedSecretAuthentication)
+from mkt.api.base import CORSMixin, SlugOrIdMixin
+from mkt.api.exceptions import ServiceUnavailable
+from mkt.api.permissions import AllowAppOwner, AnyOf, GroupPermission
+from mkt.purchase.models import Contribution
+from mkt.webapps.models import Webapp
+
+from .forms import StatsForm
 
 
-logger = logging.getLogger('z.mkt.stats.views')
-FINANCE_SERIES = (
-    'sales', 'refunds', 'revenue',
-    'currency_revenue', 'currency_sales', 'currency_refunds',
-    'source_revenue', 'source_sales', 'source_refunds',
-)
-SERIES = FINANCE_SERIES + ('installs', 'usage', 'my_apps')
-SERIES_GROUPS = ('day', 'week', 'month')
-SERIES_GROUPS_DATE = ('date', 'week', 'month')
-SERIES_FORMATS = ('json', 'csv')
+log = commonware.log.getLogger('z.stats')
 
 
-@app_view_factory(Webapp.objects.all)
-def stats_report(request, addon, report, category_field=None):
+class PublicStats(BasePermission):
     """
-    Stats page. Passes in context variables into template which is read by the
-    JS to build a URL. The URL calls a *_series view which determines
-    necessary arguments for get_series_*. get_series_* queries ES for the data,
-    which is later formatted into .json or .csv and made available to the JS.
+    Allow for app's with `public_stats` set to True.
     """
-    if (addon.status is not amo.STATUS_PUBLIC and
-        not check_stats_permission(request, addon, for_contributions=True,
-                                   no_raise=True)):
-        return redirect(addon.get_detail_url())
-    check_stats_permission(request, addon)
 
-    template_name = 'appstats/reports/%s.html' % report
-    stats_base_url = reverse('mkt.stats.overview', args=[addon.app_slug])
-    view = get_report_view(request)
-
-    return jingo.render(request, template_name, {
-        'addon': addon,
-        'report': report,
-        'view': view,
-        'stats_base_url': stats_base_url,
-    })
-
-
-@login_required
-@waffle_switch('developer-stats')
-def my_apps_report(request, report):
-    """
-    A report for a developer, showing multiple apps.
-    """
-    view = get_report_view(request)
-    template_name = 'devstats/reports/%s.html' % report
-    return jingo.render(request, template_name, {
-        'view': view,
-        'report': 'my_apps',
-    })
-
-
-def get_series_line(model, group, primary_field=None, extra_fields=None,
-                    extra_values=None, **filters):
-    """
-    Get a generator of dicts for the stats model given by the filters, made
-    to fit into Highchart's datetime line graph.
-
-    primary_field takes a field name that can be referenced by the key 'count'
-    extra_fields takes a list of fields that can be found in the index
-    on top of date and count and can be seen in the output
-    extra_values is a list of constant values added to each line
-    """
-    if not extra_fields:
-        extra_fields = []
-
-    extra_values = extra_values or {}
-
-    if waffle.switch_is_active('monolith-stats'):
-        keys = {Installed: 'app_installs',
-                UpdateCount: 'updatecount_XXX',
-                Contribution: 'contribution_XXX'}
-
-        # Getting data from the monolith server.
-        client = get_monolith_client()
-
-        field = keys[model]
-        start, end = filters['date__range']
-
-        if group == 'date':
-            group = 'day'
-
-        try:
-            for result in client(field, start, end, interval=group,
-                                 addon_id=filters['addon']):
-                res = {'count': result['count']}
-                for extra_field in extra_fields:
-                    res[extra_field] = result[extra_field]
-                date_ = date(*result['date'].timetuple()[:3])
-                res['end'] = res['date'] = date_
-                res.update(extra_values)
-                yield res
-        except ValueError as e:
-            if len(e.args) > 0:
-                logger.error(e.args[0])
-
-    else:
-        # Pull data out of ES
-        data = list((model.search().order_by('-date').filter(**filters)
-            .values_dict('date', 'count', primary_field, *extra_fields))[:365])
-
-        # Pad empty data with dummy dicts.
-        days = [datum['date'].date() for datum in data]
-        fields = []
-        if primary_field:
-            fields.append(primary_field)
-        if extra_fields:
-            fields += extra_fields
-        data += pad_missing_stats(days, group, filters.get('date__range'),
-                                  fields)
-
-        # Sort in descending order.
-        data = sorted(data, key=lambda document: document['date'],
-                      reverse=True)
-
-        # Generate dictionary with options from ES document
-        for val in data:
-            # Convert the datetimes to a date.
-            date_ = date(*val['date'].timetuple()[:3])
-            if primary_field and primary_field != 'count':
-                rv = dict(count=val[primary_field], date=date_, end=date_)
-            else:
-                rv = dict(count=val['count'], date=date_, end=date_)
-            for extra_field in extra_fields:
-                rv[extra_field] = val[extra_field]
-            rv.update(extra_values)
-            yield rv
-
-
-def get_series_column(model, primary_field=None, category_field=None,
-                      **filters):
-    """
-    Get a generator of dicts for the stats model given by the filters, made
-    to fit into Highchart's column graph.
-
-    primary_field  -- field name that is converted into generic key 'count'.
-    category_field -- the breakdown field for x-axis (e.g. currency, source),
-                      is a Highcharts term where categories are the xAxis
-                      values.
-    """
-    categories = list(set(model.objects.filter(**filters).values_list(
-                          category_field, flat=True)))
-
-    # Set up ES query.
-    if 'config__addon' in filters:
-        filters['addon'] = filters['config__addon']
-        del(filters['config__addon'])
-
-    data = []
-    for category in categories:
-        # Have to query ES in lower-case.
-        try:
-            category = category.lower()
-        except AttributeError:
-            pass
-
-        filters[category_field] = category
-        if primary_field:
-            data += list((model.search().filter(**filters)
-                          .values_dict(category_field, 'count',
-                                       primary_field)))
-        else:
-            data += list((model.search().filter(**filters)
-                          .values_dict(category_field, 'count')))
-        del(filters[category_field])
-
-    # Sort descending.
-    if primary_field:
-        data = sorted(data, key=lambda datum: datum.get(primary_field),
-                      reverse=True)
-    else:
-        data = sorted(data, key=lambda datum: datum['count'], reverse=True)
-
-    # Generate dictionary.
-    for val in data:
-        if primary_field:
-            rv = dict(count=val[primary_field])
-        else:
-            rv = dict(count=val['count'])
-        if category_field:
-            rv[category_field] = val[category_field]
-            # Represent empty strings as 'N/A' in the frontend.
-            if not rv[category_field]:
-                rv[category_field] = 'N/A'
-        yield rv
-
-
-#TODO: complex JS logic similar to apps/stats, real stats data
-@app_view
-def overview_series(request, addon, group, start, end, format):
-    """
-    Combines installs_series and usage_series into one payload.
-    """
-    date_range = check_series_params_or_404(group, start, end, format)
-    check_stats_permission(request, addon)
-
-    series = get_series_line(Installed, group, addon=addon.id,
-                             date__range=date_range)
-
-    if format == 'csv':
-        return render_csv(request, addon, series, ['date', 'count'])
-    elif format == 'json':
-        return render_json(request, addon, series)
-
-
-@app_view
-def installs_series(request, addon, group, start, end, format):
-    """
-    Generate install counts grouped by ``group`` in ``format``.
-    """
-    date_range = check_series_params_or_404(group, start, end, format)
-    check_stats_permission(request, addon)
-
-    series = get_series_line(Installed, group, addon=addon.id,
-                             date__range=date_range)
-
-    if format == 'csv':
-        return render_csv(request, addon, series, ['date', 'count'])
-    elif format == 'json':
-        return render_json(request, addon, series)
-
-
-def _my_apps(request):
-    """
-    Find the apps you are allowed to see stats for, by getting all apps
-    and then filtering down.
-    """
-    filtered = []
-    if not getattr(request, 'amo_user', None):
-        return filtered
-
-    addon_users = (request.amo_user.addonuser_set
-                          .filter(addon__type=amo.ADDON_WEBAPP)
-                          .exclude(addon__status=amo.STATUS_DELETED))
-    for addon_user in addon_users:
-        if check_stats_permission(request, addon_user.addon, no_raise=True):
-            filtered.append(addon_user.addon)
-    return filtered
-
-
-def my_apps_series(request, group, start, end, format):
-    """
-    Install counts for multiple apps. This is a temporary hack that will
-    probably live forever.
-    """
-    date_range = check_series_params_or_404(group, start, end, format)
-    apps = _my_apps(request)
-    series = []
-    for app in apps:
-        # The app name is going to appended in slightly different ways
-        # depending upon data format.
-        if format == 'csv':
-            series = get_series_line(Installed, group, addon=app.id,
-                                     date__range=date_range,
-                                     extra_values={'name': (app.name)})
-        elif format == 'json':
-            data = get_series_line(Installed, group, addon=app.id,
-                                   date__range=date_range)
-            series.append({'name': str(app.name), 'data': list(data)})
-
-    if format == 'csv':
-        return render_csv(request, apps, series, ['name', 'date', 'count'])
-    elif format == 'json':
-        return render_json(request, apps, series)
-
-
-#TODO: real data
-@app_view
-def usage_series(request, addon, group, start, end, format):
-    date_range = check_series_params_or_404(group, start, end, format)
-    check_stats_permission(request, addon)
-
-    series = get_series_line(UpdateCount, group, addon=addon.id,
-                             date__range=date_range)
-
-    if format == 'csv':
-        return render_csv(request, addon, series, ['date', 'count'])
-    elif format == 'json':
-        return render_json(request, addon, series)
-
-
-@app_view
-def finance_line_series(request, addon, group, start, end, format,
-                        primary_field=None):
-    """
-    Date-based contribution series.
-    primary_field -- revenue/count/refunds
-    """
-    date_range = check_series_params_or_404(group, start, end, format)
-    check_stats_permission(request, addon, for_contributions=True)
-
-    series = get_series_line(Contribution, group,
-        primary_field=primary_field, addon=addon.id,
-        date__range=date_range)
-
-    if format == 'csv':
-        return render_csv(request, addon, series, ['date', 'count'])
-    elif format == 'json':
-        return render_json(request, addon, series)
-
-
-@app_view
-def finance_column_series(request, addon, group, start, end, format,
-                          primary_field=None, category_field=None):
-    """
-    Non-date-based contribution series, column graph.
-    primary_field -- revenue/count/refunds
-    category_field -- breakdown field, currency/source
-    """
-    check_stats_permission(request, addon, for_contributions=True)
-
-    series = get_series_column(Contribution, primary_field=primary_field,
-        category_field=category_field, addon=addon.id)
-
-    # Since we're currently storing everything in lower-case in ES,
-    # re-capitalize the currency.
-    if category_field == 'currency':
-        series = list(series)
-        for datum in series:
-            datum['currency'] = datum['currency'].upper()
-
-    if format == 'csv':
-        return render_csv(request, addon, series, [category_field, 'count'])
-    elif format == 'json':
-        return render_json(request, addon, series)
-
-
-def check_stats_permission(request, addon, for_contributions=False,
-                           no_raise=False):
-    """
-    Check if user is allowed to view stats for ``addon``.
-
-    no_raise -- if enabled function returns true or false
-                else function raises PermissionDenied
-                if user is not allowed.
-    """
-    # If public, non-contributions: everybody can view.
-    if addon.public_stats and not for_contributions:
+    def has_permission(self, request, view):
+        # Anonymous is allowed if app.public_stats is True.
         return True
 
-    # Everything else requires an authenticated user.
-    if not request.user.is_authenticated():
-        if no_raise:
-            return False
-        raise PermissionDenied
-
-    if not for_contributions:
-        # Only authors and Stats Viewers allowed.
-        if (addon.has_author(request.amo_user) or
-            acl.action_allowed(request, 'Stats', 'View')):
-            return True
-
-    else:  # For contribution stats.
-        # Only authors and Contribution Stats Viewers.
-        if (addon.has_author(request.amo_user) or
-            acl.action_allowed(request, 'RevenueStats', 'View')):
-            return True
-
-    if no_raise:
-        return False
-    raise PermissionDenied
+    def has_object_permission(self, request, view, obj):
+        return obj.public_stats
 
 
-def pad_missing_stats(days, group, date_range=None, fields=None):
+# Map of URL metric name to monolith metric name.
+#
+# The 'dimensions' key is optional query string arguments with defaults that is
+# passed to the monolith client and used in the facet filters. If the default
+# is `None`, the dimension is excluded unless specified via the API.
+#
+# The 'lines' key is optional and used for multi-line charts. The format is:
+#     {'<name>': {'<dimension-key>': '<dimension-value>'}}
+# where <name> is what's returned in the JSON output and the dimension
+# key/value is what's sent to Monolith similar to the 'dimensions' above.
+#
+# The 'coerce' key is optional and used to coerce data types returned from
+# monolith to other types. Provide the name of the key in the data you want to
+# coerce with a callback for how you want the data coerced. E.g.:
+#   {'count': str}
+def lines(name, vals):
+    return dict((val, {name: val}) for val in vals)
+
+
+STATS = {
+    'apps_added_by_package': {
+        'metric': 'apps_added_package_count',
+        'dimensions': {'region': 'us'},
+        'lines': lines('package_type', mkt.ADDON_WEBAPP_TYPES.values()),
+    },
+    'apps_added_by_premium': {
+        'metric': 'apps_added_premium_count',
+        'dimensions': {'region': 'us'},
+        'lines': lines('premium_type', mkt.ADDON_PREMIUM_API.values()),
+    },
+    'apps_available_by_package': {
+        'metric': 'apps_available_package_count',
+        'dimensions': {'region': 'us'},
+        'lines': lines('package_type', mkt.ADDON_WEBAPP_TYPES.values()),
+    },
+    'apps_available_by_premium': {
+        'metric': 'apps_available_premium_count',
+        'dimensions': {'region': 'us'},
+        'lines': lines('premium_type', mkt.ADDON_PREMIUM_API.values()),
+    },
+    'apps_installed': {
+        'metric': 'app_installs',
+        'dimensions': {'region': None},
+    },
+    'total_developers': {
+        'metric': 'total_dev_count',
+    },
+    'total_visits': {
+        'metric': 'visits',
+    },
+    'ratings': {
+        'metric': 'apps_ratings',
+    },
+    'abuse_reports': {
+        'metric': 'apps_abuse_reports',
+    },
+    'revenue': {
+        'metric': 'gross_revenue',
+        # Counts are floats. Let's convert them to strings with 2 decimals.
+        'coerce': {'count': lambda d: '{0:.2f}'.format(d)},
+    },
+}
+APP_STATS = {
+    'installs': {
+        'metric': 'app_installs',
+        'dimensions': {'region': None},
+    },
+    'visits': {
+        'metric': 'app_visits',
+    },
+    'ratings': {
+        'metric': 'apps_ratings',
+    },
+    'average_rating': {
+        'metric': 'apps_average_rating',
+    },
+    'abuse_reports': {
+        'metric': 'apps_abuse_reports',
+    },
+    'revenue': {
+        'metric': 'gross_revenue',
+        # Counts are floats. Let's convert them to strings with 2 decimals.
+        'coerce': {'count': lambda d: '{0:.2f}'.format(d)},
+    },
+}
+# The total API will iterate over each key and return statistical totals
+# information on them all.
+STATS_TOTAL = {
+    'installs': {
+        'metric': 'app_installs',
+    },
+    'ratings': {
+        'metric': 'apps_ratings',
+    },
+    'abuse_reports': {
+        'metric': 'apps_abuse_reports',
+    },
+}
+APP_STATS_TOTAL = {
+    'installs': {
+        'metric': 'app_installs',
+    },
+    'ratings': {
+        'metric': 'apps_ratings',
+    },
+    'abuse_reports': {
+        'metric': 'apps_abuse_reports',
+    },
+}
+
+
+def _get_monolith_data(stat, start, end, interval, dimensions):
+    # If stat has a 'lines' attribute, it's a multi-line graph. Do a
+    # request for each item in 'lines' and compose them in a single
+    # response.
+    try:
+        client = get_monolith_client()
+    except requests.ConnectionError as e:
+        log.info('Monolith connection error: {0}'.format(e))
+        raise ServiceUnavailable
+
+    def _coerce(data):
+        for key, coerce in stat.get('coerce', {}).items():
+            if data.get(key):
+                data[key] = coerce(data[key])
+
+        return data
+
+    try:
+        data = {}
+        if 'lines' in stat:
+            for line_name, line_dimension in stat['lines'].items():
+                dimensions.update(line_dimension)
+                data[line_name] = map(_coerce,
+                                      client(stat['metric'], start, end,
+                                             interval, **dimensions))
+
+        else:
+            data['objects'] = map(_coerce,
+                                  client(stat['metric'], start, end, interval,
+                                         **dimensions))
+
+    except ValueError as e:
+        # This occurs if monolith doesn't have our metric and we get an
+        # elasticsearch SearchPhaseExecutionException error.
+        log.info('Monolith ValueError for metric {0}: {1}'.format(
+            stat['metric'], e))
+        raise ParseError('Invalid metric at this time. Try again later.')
+
+    return data
+
+
+class GlobalStats(CORSMixin, APIView):
+    authentication_classes = (RestOAuthAuthentication,
+                              RestSharedSecretAuthentication)
+    cors_allowed_methods = ['get']
+    permission_classes = [AllowAny]
+
+    def get(self, request, metric):
+        if metric not in STATS:
+            raise http.Http404('No metric by that name.')
+
+        stat = STATS[metric]
+
+        # Perform form validation.
+        form = StatsForm(request.GET)
+        if not form.is_valid():
+            exc = ParseError()
+            exc.detail = {'detail': dict(form.errors.items())}
+            raise exc
+
+        qs = form.cleaned_data
+
+        dimensions = {}
+        if 'dimensions' in stat:
+            for key, default in stat['dimensions'].items():
+                val = request.GET.get(key, default)
+                if val is not None:
+                    # Avoid passing kwargs to the monolith client when the
+                    # dimension is None to avoid facet filters being applied.
+                    dimensions[key] = request.GET.get(key, default)
+
+        return Response(_get_monolith_data(stat, qs.get('start'),
+                                           qs.get('end'), qs.get('interval'),
+                                           dimensions))
+
+
+class AppStats(CORSMixin, SlugOrIdMixin, ListAPIView):
+    authentication_classes = (RestOAuthAuthentication,
+                              RestSharedSecretAuthentication)
+    cors_allowed_methods = ['get']
+    permission_classes = [AnyOf(PublicStats, AllowAppOwner,
+                                GroupPermission('Stats', 'View'))]
+    queryset = Webapp.objects.all()
+    slug_field = 'app_slug'
+
+    def get(self, request, pk, metric):
+        if metric not in APP_STATS:
+            raise http.Http404('No metric by that name.')
+
+        app = self.get_object()
+
+        stat = APP_STATS[metric]
+
+        # Perform form validation.
+        form = StatsForm(request.GET)
+        if not form.is_valid():
+            exc = ParseError()
+            exc.detail = {'detail': dict(form.errors.items())}
+            raise exc
+
+        qs = form.cleaned_data
+
+        dimensions = {'app-id': app.id}
+
+        if 'dimensions' in stat:
+            for key, default in stat['dimensions'].items():
+                val = request.GET.get(key, default)
+                if val is not None:
+                    # Avoid passing kwargs to the monolith client when the
+                    # dimension is None to avoid facet filters being applied.
+                    dimensions[key] = request.GET.get(key, default)
+
+        return Response(_get_monolith_data(stat, qs.get('start'),
+                                           qs.get('end'), qs.get('interval'),
+                                           dimensions))
+
+
+class StatsTotalBase(object):
     """
-    Bug 758480: return dummy dicts with values of 0 to pad missing dates
-    days -- list of datetime dates that have returned data
-    group -- grouping by day, week, or month
-    date_range -- optional, to extend the padding to fill a date range
-    fields -- fields to insert into the dummy dict with values of 0
+    A place for a few helper methods for totals stats API.
     """
-    if not fields:
-        fields = []
-
-    # Add 0s for missing daily stats (so frontend represents empty stats as 0).
-    days = sorted(set(days))
-
-    # Make sure whole date range is padded so data doesn't just start at first
-    # data point returned from ES.
-    if date_range:
-        start, end = date_range
-        if start not in days:
-            days.insert(0, start)
-        if end not in days:
-            days.append(end)
-
-    if group == 'day':
-        max_delta = timedelta(1)
-        group_delta = relativedelta(days=1)
-    elif group == 'week':
-        max_delta = timedelta(7)
-        group_delta = relativedelta(weeks=1)
-    elif group == 'month':
-        max_delta = timedelta(31)
-        group_delta = relativedelta(months=1)
-
-    dummy_dicts = []
-    for day in enumerate(days):
-        # Find missing dates between two dates in the list of days.
+    def get_client(self):
         try:
-            # Pad based on the group (e.g don't insert days in a week view).
-            if days[day[0] + 1] - day[1] > max_delta:
-                dummy_date = day[1] + group_delta
-                dummy_dict = {
-                    'date': datetime.datetime.combine(dummy_date,
-                                                      datetime.time(0, 0)),
-                    'count': 0
+            client = get_monolith_client()
+        except requests.ConnectionError as e:
+            log.info('Monolith connection error: {0}'.format(e))
+            raise ServiceUnavailable
+        return client
+
+    def get_query(self, metric, field, app_id=None):
+        query = {
+            'query': {
+                'match_all': {}
+            },
+            'facets': {
+                metric: {
+                    'statistical': {
+                        'field': field
+                    }
                 }
+            },
+            'size': 0
+        }
 
-                for field in fields:
-                    dummy_dict[field] = 0
+        # If this is per-app, add the facet_filter.
+        if app_id:
+            query['facets'][metric]['facet_filter'] = {
+                'term': {
+                    'app-id': app_id
+                }
+            }
 
-                # Insert dummy day into current iterated list to find more
-                # empty spots.
-                days.insert(day[0] + 1, dummy_date)
-                dummy_dicts.append(dummy_dict)
-        except IndexError:
-            break
-    return dummy_dicts
+        return query
 
+    def process_response(self, resp, data):
+        for metric, facet in resp.get('facets', {}).items():
+            count = facet.get('count', 0)
 
-@json_view
-def fake_app_stats(request, addon, group, start, end, format):
-    from time import strftime
-    from math import sin, floor
-    start, end = check_series_params_or_404(group, start, end, format)
-    faked = []
-    val = 0
-    for single_date in daterange(start, end):
-        isodate = strftime("%Y-%m-%d", single_date.timetuple())
-        faked.append({
-         'date': isodate,
-         'count': floor(200 + 50 * sin(val + 1)),
-         'data': {
-            'installs': floor(200 + 50 * sin(2 * val + 2)),
-            'usage': floor(200 + 50 * sin(3 * val + 3)),
-            #'device': floor(200 + 50 * sin(5 * val + 5)),
-        }})
-        val += .01
-    return faked
+            # We filter out facets with count=0 to avoid returning things
+            # like `'max': u'-Infinity'`.
+            if count > 0:
+                for field in ('max', 'mean', 'min', 'std_deviation',
+                              'sum_of_squares', 'total', 'variance'):
+                    value = facet.get(field)
+                    if value is not None:
+                        data[metric][field] = value
 
 
-@permission_required('Stats', 'View')
-def overall(request, report):
-    view = get_report_view(request)
-    return jingo.render(request, 'sitestats/stats.html', {'report': report,
-                                                          'view': view})
+class GlobalStatsTotal(CORSMixin, APIView, StatsTotalBase):
+    authentication_classes = (RestOAuthAuthentication,
+                              RestSharedSecretAuthentication)
+    cors_allowed_methods = ['get']
+    permission_classes = [AllowAny]
+    slug_field = 'app_slug'
+
+    def get(self, request):
+        client = self.get_client()
+
+        # Note: We have to do this as separate requests so that if one fails
+        # the rest can still be returned.
+        data = {}
+        for metric, stat in STATS_TOTAL.items():
+            data[metric] = {}
+            query = self.get_query(metric, stat['metric'])
+
+            try:
+                resp = client.raw(query)
+            except ValueError as e:
+                log.info('Received value error from monolith client: %s' % e)
+                continue
+
+            self.process_response(resp, data)
+
+        return Response(data)
+
+
+class AppStatsTotal(CORSMixin, SlugOrIdMixin, ListAPIView, StatsTotalBase):
+    authentication_classes = (RestOAuthAuthentication,
+                              RestSharedSecretAuthentication)
+    cors_allowed_methods = ['get']
+    permission_classes = [AnyOf(PublicStats, AllowAppOwner,
+                                GroupPermission('Stats', 'View'))]
+    queryset = Webapp.objects.all()
+    slug_field = 'app_slug'
+
+    def get(self, request, pk):
+        app = self.get_object()
+        client = self.get_client()
+
+        # Note: We have to do this as separate requests so that if one fails
+        # the rest can still be returned.
+        data = {}
+        for metric, stat in APP_STATS_TOTAL.items():
+            data[metric] = {}
+            query = self.get_query(metric, stat['metric'], app.id)
+
+            try:
+                resp = client.raw(query)
+            except ValueError as e:
+                log.info('Received value error from monolith client: %s' % e)
+                continue
+
+            self.process_response(resp, data)
+
+        return Response(data)
+
+
+class TransactionAPI(CORSMixin, APIView):
+    """
+    API to query by transaction ID.
+
+    Note: This is intended for Monolith to be able to associate a Solitude
+    transaction with an app and price tier amount in USD.
+
+    """
+    authentication_classes = (RestOAuthAuthentication,
+                              RestSharedSecretAuthentication)
+    cors_allowed_methods = ['get']
+    permission_classes = [GroupPermission('RevenueStats', 'View')]
+
+    def get(self, request, transaction_id):
+        try:
+            contrib = (Contribution.objects.select_related('price_tier').
+                       get(transaction_id=transaction_id))
+        except Contribution.DoesNotExist:
+            raise http.Http404('No transaction by that ID.')
+
+        data = {
+            'id': transaction_id,
+            'app_id': contrib.addon_id,
+            'amount_USD': unicode(contrib.price_tier.price),
+            'type': mkt.CONTRIB_TYPES[contrib.type],
+        }
+
+        return Response(data)

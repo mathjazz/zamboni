@@ -2,24 +2,25 @@ from urlparse import urljoin
 
 from django import http, shortcuts
 from django.conf import settings
+from django.core.urlresolvers import reverse
+from django.shortcuts import render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import condition
 
 import commonware.log
-import jingo
-import waffle
+from cache_nuggets.lib import Message, Token
+from jingo.helpers import urlparams
+from django.utils.translation import ugettext as _
 
-from access import acl
-from amo.decorators import json_view
-from amo.urlresolvers import reverse
-from amo.utils import HttpResponseSendFile, Message, Token, urlparams
-from files import forms
-from files.decorators import (etag, webapp_file_view, compare_webapp_file_view,
-                              webapp_file_view_token, last_modified)
-from files.tasks import extract_file
-
-from tower import ugettext as _
+from mkt.access import acl
+from mkt.files import forms
+from mkt.files.decorators import (compare_webapp_file_view, etag,
+                                  last_modified, webapp_file_view,
+                                  webapp_file_view_token)
+from mkt.files.tasks import extract_file
+from mkt.site.decorators import json_view
+from mkt.site.utils import get_file_response
 
 
 log = commonware.log.getLogger('z.addons')
@@ -89,9 +90,8 @@ def browse(request, viewer, key=None, type_='file'):
     data['poll_url'] = reverse('mkt.files.poll', args=[viewer.file.id])
     data['form'] = form
 
-    if (not waffle.switch_is_active('delay-file-viewer') and
-        not viewer.is_extracted()):
-        extract_file(viewer)
+    if not viewer.is_extracted():
+        extract_file(viewer.file.id)
 
     if viewer.is_extracted():
         data.update({'status': True, 'files': viewer.get_files()})
@@ -104,14 +104,14 @@ def browse(request, viewer, key=None, type_='file'):
 
         binary = viewer.is_binary()
         if (not viewer.is_directory() and
-            (not binary or binary != 'image')):
+                (not binary or binary != 'image')):
             data['content'] = viewer.read_file()
 
     else:
-        extract_file.delay(viewer)
+        extract_file.delay(viewer.file.id)
 
     tmpl = 'content' if type_ == 'fragment' else 'viewer'
-    return jingo.render(request, 'fileviewer/%s.html' % tmpl, data)
+    return render(request, 'fileviewer/%s.html' % tmpl, data)
 
 
 @never_cache
@@ -144,10 +144,9 @@ def compare(request, diff, key=None, type_='file'):
                                      diff.right.file.id])
     data['form'] = form
 
-    if (not waffle.switch_is_active('delay-file-viewer')
-        and not diff.is_extracted()):
-        extract_file(diff.left)
-        extract_file(diff.right)
+    if not diff.is_extracted():
+        extract_file(diff.left.file.id)
+        extract_file(diff.right.file.id)
 
     if diff.is_extracted():
         data.update({'status': True,
@@ -163,11 +162,11 @@ def compare(request, diff, key=None, type_='file'):
             data['left'], data['right'] = diff.read_file()
 
     else:
-        extract_file.delay(diff.left)
-        extract_file.delay(diff.right)
+        extract_file.delay(diff.left.file.id)
+        extract_file.delay(diff.right.file.id)
 
     tmpl = 'content' if type_ == 'fragment' else 'viewer'
-    return jingo.render(request, 'fileviewer/%s.html' % tmpl, data)
+    return render(request, 'fileviewer/%s.html' % tmpl, data)
 
 
 @webapp_file_view
@@ -192,5 +191,5 @@ def serve(request, viewer, key):
         log.error(u'Couldn\'t find %s in %s (%d entries) for file %s' %
                   (key, files.keys()[:10], len(files.keys()), viewer.file.id))
         raise http.Http404()
-    return HttpResponseSendFile(request, obj['full'],
-                                content_type=obj['mimetype'])
+    return get_file_response(request, obj['full'],
+                             content_type=obj['mimetype'])

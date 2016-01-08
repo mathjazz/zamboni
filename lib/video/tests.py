@@ -9,14 +9,18 @@ import waffle
 
 from django.conf import settings
 
-import amo
-import amo.tests
-from amo.tests.test_helpers import get_image_path
-from devhub.models import UserLog
-from lib.video import get_library
-from lib.video import ffmpeg, totem
+import mkt
+import mkt.site.tests
+from lib.video import dummy, ffmpeg, get_library, totem
 from lib.video.tasks import resize_video
-from users.models import UserProfile
+from mkt.developers.models import UserLog
+from mkt.site.fixtures import fixture
+from mkt.site.storage_utils import (copy_stored_file, local_storage,
+                                    private_storage)
+from mkt.site.tests.test_utils_ import get_image_path
+from mkt.users.models import UserProfile
+from mkt.webapps.models import Preview, Webapp
+
 
 files = {
     'good': os.path.join(os.path.dirname(__file__),
@@ -57,7 +61,7 @@ TOTEM_INFO_HAS_AUDIO=False
 """
 
 
-class TestFFmpegVideo(amo.tests.TestCase):
+class TestFFmpegVideo(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.video = ffmpeg.Video(files['good'])
@@ -87,7 +91,7 @@ class TestFFmpegVideo(amo.tests.TestCase):
         raise SkipTest
         self.video.get_meta()
         try:
-            screenshot = self.video.get_screenshot(amo.ADDON_PREVIEW_SIZES[0])
+            screenshot = self.video.get_screenshot(mkt.ADDON_PREVIEW_SIZES[0])
             assert os.stat(screenshot)[stat.ST_SIZE]
         finally:
             os.remove(screenshot)
@@ -96,13 +100,13 @@ class TestFFmpegVideo(amo.tests.TestCase):
         raise SkipTest
         self.video.get_meta()
         try:
-            video = self.video.get_encoded(amo.ADDON_PREVIEW_SIZES[0])
+            video = self.video.get_encoded(mkt.ADDON_PREVIEW_SIZES[0])
             assert os.stat(video)[stat.ST_SIZE]
         finally:
             os.remove(video)
 
 
-class TestBadFFmpegVideo(amo.tests.TestCase):
+class TestBadFFmpegVideo(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.video = ffmpeg.Video(files['bad'])
@@ -119,14 +123,14 @@ class TestBadFFmpegVideo(amo.tests.TestCase):
 
     def test_screenshot(self):
         self.assertRaises(AssertionError, self.video.get_screenshot,
-                          amo.ADDON_PREVIEW_SIZES[0])
+                          mkt.ADDON_PREVIEW_SIZES[0])
 
     def test_encoded(self):
         self.assertRaises(AssertionError, self.video.get_encoded,
-                          amo.ADDON_PREVIEW_SIZES[0])
+                          mkt.ADDON_PREVIEW_SIZES[0])
 
 
-class TestTotemVideo(amo.tests.TestCase):
+class TestTotemVideo(mkt.site.tests.TestCase):
 
     def setUp(self):
         self.video = totem.Video(files['good'])
@@ -149,26 +153,6 @@ class TestTotemVideo(amo.tests.TestCase):
         self.video.get_meta()
         assert not self.video.is_valid()
 
-    # These tests can be a little bit slow, to say the least so they are
-    # skipped. Un-skip them if you want.
-    def test_screenshot(self):
-        raise SkipTest
-        self.video.get_meta()
-        try:
-            screenshot = self.video.get_screenshot(amo.ADDON_PREVIEW_SIZES[0])
-            assert os.stat(screenshot)[stat.ST_SIZE]
-        finally:
-            os.remove(screenshot)
-
-    def test_encoded(self):
-        raise SkipTest
-        self.video.get_meta()
-        try:
-            video = self.video.get_encoded(amo.ADDON_PREVIEW_SIZES[0])
-            assert os.stat(video)[stat.ST_SIZE]
-        finally:
-            os.remove(video)
-
 
 @patch('lib.video.totem.Video.library_available')
 @patch('lib.video.ffmpeg.Video.library_available')
@@ -184,51 +168,69 @@ def test_choose(ffmpeg_, totem_):
     eq_(get_library(), None)
 
 
-class TestTask(amo.tests.TestCase):
-    # TODO(andym): make these more sparkly and cope with totem and not blow
-    # up all the time.
+class TestTask(mkt.site.tests.TestCase):
+    fixtures = fixture('webapp_337141')
 
     def setUp(self):
-        waffle.models.Switch.objects.create(name='video-encode', active=True)
-        self.mock = Mock()
-        self.mock.thumbnail_path = tempfile.mkstemp()[1]
-        self.mock.image_path = tempfile.mkstemp()[1]
-        self.mock.pk = 1
+        super(TestTask, self).setUp()
+        self.app = Webapp.objects.get(pk=337141)
+        self.preview = Preview.objects.create(
+            addon=self.app, thumbnail_path=tempfile.mkstemp()[1],
+            image_path=tempfile.mkstemp()[1])
+        # Copy files to private storage where `resize_video` expects it.
+        self.tmp_good = tempfile.NamedTemporaryFile(suffix='.webm').name
+        self.tmp_bad = tempfile.NamedTemporaryFile(suffix='.png').name
+        copy_stored_file(files['good'], self.tmp_good,
+                         src_storage=local_storage,
+                         dst_storage=private_storage)
+        copy_stored_file(files['bad'], self.tmp_bad,
+                         src_storage=local_storage,
+                         dst_storage=private_storage)
 
+    def tearDown(self):
+        private_storage.delete(self.tmp_good)
+        private_storage.delete(self.tmp_bad)
+        super(TestTask, self).tearDown()
+
+    @patch('lib.video.tasks.Preview.delete')
     @patch('lib.video.tasks._resize_video')
-    def test_resize_error(self, _resize_video):
+    def test_resize_error(self, _resize_video, _preview_delete):
         user = UserProfile.objects.create(email='a@a.com')
         _resize_video.side_effect = ValueError
         with self.assertRaises(ValueError):
-            resize_video(files['good'], self.mock, user=user)
-        assert self.mock.delete.called
-        assert UserLog.objects.filter(user=user,
-                        activity_log__action=amo.LOG.VIDEO_ERROR.id).exists()
+            resize_video(self.tmp_good, self.preview.pk, user_pk=user.pk,
+                         lib=dummy.Video)
+        assert _preview_delete.called
+        assert UserLog.objects.filter(
+            user=user, activity_log__action=mkt.LOG.VIDEO_ERROR.id).exists()
 
+    @patch('lib.video.tasks.Preview.delete')
     @patch('lib.video.tasks._resize_video')
-    def test_resize_failed(self, _resize_video):
+    def test_resize_failed(self, _resize_video, _preview_delete):
         user = UserProfile.objects.create(email='a@a.com')
         _resize_video.return_value = None
-        resize_video(files['good'], self.mock, user=user)
-        assert self.mock.delete.called
+        resize_video(self.tmp_good, self.preview.pk, user_pk=user.pk,
+                     lib=dummy.Video)
+        assert _preview_delete.called
 
+    @patch('lib.video.tasks.Preview.save')
     @patch('lib.video.ffmpeg.Video.get_encoded')
-    def test_resize_video_no_encode(self, get_encoded):
-        raise SkipTest
+    def test_resize_video_no_encode(self, get_encoded, _preview_save):
         waffle.models.Switch.objects.update(name='video-encode', active=False)
-        resize_video(files['good'], self.mock)
+        resize_video(self.tmp_good, self.preview.pk, lib=dummy.Video)
         assert not get_encoded.called
-        assert isinstance(self.mock.sizes, dict)
-        assert self.mock.save.called
+        assert _preview_save.called
 
-    def test_resize_video(self):
-        raise SkipTest
-        resize_video(files['good'], self.mock)
-        assert isinstance(self.mock.sizes, dict)
-        assert self.mock.save.called
+    @patch('lib.video.tasks.Preview.save')
+    @patch('lib.video.totem.Video.get_encoded')
+    def test_resize_video(self, get_encoded, _preview_save):
+        name = tempfile.mkstemp()[1]
+        get_encoded.return_value = name
+        resize_video(self.tmp_good, self.preview.pk, lib=dummy.Video)
+        assert _preview_save.called
 
-    def test_resize_image(self):
-        raise SkipTest
-        resize_video(files['bad'], self.mock)
-        assert not isinstance(self.mock.sizes, dict)
-        assert not self.mock.save.called
+    @patch('lib.video.tasks.Preview.save')
+    def test_resize_image(self, _preview_save):
+        resize_video(self.tmp_bad, self.preview.pk, lib=dummy.Video)
+        eq_(self.preview.sizes, {})
+        assert not _preview_save.called

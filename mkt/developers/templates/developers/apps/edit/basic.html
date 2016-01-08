@@ -13,15 +13,19 @@
   <div class="item island">
     <table>
       {# L10n: {0} is the addon name #}
-      <caption>{{ _('Basic Information for {0}')|f(addon.name) }}</caption>
+      <caption>{{ _('Basic Information for {0}')|fe(addon.name) }}</caption>
       <tbody>
         <tr>
           <th>
             <label data-for="name">
               {{ _('Name') }}
               {{ tip(None,
-                     _('This field can only be edited by updating it in the '
-                       'manifest.')) }}
+                    _("The app name is one of the fields used to return "
+                      "search results in the Firefox Marketplace. The app "
+                      "name also appears on the app’s detail page. Be sure "
+                      "you’ve included a descriptive name in your app "
+                      "manifest. If you want to change the app name, you’ll "
+                      "need to do that in your app manifest.")) }}
             </label>
           </th>
           <td>
@@ -56,7 +60,7 @@
               </div>
               {{ form.slug.errors }}
             {% else %}
-              {{ settings.SITE_URL }}/&hellip;/{{ addon.app_slug if webapp else addon.slug }}
+              {{ settings.SITE_URL }}/&hellip;/{{ addon.app_slug }}
               <a class="smaller" href="{{ addon.get_url_path() }}">{{ _('View Listing') }}</a>
             {% endif %}
           </td>
@@ -64,30 +68,27 @@
         <tr>
           <th class="label">
             {{ tip(_('API URL'),
-                   _('The URL for accessing this app using the '
-                     'Marketplace API')) }}
+                   _('The URL for accessing this app using the Marketplace API')) }}
           </th>
           <td>
             <span>{{ settings.SITE_URL }}{{ addon.get_api_url() }}</span>
-            <a class="smaller" href="https://firefox-marketplace-api.readthedocs.org">{{ _('View API documentation') }}</a>
+            <a class="smaller" href="https://firefox-marketplace-api.readthedocs.org" target="_blank">{{ _('View API documentation') }}</a>
           </td>
         </tr>
         <tr id="manifest-url">
           <th class="label">{{ _('Manifest URL') }}</th>
           <td>
             {% if addon.is_packaged %}
-                <a href="{{ addon.get_manifest_url() }}" target="_blank">{{ addon.get_manifest_url() }}</a>
+              <a href="{{ addon.get_manifest_url() }}" target="_blank">{{ addon.get_manifest_url() }}</a>
             {% else %}
               {% if editable %}
-                <input type="text" name="manifest_url"{{ ' readonly' if not action_allowed('Admin', '%') }} value="{{ addon.manifest_url }}">
+                <input type="text" name="manifest_url" value="{{ addon.manifest_url }}">
                 {{ form.manifest_url.errors }}
                 <a class="button" data-url="{{ url('mkt.developers.apps.refresh_manifest', valid_slug) }}">{{ _('Refresh') }}</a>
                 <p class="note">
-                  {% trans email='app-reviews@mozilla.org' %}
-                    Manifest URLs cannot be changed after your app has been
-                    submitted. Please email
-                    <a href="mailto:{{ email }}">{{ email }}</a> if there is a
-                    reason you need to modify your manifest URL.
+                  {% trans doc_url='https://developer.mozilla.org/en-US/Marketplace/Publishing/Updating_apps#Updating_hosted_apps' %}
+                    Please try not to change your manifest URL too frequently. If you change your manifest URL, existing users
+                    won't be upgraded to use the new manifest URL. For more information, read the <a href="{{ doc_url }}" target="_blank">documentation on Updating Apps</a>.
                   {% endtrans %}
                 </p>
               {% else %}
@@ -97,14 +98,33 @@
             {% endif %}
           </td>
         </tr>
+        {% if addon.is_packaged %}
+          <tr id="hosted-url">
+            <th class="label">{{ _('Hosted URL') }}</th>
+            <td>
+              {% if editable %}
+                <input type="text" name="hosted_url" value="{{ addon.hosted_url }}">
+                {{ form.hosted_url.errors }}
+                <p class="note">
+                  {{ _('If your app has a URL where it is hosted, you can set it for users that want to try your app before installing it.') }}
+                </p>
+              {% else %}
+                <a href="{{ addon.hosted_url }}" target="_blank">
+                  {{ addon.hosted_url }}</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endif %}
         <tr>
           <th>
             <label data-for="description">
               {{ _('Description') }}
               {{ tip(None,
-                     _("An explanation of features, functionality, and
-                        other relevant information. This field is displayed
-                        on the app's details page.")) }}
+                    _("The app description is one of the fields used to "
+                      "return search results in the Firefox Marketplace. "
+                      "The app description also appears on the app's detail "
+                      "page. Be sure to include a description that accurately "
+                      "represents your app.")) }}
             </label>
             {{ req_if_edit }}
           </th>
@@ -122,18 +142,68 @@
         </tr>
         <tr>
           <th>
+            <label data-form="keywords">
+              {{ _('Search Keywords') }}
+              {{ tip(None,
+                     _("The search keywords are used to return search results in the "
+                       "Firefox Marketplace. Be sure to include a keywords that "
+                       "accurately reflect your app.")) }}
+            </label>
+          </th>
+          <td>
+            {% if editable %}
+              {{ form.tags }}
+              {{ form.tags.errors }}
+              <p class="note">
+                {{ _('Enter as comma-separated words. {0} keywords maximum.'|f(mkt.MAX_TAGS)) }}
+              </p>
+            {% else %}
+              <div id="addon-keywords" class="prose">
+                {% call empty_unless(tags) %}
+                  {{ tags|join(', ') }}
+                {% endcall %}
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% if not addon.is_packaged %}
+          <tr id="releasenotes">
+            <th>
+              <label data-for="releasenotes">
+                {{ _('Release Notes') }}
+                {{ tip(None, _("Information about changes in the latest "
+                               "release, new features, known bugs, and other "
+                               "useful information specific to this "
+                               "release/version.")) }}
+              </label>
+            </th>
+            <td>
+              {% if editable %}
+                {{ version_form.releasenotes.errors }}
+                {{ version_form.releasenotes }}
+                {{ some_html_tip() }}
+              {% else %}
+                <div id="addon-releasenotes" class="prose">
+                  {{ version|all_locales('releasenotes', nl2br=True, prettify_empty=True) }}
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endif %}
+        <tr>
+          <th>
             {{ tip(_('Categories'),
-                   _("Categories are the primary way users browse through apps.
-                      Choose any that fit your app's functionality for the
-                      most exposure.")) }}
+                   _("Categories are the primary way users browse through "
+                     "apps. Choose any that fit your app's functionality for "
+                     "the most exposure.")) }}
             {{ req_if_edit }}
           </th>
           <td id="addon-categories-edit"
-              data-max-categories="{{ cat_form.max_categories() if cat_form else amo.MAX_CATEGORIES }}">
+              data-max-categories="{{ cat_form.max_categories() if cat_form else mkt.MAX_CATEGORIES }}">
             {% if editable %}
-              {{ select_cats(amo.MAX_CATEGORIES, cat_form, webapp) }}
+              {{ select_cats(mkt.MAX_CATEGORIES, cat_form) }}
             {% else %}
-              {% set categories = addon.categories.all() %}
+              {% set categories = addon.categories|categories_names %}
               {% call empty_unless(categories) %}
                 {{ categories|join(', ') }}
               {% endcall %}
