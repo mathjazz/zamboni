@@ -3186,16 +3186,12 @@ msgid "Apps can have any number of team members with 4 possible roles:"
 msgstr "应用可以有4种角色的任意数量团队成员："
 
 #: mkt/developers/templates/developers/apps/owner.html:89
-msgid ""
-"Can manage all aspects of the app's listing, including\n"
-"            adding and removing other team members"
-msgstr "可以管理此应用上架的任何方面，除了添加和移除其他团队成员"
+msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:91
-msgid ""
-"Can manage all aspects of the app's listing, except\n"
-"            for adding and removing other team members and managing payments"
-msgstr "可以管理此应用上架的任何方面，除了添加和移除其他团队成员，以及管理支付"
+msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3490,22 +3486,16 @@ msgstr "版本说明"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
-"Information about changes in this release, new features,\n"
-"                              known bugs, and other useful information specific to this\n"
-"                              release/version. This information is also shown in the\n"
-"                              Apps Manager when updating."
-msgstr "有关此次发布的变更、新功能、已知问题，及其他特定于此次发布的实用信息。此信息也在更新时显示在应用管理器中。"
+"Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
 msgstr "给审核员的备注"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
-msgid ""
-"Optionally, enter any information that may be useful\n"
-"                              to the Reviewer reviewing this app, such as test\n"
-"                              account information."
-msgstr "可选，输入任何可能有助于审核员审核此应用的信息，例如测试账号的登录信息。"
+msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3524,10 +3514,8 @@ msgid "Mozilla Contact"
 msgstr "联系 Mozilla"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
-msgid ""
-"An e-mail address (or addresses separated by commas) of this\n"
-"                   app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr "Mozilla 就此应用的任何审核邮件将抄送一个电子邮件地址（或者逗号分隔的多个地址）。"
+msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3566,15 +3554,11 @@ msgstr "基本信息"
 msgid "Basic Information for {0}"
 msgstr "{0} 的基本信息"
 
-#: mkt/developers/templates/developers/apps/edit/basic.html:23
+#: mkt/developers/templates/developers/apps/edit/basic.html:23 mkt/submit/templates/submit/details.html:60
 msgid ""
-"The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-"                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-"                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-"                       your app manifest."
+"The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
+"app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
-"应用名称是 Firefox 应用市场返回搜索结果中的其中一项。应用名称也出现在应用的详细信息页面上。请确保您已经在应用的清单文件（manifest）中包含了一个描述性的名称。如果您想更改应用名称，您也必须在应用的清"
-"单文件中更改它。"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3653,11 +3637,8 @@ msgid "Release Notes"
 msgstr "发行说明"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
-msgid ""
-"Information about changes in the latest release, new features,\n"
-"                                known bugs, and other useful information specific to this\n"
-"                                release/version."
-msgstr "有关最新版本的变更、新功能、已知问题，及其他特定于此次发布的实用信息。"
+msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
@@ -3681,12 +3662,8 @@ msgid "Homepage"
 msgstr "主页"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
-msgid ""
-"If your app has another homepage, enter its\n"
-"                        address here. If your website is localized into other\n"
-"                        languages multiple translations of this field can be\n"
-"                        added."
-msgstr "如果您的应用还有一个首页，在这里输入那个地址。如果您的网站已本地化到多种语言，可以在此栏中添加多个语言版本。"
+msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3736,24 +3713,16 @@ msgid "Support Information for {0}"
 msgstr "{0} 的用户支持信息"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
-msgid ""
-"The email address used by end users to contact you\n"
-"                        with support issues. If you have different addresses\n"
-"                        for each language multiple translations of this field\n"
-"                        can be added."
-msgstr "电子邮件地址用于最终用户就支持问题联系您。如果您对各个语言有不同的邮件地址，可以在此栏中添加多个语言版本。"
+msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
 msgstr "网站"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
-msgid ""
-"If your app has a support website or forum, enter\n"
-"                        its address here. If your website is localized into\n"
-"                        other languages, multiple translations of this\n"
-"                        field can be added."
-msgstr "如果您的应用有一个支持网站或论坛，在这里输入地址。如果您的网站已本地化到多种语言，可以在此栏中添加多个语言版本。"
+msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3777,10 +3746,8 @@ msgid "Public Stats?"
 msgstr "公开统计数据？"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
-msgid ""
-"Whether the install and usage stats of your app can\n"
-"                      be displayed in our online viewer."
-msgstr "您的应用的安装和使用率统计是否要在我们的在线查看器中显示。"
+msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4099,10 +4066,8 @@ msgid "Submission ID"
 msgstr "提交 ID"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
-msgid ""
-"The submission ID can be found on the certificate sent to you.\n"
-"                              It is a numeric value like &quot;14&quot;."
-msgstr "提交 ID 可以在发送给您的证书上找到。它是一个像是 &quot;14&quot; 的数字值。"
+msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -7010,10 +6975,8 @@ msgid "Search Unavailable"
 msgstr "搜索不可用"
 
 #: mkt/search/templates/search/down.html:10
-msgid ""
-"Search is temporarily unavailable. Please try again in a few\n"
-"             minutes."
-msgstr "搜索暂时不可用。请几分钟后再试。"
+msgid "Search is temporarily unavailable. Please try again in a few minutes."
+msgstr ""
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7396,8 +7359,8 @@ msgid "Reviewer escalation"
 msgstr "审核者向上呈报"
 
 #: mkt/site/log.py:488
-msgid "Video removed from {addon} because of a problem with the video. "
-msgstr "{addon} 的视频已移除，因为视频存在一个问题。"
+msgid "Video removed from {addon} because of a problem with the video."
+msgstr ""
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7586,10 +7549,8 @@ msgid "You tried to do something that you weren't allowed to."
 msgstr "您尝试去做一些不被我们允许的事。"
 
 #: mkt/site/templates/site/403.html:11
-msgid ""
-"Try going back to the previous page, refreshing and trying\n"
-"              again."
-msgstr "尝试返回上一个页面，然后刷新并重试。"
+msgid "Try going back to the previous page, refreshing and trying again."
+msgstr ""
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7600,17 +7561,12 @@ msgid "We're sorry, but we can't find what you're looking for."
 msgstr "我们很抱歉，我们没有找到您所找的东西。"
 
 #: mkt/site/templates/site/404.html:11
-msgid ""
-"The page or file you requested wasn't found on our site. It's\n"
-"             possible that you clicked a link that's out of date, or typed in\n"
-"             the address incorrectly."
-msgstr "您请求的页面或文件无法在网站上找到。可能您点击的链接已经过时，或者输入的地址不正确。"
+msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
+msgstr ""
 
 #: mkt/site/templates/site/404.html:16
-msgid ""
-"If you typed in the address, please double check the\n"
-"                 spelling."
-msgstr "如果您手动输入了该地址，请重新检查拼写。"
+msgid "If you typed in the address, please double check the spelling."
+msgstr ""
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7701,12 +7657,10 @@ msgstr "隐私政策："
 
 #: mkt/submit/forms.py:297
 msgid ""
-"A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
+"A privacy policy explains how you handle data received through your app. For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
-"隐私政策介绍了您如何处理您的应用收到的数据。例如：您收到什么数据？您如何使用它？您与谁共享它？您会收到个人信息？您会采取措施使数据匿名化？用户是否有选项控制您与其他人收到哪些数据？请在上方输入您的隐"
-"私政策的链接或者正文。如果您没有一个隐私政策，<a href=\"{url}\" target=\"_blank\">了解如何写一个</a>。"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8230,6 +8184,112 @@ msgstr "必填字段"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "（可选）"
+
+#~ msgid ""
+#~ "Can manage all aspects of the app's listing, including\n"
+#~ "            adding and removing other team members"
+#~ msgstr "可以管理此应用上架的任何方面，除了添加和移除其他团队成员"
+
+#~ msgid ""
+#~ "Can manage all aspects of the app's listing, except\n"
+#~ "            for adding and removing other team members and managing payments"
+#~ msgstr "可以管理此应用上架的任何方面，除了添加和移除其他团队成员，以及管理支付"
+
+#~ msgid ""
+#~ "Information about changes in this release, new features,\n"
+#~ "                              known bugs, and other useful information specific to this\n"
+#~ "                              release/version. This information is also shown in the\n"
+#~ "                              Apps Manager when updating."
+#~ msgstr "有关此次发布的变更、新功能、已知问题，及其他特定于此次发布的实用信息。此信息也在更新时显示在应用管理器中。"
+
+#~ msgid ""
+#~ "Optionally, enter any information that may be useful\n"
+#~ "                              to the Reviewer reviewing this app, such as test\n"
+#~ "                              account information."
+#~ msgstr "可选，输入任何可能有助于审核员审核此应用的信息，例如测试账号的登录信息。"
+
+#~ msgid ""
+#~ "An e-mail address (or addresses separated by commas) of this\n"
+#~ "                   app's Mozilla contact that will be CC'd on any reviewer emails."
+#~ msgstr "Mozilla 就此应用的任何审核邮件将抄送一个电子邮件地址（或者逗号分隔的多个地址）。"
+
+#~ msgid ""
+#~ "The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
+#~ "                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
+#~ "                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
+#~ "                       your app manifest."
+#~ msgstr ""
+#~ "应用名称是 Firefox 应用市场返回搜索结果中的其中一项。应用名称也出现在应用的详细信息页面上。请确保您已经在应用的清单文件（manifest）中包含了一个描述性的名称。如果您想更改应用名称，您也必须在应用的"
+#~ "清单文件中更改它。"
+
+#~ msgid ""
+#~ "Information about changes in the latest release, new features,\n"
+#~ "                                known bugs, and other useful information specific to this\n"
+#~ "                                release/version."
+#~ msgstr "有关最新版本的变更、新功能、已知问题，及其他特定于此次发布的实用信息。"
+
+#~ msgid ""
+#~ "If your app has another homepage, enter its\n"
+#~ "                        address here. If your website is localized into other\n"
+#~ "                        languages multiple translations of this field can be\n"
+#~ "                        added."
+#~ msgstr "如果您的应用还有一个首页，在这里输入那个地址。如果您的网站已本地化到多种语言，可以在此栏中添加多个语言版本。"
+
+#~ msgid ""
+#~ "The email address used by end users to contact you\n"
+#~ "                        with support issues. If you have different addresses\n"
+#~ "                        for each language multiple translations of this field\n"
+#~ "                        can be added."
+#~ msgstr "电子邮件地址用于最终用户就支持问题联系您。如果您对各个语言有不同的邮件地址，可以在此栏中添加多个语言版本。"
+
+#~ msgid ""
+#~ "If your app has a support website or forum, enter\n"
+#~ "                        its address here. If your website is localized into\n"
+#~ "                        other languages, multiple translations of this\n"
+#~ "                        field can be added."
+#~ msgstr "如果您的应用有一个支持网站或论坛，在这里输入地址。如果您的网站已本地化到多种语言，可以在此栏中添加多个语言版本。"
+
+#~ msgid ""
+#~ "Whether the install and usage stats of your app can\n"
+#~ "                      be displayed in our online viewer."
+#~ msgstr "您的应用的安装和使用率统计是否要在我们的在线查看器中显示。"
+
+#~ msgid ""
+#~ "The submission ID can be found on the certificate sent to you.\n"
+#~ "                              It is a numeric value like &quot;14&quot;."
+#~ msgstr "提交 ID 可以在发送给您的证书上找到。它是一个像是 &quot;14&quot; 的数字值。"
+
+#~ msgid ""
+#~ "Search is temporarily unavailable. Please try again in a few\n"
+#~ "             minutes."
+#~ msgstr "搜索暂时不可用。请几分钟后再试。"
+
+#~ msgid "Video removed from {addon} because of a problem with the video. "
+#~ msgstr "{addon} 的视频已移除，因为视频存在一个问题。"
+
+#~ msgid ""
+#~ "Try going back to the previous page, refreshing and trying\n"
+#~ "              again."
+#~ msgstr "尝试返回上一个页面，然后刷新并重试。"
+
+#~ msgid ""
+#~ "The page or file you requested wasn't found on our site. It's\n"
+#~ "             possible that you clicked a link that's out of date, or typed in\n"
+#~ "             the address incorrectly."
+#~ msgstr "您请求的页面或文件无法在网站上找到。可能您点击的链接已经过时，或者输入的地址不正确。"
+
+#~ msgid ""
+#~ "If you typed in the address, please double check the\n"
+#~ "                 spelling."
+#~ msgstr "如果您手动输入了该地址，请重新检查拼写。"
+
+#~ msgid ""
+#~ "A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? "
+#~ "Do you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, "
+#~ "<a href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
+#~ msgstr ""
+#~ "隐私政策介绍了您如何处理您的应用收到的数据。例如：您收到什么数据？您如何使用它？您与谁共享它？您会收到个人信息？您会采取措施使数据匿名化？用户是否有选项控制您与其他人收到哪些数据？请在上方输入您"
+#~ "的隐私政策的链接或者正文。如果您没有一个隐私政策，<a href=\"{url}\" target=\"_blank\">了解如何写一个</a>。"
 
 #~ msgid "Password was incorrect.  App was not deleted."
 #~ msgstr "密码不正确。应用未被删除。"

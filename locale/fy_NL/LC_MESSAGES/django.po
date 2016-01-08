@@ -3196,15 +3196,11 @@ msgid "Apps can have any number of team members with 4 possible roles:"
 msgstr "Apps kunnen elk gewenst aantal teamlieden hebben met vier mogelijke rollen:"
 
 #: mkt/developers/templates/developers/apps/owner.html:89
-msgid ""
-"Can manage all aspects of the app's listing, including\n"
-"            adding and removing other team members"
+msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:91
-msgid ""
-"Can manage all aspects of the app's listing, except\n"
-"            for adding and removing other team members and managing payments"
+msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:93
@@ -3502,29 +3498,16 @@ msgstr "Versieopmerkingen"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
-"Information about changes in this release, new features,\n"
-"                              known bugs, and other useful information specific to this\n"
-"                              release/version. This information is also shown in the\n"
-"                              Apps Manager when updating."
+"Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
-"Ynformaasje oer wizigingen yn dizze ferzje, nije funksjes,\n"
-"                              bekende bugs en oare nuttige ynformaasje dy't spesifyk is\n"
-"                              foar dizze ferzje. Dizze ynformaasje is ek sichtber yn de\n"
-"                              App-behearder wylst it bywurkjen."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
 msgstr "Opmerkingen voor beoordelaars"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
-msgid ""
-"Optionally, enter any information that may be useful\n"
-"                              to the Reviewer reviewing this app, such as test\n"
-"                              account information."
+msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
 msgstr ""
-"Opsjoneel kinne jo alderlei gegevens ynfiere dy't foar de\n"
-"                              beoardieler fan dizze app fan nut wêze kinne,\n"
-"                              lykas gegevens oer de testaccount."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3543,9 +3526,7 @@ msgid "Mozilla Contact"
 msgstr "Mozilla-contact"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
-msgid ""
-"An e-mail address (or addresses separated by commas) of this\n"
-"                   app's Mozilla contact that will be CC'd on any reviewer emails."
+msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
@@ -3585,12 +3566,10 @@ msgstr "Basisgegevens"
 msgid "Basic Information for {0}"
 msgstr "Basisgegevens voor {0}"
 
-#: mkt/developers/templates/developers/apps/edit/basic.html:23
+#: mkt/developers/templates/developers/apps/edit/basic.html:23 mkt/submit/templates/submit/details.html:60
 msgid ""
-"The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-"                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-"                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-"                       your app manifest."
+"The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
+"app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
@@ -3674,10 +3653,7 @@ msgid "Release Notes"
 msgstr "Uitgaveopmerkingen"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
-msgid ""
-"Information about changes in the latest release, new features,\n"
-"                                known bugs, and other useful information specific to this\n"
-"                                release/version."
+msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
@@ -3702,11 +3678,7 @@ msgid "Homepage"
 msgstr "Startpagina"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
-msgid ""
-"If your app has another homepage, enter its\n"
-"                        address here. If your website is localized into other\n"
-"                        languages multiple translations of this field can be\n"
-"                        added."
+msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
@@ -3757,11 +3729,7 @@ msgid "Support Information for {0}"
 msgstr "Ondersteuningsinformatie voor {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
-msgid ""
-"The email address used by end users to contact you\n"
-"                        with support issues. If you have different addresses\n"
-"                        for each language multiple translations of this field\n"
-"                        can be added."
+msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
@@ -3769,11 +3737,7 @@ msgid "Website"
 msgstr "Website"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
-msgid ""
-"If your app has a support website or forum, enter\n"
-"                        its address here. If your website is localized into\n"
-"                        other languages, multiple translations of this\n"
-"                        field can be added."
+msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
@@ -3798,9 +3762,7 @@ msgid "Public Stats?"
 msgstr "Publieke statistieken?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
-msgid ""
-"Whether the install and usage stats of your app can\n"
-"                      be displayed in our online viewer."
+msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
@@ -4122,9 +4084,7 @@ msgid "Submission ID"
 msgstr "Indieningskenmerk"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
-msgid ""
-"The submission ID can be found on the certificate sent to you.\n"
-"                              It is a numeric value like &quot;14&quot;."
+msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
@@ -7057,12 +7017,8 @@ msgid "Search Unavailable"
 msgstr "Zoeken niet beschikbaar"
 
 #: mkt/search/templates/search/down.html:10
-msgid ""
-"Search is temporarily unavailable. Please try again in a few\n"
-"             minutes."
+msgid "Search is temporarily unavailable. Please try again in a few minutes."
 msgstr ""
-"Sykjen is tydlik net beskikber. Probearje it oer inkele minuten\n"
-"             opnij."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7447,8 +7403,8 @@ msgid "Reviewer escalation"
 msgstr "Escalatie door beoordelaar"
 
 #: mkt/site/log.py:488
-msgid "Video removed from {addon} because of a problem with the video. "
-msgstr "Fideo is fan {addon} fuortsmite fanwege in probleem mei de fideo. "
+msgid "Video removed from {addon} because of a problem with the video."
+msgstr ""
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7637,12 +7593,8 @@ msgid "You tried to do something that you weren't allowed to."
 msgstr "U hebt geprobeerd iets te doen wat niet is toegestaan."
 
 #: mkt/site/templates/site/403.html:11
-msgid ""
-"Try going back to the previous page, refreshing and trying\n"
-"              again."
+msgid "Try going back to the previous page, refreshing and trying again."
 msgstr ""
-"Probearje werom te gean nei de foarige side, te fernijen en it opnij\n"
-"              te probearjen."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7653,22 +7605,12 @@ msgid "We're sorry, but we can't find what you're looking for."
 msgstr "Sorry, maar we kunnen de gevraagde pagina niet vinden."
 
 #: mkt/site/templates/site/404.html:11
-msgid ""
-"The page or file you requested wasn't found on our site. It's\n"
-"             possible that you clicked a link that's out of date, or typed in\n"
-"             the address incorrectly."
+msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
 msgstr ""
-"De opfrege side of it bestân is net op ús website fûn.\n"
-"             Mooglik hawwe jo op in ferâldere keppeling klikt, of it adres\n"
-"             net krekt yntypt."
 
 #: mkt/site/templates/site/404.html:16
-msgid ""
-"If you typed in the address, please double check the\n"
-"                 spelling."
+msgid "If you typed in the address, please double check the spelling."
 msgstr ""
-"As jo it adres yntypt hawwe, kontrolearje dan nochris de\n"
-"                 stavering."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7759,7 +7701,7 @@ msgstr "Privacybeleid:"
 
 #: mkt/submit/forms.py:297
 msgid ""
-"A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
+"A privacy policy explains how you handle data received through your app. For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
@@ -8300,6 +8242,59 @@ msgstr "Ferplichte fjilden"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "(opsjoneel)"
+
+#~ msgid ""
+#~ "Information about changes in this release, new features,\n"
+#~ "                              known bugs, and other useful information specific to this\n"
+#~ "                              release/version. This information is also shown in the\n"
+#~ "                              Apps Manager when updating."
+#~ msgstr ""
+#~ "Ynformaasje oer wizigingen yn dizze ferzje, nije funksjes,\n"
+#~ "                              bekende bugs en oare nuttige ynformaasje dy't spesifyk is\n"
+#~ "                              foar dizze ferzje. Dizze ynformaasje is ek sichtber yn de\n"
+#~ "                              App-behearder wylst it bywurkjen."
+
+#~ msgid ""
+#~ "Optionally, enter any information that may be useful\n"
+#~ "                              to the Reviewer reviewing this app, such as test\n"
+#~ "                              account information."
+#~ msgstr ""
+#~ "Opsjoneel kinne jo alderlei gegevens ynfiere dy't foar de\n"
+#~ "                              beoardieler fan dizze app fan nut wêze kinne,\n"
+#~ "                              lykas gegevens oer de testaccount."
+
+#~ msgid ""
+#~ "Search is temporarily unavailable. Please try again in a few\n"
+#~ "             minutes."
+#~ msgstr ""
+#~ "Sykjen is tydlik net beskikber. Probearje it oer inkele minuten\n"
+#~ "             opnij."
+
+#~ msgid "Video removed from {addon} because of a problem with the video. "
+#~ msgstr "Fideo is fan {addon} fuortsmite fanwege in probleem mei de fideo. "
+
+#~ msgid ""
+#~ "Try going back to the previous page, refreshing and trying\n"
+#~ "              again."
+#~ msgstr ""
+#~ "Probearje werom te gean nei de foarige side, te fernijen en it opnij\n"
+#~ "              te probearjen."
+
+#~ msgid ""
+#~ "The page or file you requested wasn't found on our site. It's\n"
+#~ "             possible that you clicked a link that's out of date, or typed in\n"
+#~ "             the address incorrectly."
+#~ msgstr ""
+#~ "De opfrege side of it bestân is net op ús website fûn.\n"
+#~ "             Mooglik hawwe jo op in ferâldere keppeling klikt, of it adres\n"
+#~ "             net krekt yntypt."
+
+#~ msgid ""
+#~ "If you typed in the address, please double check the\n"
+#~ "                 spelling."
+#~ msgstr ""
+#~ "As jo it adres yntypt hawwe, kontrolearje dan nochris de\n"
+#~ "                 stavering."
 
 #~ msgid "Password was incorrect.  App was not deleted."
 #~ msgstr "Wachtwurd wie net krekt.  App is net fuortsmiten."

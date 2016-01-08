@@ -3198,15 +3198,11 @@ msgid "Apps can have any number of team members with 4 possible roles:"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:89
-msgid ""
-"Can manage all aspects of the app's listing, including\n"
-"            adding and removing other team members"
+msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:91
-msgid ""
-"Can manage all aspects of the app's listing, except\n"
-"            for adding and removing other team members and managing payments"
+msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:93
@@ -3498,10 +3494,7 @@ msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
-"Information about changes in this release, new features,\n"
-"                              known bugs, and other useful information specific to this\n"
-"                              release/version. This information is also shown in the\n"
-"                              Apps Manager when updating."
+"Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
@@ -3509,10 +3502,7 @@ msgid "Notes for Reviewers"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
-msgid ""
-"Optionally, enter any information that may be useful\n"
-"                              to the Reviewer reviewing this app, such as test\n"
-"                              account information."
+msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
@@ -3532,9 +3522,7 @@ msgid "Mozilla Contact"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
-msgid ""
-"An e-mail address (or addresses separated by commas) of this\n"
-"                   app's Mozilla contact that will be CC'd on any reviewer emails."
+msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
@@ -3574,12 +3562,10 @@ msgstr "Osnovne informacije"
 msgid "Basic Information for {0}"
 msgstr ""
 
-#: mkt/developers/templates/developers/apps/edit/basic.html:23
+#: mkt/developers/templates/developers/apps/edit/basic.html:23 mkt/submit/templates/submit/details.html:60
 msgid ""
-"The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-"                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-"                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-"                       your app manifest."
+"The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
+"app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
@@ -3659,10 +3645,7 @@ msgid "Release Notes"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
-msgid ""
-"Information about changes in the latest release, new features,\n"
-"                                known bugs, and other useful information specific to this\n"
-"                                release/version."
+msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
@@ -3687,11 +3670,7 @@ msgid "Homepage"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
-msgid ""
-"If your app has another homepage, enter its\n"
-"                        address here. If your website is localized into other\n"
-"                        languages multiple translations of this field can be\n"
-"                        added."
+msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
@@ -3742,11 +3721,7 @@ msgid "Support Information for {0}"
 msgstr "Informacije podrške za {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
-msgid ""
-"The email address used by end users to contact you\n"
-"                        with support issues. If you have different addresses\n"
-"                        for each language multiple translations of this field\n"
-"                        can be added."
+msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
@@ -3754,11 +3729,7 @@ msgid "Website"
 msgstr "Web stranica"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
-msgid ""
-"If your app has a support website or forum, enter\n"
-"                        its address here. If your website is localized into\n"
-"                        other languages, multiple translations of this\n"
-"                        field can be added."
+msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
@@ -3783,9 +3754,7 @@ msgid "Public Stats?"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
-msgid ""
-"Whether the install and usage stats of your app can\n"
-"                      be displayed in our online viewer."
+msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
@@ -4103,9 +4072,7 @@ msgid "Submission ID"
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
-msgid ""
-"The submission ID can be found on the certificate sent to you.\n"
-"                              It is a numeric value like &quot;14&quot;."
+msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
@@ -7033,9 +7000,7 @@ msgid "Search Unavailable"
 msgstr "Pretraživanje nije dostupno"
 
 #: mkt/search/templates/search/down.html:10
-msgid ""
-"Search is temporarily unavailable. Please try again in a few\n"
-"             minutes."
+msgid "Search is temporarily unavailable. Please try again in a few minutes."
 msgstr ""
 
 #: mkt/site/context_processors.py:57
@@ -7420,7 +7385,7 @@ msgid "Reviewer escalation"
 msgstr ""
 
 #: mkt/site/log.py:488
-msgid "Video removed from {addon} because of a problem with the video. "
+msgid "Video removed from {addon} because of a problem with the video."
 msgstr ""
 
 #: mkt/site/log.py:490
@@ -7610,9 +7575,7 @@ msgid "You tried to do something that you weren't allowed to."
 msgstr ""
 
 #: mkt/site/templates/site/403.html:11
-msgid ""
-"Try going back to the previous page, refreshing and trying\n"
-"              again."
+msgid "Try going back to the previous page, refreshing and trying again."
 msgstr ""
 
 #: mkt/site/templates/site/404.html:4
@@ -7624,16 +7587,11 @@ msgid "We're sorry, but we can't find what you're looking for."
 msgstr ""
 
 #: mkt/site/templates/site/404.html:11
-msgid ""
-"The page or file you requested wasn't found on our site. It's\n"
-"             possible that you clicked a link that's out of date, or typed in\n"
-"             the address incorrectly."
+msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
 msgstr ""
 
 #: mkt/site/templates/site/404.html:16
-msgid ""
-"If you typed in the address, please double check the\n"
-"                 spelling."
+msgid "If you typed in the address, please double check the spelling."
 msgstr ""
 
 #: mkt/site/templates/site/404.html:19
@@ -7726,7 +7684,7 @@ msgstr "Politika privatnosti:"
 
 #: mkt/submit/forms.py:297
 msgid ""
-"A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
+"A privacy policy explains how you handle data received through your app. For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
