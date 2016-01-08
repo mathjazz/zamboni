@@ -3191,16 +3191,12 @@ msgid "Apps can have any number of team members with 4 possible roles:"
 msgstr "アプリには以下の 4 つの役割のいずれかを持ったチームメンバーを何人でも追加できます。"
 
 #: mkt/developers/templates/developers/apps/owner.html:89
-msgid ""
-"Can manage all aspects of the app's listing, including\n"
-"            adding and removing other team members"
-msgstr "他のチームメンバーの追加と削除を含め、アプリ掲載内容の全項目を管理できます"
+msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:91
-msgid ""
-"Can manage all aspects of the app's listing, except\n"
-"            for adding and removing other team members and managing payments"
-msgstr "他のチームメンバーの追加と削除、決済方法の管理を除く、アプリ掲載内容の全項目を管理できます"
+msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3497,22 +3493,16 @@ msgstr "バージョンノート"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
-"Information about changes in this release, new features,\n"
-"                              known bugs, and other useful information specific to this\n"
-"                              release/version. This information is also shown in the\n"
-"                              Apps Manager when updating."
-msgstr "このバージョンでの変更点、新機能、既知のバグ、その他このバージョン固有の有益な情報。この情報は更新時にアプリケーションマネージャにも表示されます。"
+"Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
 msgstr "審査担当者へのメモ"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
-msgid ""
-"Optionally, enter any information that may be useful\n"
-"                              to the Reviewer reviewing this app, such as test\n"
-"                              account information."
-msgstr "テスト用アカウント情報など、このアプリを検証する審査担当者の役に立つ情報が何かあれば入力してください。"
+msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3531,10 +3521,8 @@ msgid "Mozilla Contact"
 msgstr "Mozilla の問い合わせ先"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
-msgid ""
-"An e-mail address (or addresses separated by commas) of this\n"
-"                   app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr "審査担当者からのメールに Cc として指定される、このアプリの Mozilla からの連絡用メールアドレス (複数ある場合はカンマ区切りにしてください)。"
+msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3573,15 +3561,11 @@ msgstr "基本情報"
 msgid "Basic Information for {0}"
 msgstr "{0} の基本情報"
 
-#: mkt/developers/templates/developers/apps/edit/basic.html:23
+#: mkt/developers/templates/developers/apps/edit/basic.html:23 mkt/submit/templates/submit/details.html:60
 msgid ""
-"The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-"                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-"                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-"                       your app manifest."
+"The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
+"app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
-"アプリ名は、Firefox Marketplace 内の検索結果を返す際に使われる項目のひとつです。アプリ名はアプリの詳細ページにも表示されます。アプリマニフェストにも記述的な名前を記載するのを忘れないようにしてくださ"
-"い。アプリ名を変更したい場合は、アプリマニフェスト内の名前も併せて変更する必要があります。"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3663,11 +3647,8 @@ msgid "Release Notes"
 msgstr "リリースノート"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
-msgid ""
-"Information about changes in the latest release, new features,\n"
-"                                known bugs, and other useful information specific to this\n"
-"                                release/version."
-msgstr "最新版での変更点、新機能、既知のバグ、その他このバージョン固有の有益な情報。"
+msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
@@ -3691,12 +3672,8 @@ msgid "Homepage"
 msgstr "ホームページ"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
-msgid ""
-"If your app has another homepage, enter its\n"
-"                        address here. If your website is localized into other\n"
-"                        languages multiple translations of this field can be\n"
-"                        added."
-msgstr "このアプリのホームページが他にある場合は、そのアドレスを入力してください。そのサイトが他の言語にローカライズされている場合は、この項目の翻訳を複数追加できます。"
+msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3746,24 +3723,16 @@ msgid "Support Information for {0}"
 msgstr "{0} のサポート情報"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
-msgid ""
-"The email address used by end users to contact you\n"
-"                        with support issues. If you have different addresses\n"
-"                        for each language multiple translations of this field\n"
-"                        can be added."
-msgstr "エンドユーザがサポートに関する問題で連絡を取る際に使われるメールアドレス。言語ごとに異なるアドレスがある場合は、この項目の翻訳を複数追加できます。"
+msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
 msgstr "Web サイト"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
-msgid ""
-"If your app has a support website or forum, enter\n"
-"                        its address here. If your website is localized into\n"
-"                        other languages, multiple translations of this\n"
-"                        field can be added."
-msgstr "このアプリのサポート用 Web サイトやフォーラムがある場合は、そのアドレスを入力してください。そのサイトが他の言語にローカライズされている場合は、この項目の翻訳を複数追加できます。"
+msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3787,10 +3756,8 @@ msgid "Public Stats?"
 msgstr "公開統計情報"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
-msgid ""
-"Whether the install and usage stats of your app can\n"
-"                      be displayed in our online viewer."
-msgstr "アプリのインストール回数や使用状況の統計情報をオンラインビューアで表示するかどうか。"
+msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4109,10 +4076,8 @@ msgid "Submission ID"
 msgstr "登録 ID"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
-msgid ""
-"The submission ID can be found on the certificate sent to you.\n"
-"                              It is a numeric value like &quot;14&quot;."
-msgstr "Submission ID はあなたに送られた証明書に記載されています。「14」のような番号です。"
+msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
+msgstr ""
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -7031,10 +6996,8 @@ msgid "Search Unavailable"
 msgstr "検索使用不可"
 
 #: mkt/search/templates/search/down.html:10
-msgid ""
-"Search is temporarily unavailable. Please try again in a few\n"
-"             minutes."
-msgstr "検索は一時的に使用できなくなっています。数分後にまたお試しください。"
+msgid "Search is temporarily unavailable. Please try again in a few minutes."
+msgstr ""
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7417,8 +7380,8 @@ msgid "Reviewer escalation"
 msgstr "審査担当者による上級審査依頼"
 
 #: mkt/site/log.py:488
-msgid "Video removed from {addon} because of a problem with the video. "
-msgstr "動画に問題があったため、{addon} の動画は削除されました。"
+msgid "Video removed from {addon} because of a problem with the video."
+msgstr ""
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7607,10 +7570,8 @@ msgid "You tried to do something that you weren't allowed to."
 msgstr "あなたは何か許可されていない操作を実行しようとしました。"
 
 #: mkt/site/templates/site/403.html:11
-msgid ""
-"Try going back to the previous page, refreshing and trying\n"
-"              again."
-msgstr "前のページに戻って再読み込みし、再度お試しください。"
+msgid "Try going back to the previous page, refreshing and trying again."
+msgstr ""
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7621,17 +7582,12 @@ msgid "We're sorry, but we can't find what you're looking for."
 msgstr "申し訳ありませんが、お探しのページは見つかりませんでした。"
 
 #: mkt/site/templates/site/404.html:11
-msgid ""
-"The page or file you requested wasn't found on our site. It's\n"
-"             possible that you clicked a link that's out of date, or typed in\n"
-"             the address incorrectly."
-msgstr "リクエストされたページもしくはファイルは当サイト上で見つかりませんでした。既に削除されたページへのリンクを辿ってきたか、アドレスを間違って入力された可能性があります。"
+msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
+msgstr ""
 
 #: mkt/site/templates/site/404.html:16
-msgid ""
-"If you typed in the address, please double check the\n"
-"                 spelling."
-msgstr "アドレスを直接入力された場合は、スペルを改めて確認してください。"
+msgid "If you typed in the address, please double check the spelling."
+msgstr ""
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7722,13 +7678,10 @@ msgstr "プライバシーポリシー:"
 
 #: mkt/submit/forms.py:297
 msgid ""
-"A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
+"A privacy policy explains how you handle data received through your app. For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
-"プライバシーポリシーでは、このアプリを通じて受け取ったデータをあなたがどう扱うかを説明します。例えば、どのようなデータを受け取るのか、それをどのように利用するのか、それを誰と共有するのか、個人情報を"
-"受け取るのか、それを匿名化する手段を講じているのか、あなたや第三者が受け取るデータの種類をユーザ自身が選択する方法はあるのか、といったことです。プライバシーポリシーへのリンクもしくは直接その内容を入"
-"力してください。プライバシーポリシーがない場合は、<a href=\"{url}\" target=\"_blank\">その書き方を学んでください</a>。"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8260,6 +8213,113 @@ msgstr "入力必須項目"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "(任意)"
+
+#~ msgid ""
+#~ "Can manage all aspects of the app's listing, including\n"
+#~ "            adding and removing other team members"
+#~ msgstr "他のチームメンバーの追加と削除を含め、アプリ掲載内容の全項目を管理できます"
+
+#~ msgid ""
+#~ "Can manage all aspects of the app's listing, except\n"
+#~ "            for adding and removing other team members and managing payments"
+#~ msgstr "他のチームメンバーの追加と削除、決済方法の管理を除く、アプリ掲載内容の全項目を管理できます"
+
+#~ msgid ""
+#~ "Information about changes in this release, new features,\n"
+#~ "                              known bugs, and other useful information specific to this\n"
+#~ "                              release/version. This information is also shown in the\n"
+#~ "                              Apps Manager when updating."
+#~ msgstr "このバージョンでの変更点、新機能、既知のバグ、その他このバージョン固有の有益な情報。この情報は更新時にアプリケーションマネージャにも表示されます。"
+
+#~ msgid ""
+#~ "Optionally, enter any information that may be useful\n"
+#~ "                              to the Reviewer reviewing this app, such as test\n"
+#~ "                              account information."
+#~ msgstr "テスト用アカウント情報など、このアプリを検証する審査担当者の役に立つ情報が何かあれば入力してください。"
+
+#~ msgid ""
+#~ "An e-mail address (or addresses separated by commas) of this\n"
+#~ "                   app's Mozilla contact that will be CC'd on any reviewer emails."
+#~ msgstr "審査担当者からのメールに Cc として指定される、このアプリの Mozilla からの連絡用メールアドレス (複数ある場合はカンマ区切りにしてください)。"
+
+#~ msgid ""
+#~ "The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
+#~ "                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
+#~ "                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
+#~ "                       your app manifest."
+#~ msgstr ""
+#~ "アプリ名は、Firefox Marketplace 内の検索結果を返す際に使われる項目のひとつです。アプリ名はアプリの詳細ページにも表示されます。アプリマニフェストにも記述的な名前を記載するのを忘れないようにしてく"
+#~ "ださい。アプリ名を変更したい場合は、アプリマニフェスト内の名前も併せて変更する必要があります。"
+
+#~ msgid ""
+#~ "Information about changes in the latest release, new features,\n"
+#~ "                                known bugs, and other useful information specific to this\n"
+#~ "                                release/version."
+#~ msgstr "最新版での変更点、新機能、既知のバグ、その他このバージョン固有の有益な情報。"
+
+#~ msgid ""
+#~ "If your app has another homepage, enter its\n"
+#~ "                        address here. If your website is localized into other\n"
+#~ "                        languages multiple translations of this field can be\n"
+#~ "                        added."
+#~ msgstr "このアプリのホームページが他にある場合は、そのアドレスを入力してください。そのサイトが他の言語にローカライズされている場合は、この項目の翻訳を複数追加できます。"
+
+#~ msgid ""
+#~ "The email address used by end users to contact you\n"
+#~ "                        with support issues. If you have different addresses\n"
+#~ "                        for each language multiple translations of this field\n"
+#~ "                        can be added."
+#~ msgstr "エンドユーザがサポートに関する問題で連絡を取る際に使われるメールアドレス。言語ごとに異なるアドレスがある場合は、この項目の翻訳を複数追加できます。"
+
+#~ msgid ""
+#~ "If your app has a support website or forum, enter\n"
+#~ "                        its address here. If your website is localized into\n"
+#~ "                        other languages, multiple translations of this\n"
+#~ "                        field can be added."
+#~ msgstr "このアプリのサポート用 Web サイトやフォーラムがある場合は、そのアドレスを入力してください。そのサイトが他の言語にローカライズされている場合は、この項目の翻訳を複数追加できます。"
+
+#~ msgid ""
+#~ "Whether the install and usage stats of your app can\n"
+#~ "                      be displayed in our online viewer."
+#~ msgstr "アプリのインストール回数や使用状況の統計情報をオンラインビューアで表示するかどうか。"
+
+#~ msgid ""
+#~ "The submission ID can be found on the certificate sent to you.\n"
+#~ "                              It is a numeric value like &quot;14&quot;."
+#~ msgstr "Submission ID はあなたに送られた証明書に記載されています。「14」のような番号です。"
+
+#~ msgid ""
+#~ "Search is temporarily unavailable. Please try again in a few\n"
+#~ "             minutes."
+#~ msgstr "検索は一時的に使用できなくなっています。数分後にまたお試しください。"
+
+#~ msgid "Video removed from {addon} because of a problem with the video. "
+#~ msgstr "動画に問題があったため、{addon} の動画は削除されました。"
+
+#~ msgid ""
+#~ "Try going back to the previous page, refreshing and trying\n"
+#~ "              again."
+#~ msgstr "前のページに戻って再読み込みし、再度お試しください。"
+
+#~ msgid ""
+#~ "The page or file you requested wasn't found on our site. It's\n"
+#~ "             possible that you clicked a link that's out of date, or typed in\n"
+#~ "             the address incorrectly."
+#~ msgstr "リクエストされたページもしくはファイルは当サイト上で見つかりませんでした。既に削除されたページへのリンクを辿ってきたか、アドレスを間違って入力された可能性があります。"
+
+#~ msgid ""
+#~ "If you typed in the address, please double check the\n"
+#~ "                 spelling."
+#~ msgstr "アドレスを直接入力された場合は、スペルを改めて確認してください。"
+
+#~ msgid ""
+#~ "A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? "
+#~ "Do you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, "
+#~ "<a href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
+#~ msgstr ""
+#~ "プライバシーポリシーでは、このアプリを通じて受け取ったデータをあなたがどう扱うかを説明します。例えば、どのようなデータを受け取るのか、それをどのように利用するのか、それを誰と共有するのか、個人情"
+#~ "報を受け取るのか、それを匿名化する手段を講じているのか、あなたや第三者が受け取るデータの種類をユーザ自身が選択する方法はあるのか、といったことです。プライバシーポリシーへのリンクもしくは直接その"
+#~ "内容を入力してください。プライバシーポリシーがない場合は、<a href=\"{url}\" target=\"_blank\">その書き方を学んでください</a>。"
 
 #~ msgid "Password was incorrect.  App was not deleted."
 #~ msgstr "パスワードが正しくありません。アプリは削除されませんでした。"

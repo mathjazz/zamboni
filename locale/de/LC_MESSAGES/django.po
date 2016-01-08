@@ -3190,20 +3190,12 @@ msgid "Apps can have any number of team members with 4 possible roles:"
 msgstr "Apps können beliebig viele Team-Mitglieder mit 4 möglichen Rollen haben:"
 
 #: mkt/developers/templates/developers/apps/owner.html:89
-msgid ""
-"Can manage all aspects of the app's listing, including\n"
-"            adding and removing other team members"
+msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
 msgstr ""
-"Kann alle Aspekte des Listeneintrags der App bearbeiten, einschließlich\n"
-"            Hinzufügen und Entfernen anderer Teammitglieder"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
-msgid ""
-"Can manage all aspects of the app's listing, except\n"
-"            for adding and removing other team members and managing payments"
+msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
 msgstr ""
-"Kann alle Aspekte des Listeneintrags der App bearbeiten, außer\n"
-"            Hinzufügen und Entfernen anderer Teammitglieder und Verwaltung von Zahlungen"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3500,29 +3492,16 @@ msgstr "Anmerkungen zur Version"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
-"Information about changes in this release, new features,\n"
-"                              known bugs, and other useful information specific to this\n"
-"                              release/version. This information is also shown in the\n"
-"                              Apps Manager when updating."
+"Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
-"Informationen über Änderungen in dieser Version, \n"
-"                              bekannte Fehler und andere nützliche Informationen zu dieser\n"
-"                              Version. Die Informationen werden auch bei der Aktualisisierung\n"
-"                              im Apps-Manager angezeigt."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
 msgstr "Anmerkungen für Kontrolleure"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
-msgid ""
-"Optionally, enter any information that may be useful\n"
-"                              to the Reviewer reviewing this app, such as test\n"
-"                              account information."
+msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
 msgstr ""
-"Geben Sie optional weitere Informationen ein, die für den Überprüfer,\n"
-"                              der diese App überprüft, hilfreich sein könnten, wie\n"
-"                              Informationen zu einem Testkonto."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3541,12 +3520,8 @@ msgid "Mozilla Contact"
 msgstr "Mozilla-Kontakt"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
-msgid ""
-"An e-mail address (or addresses separated by commas) of this\n"
-"                   app's Mozilla contact that will be CC'd on any reviewer emails."
+msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
 msgstr ""
-"Eine E-Mail-Adresse (oder mehrere kommagetrennte Adressen) des Mozilla-\n"
-"                   Ansprechpartners für diese App, der von allen E-Mails von Überprüfern Kopien bekommt."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3585,17 +3560,11 @@ msgstr "Basisinformationen"
 msgid "Basic Information for {0}"
 msgstr "Basisinformationen für {0}"
 
-#: mkt/developers/templates/developers/apps/edit/basic.html:23
+#: mkt/developers/templates/developers/apps/edit/basic.html:23 mkt/submit/templates/submit/details.html:60
 msgid ""
-"The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-"                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-"                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-"                       your app manifest."
+"The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
+"app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
-"Der App-Name ist eines der Felder, über die Suchergebnisse im Firefox Marketplace erzeugt werden.\n"
-"                       Der App-Name erscheint auch auf der Detailseite der App. Geben Sie unbedingt einen aussagekräftigen Namen\n"
-"                       in Ihrem App-Manifest an. Wenn Sie den App-Namen ändern möchten, müssen Sie dies\n"
-"                       in Ihrem App-Manifest tun."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3678,14 +3647,8 @@ msgid "Release Notes"
 msgstr "Versionshinweise"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
-msgid ""
-"Information about changes in the latest release, new features,\n"
-"                                known bugs, and other useful information specific to this\n"
-"                                release/version."
+msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
 msgstr ""
-"Informationen über Änderungen in der neuesten Version, neue Funktionen,\n"
-"                                bekannte Fehler und andere hilfreiche Informationen\n"
-"                                zu dieser Version."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
@@ -3709,16 +3672,8 @@ msgid "Homepage"
 msgstr "Homepage"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
-msgid ""
-"If your app has another homepage, enter its\n"
-"                        address here. If your website is localized into other\n"
-"                        languages multiple translations of this field can be\n"
-"                        added."
+msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
 msgstr ""
-"Wenn Ihre App eine weitere Homepage besitzt, geben Sie hier\n"
-"                        die Adresse ein. Wenn Ihre Website in mehrere Sprachen \n"
-"                        übersetzt wurde, können weitere Übersetzungen dieses Felds\n"
-"                        eingefügt werden."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3768,32 +3723,16 @@ msgid "Support Information for {0}"
 msgstr "Support-Information für {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
-msgid ""
-"The email address used by end users to contact you\n"
-"                        with support issues. If you have different addresses\n"
-"                        for each language multiple translations of this field\n"
-"                        can be added."
+msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
 msgstr ""
-"Die E-Mail-Adresse, über die Anwender Sie kontaktieren können, \n"
-"                        wenn sie Probleme haben. Wenn Sie unterschiedliche Adressen\n"
-"                        für jede Sprache haben, können mehrere Übersetzungen dieses Felds\n"
-"                        hinzugefügt werden."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
 msgstr "Webseite"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
-msgid ""
-"If your app has a support website or forum, enter\n"
-"                        its address here. If your website is localized into\n"
-"                        other languages, multiple translations of this\n"
-"                        field can be added."
+msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
 msgstr ""
-"Wenn Ihre App eine Hilfeseite oder ein Hilfeforum besitzt, geben Sie\n"
-"                        hier die Adresse ein. Wenn Ihre Website in weitere\n"
-"                        Sprachen übersetzt ist, können mehrere Übersetzungen\n"
-"                        dieses Feldes hinzugefügt werden."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3817,12 +3756,8 @@ msgid "Public Stats?"
 msgstr "Öffentliche Statistiken?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
-msgid ""
-"Whether the install and usage stats of your app can\n"
-"                      be displayed in our online viewer."
+msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
 msgstr ""
-"Ob die Installations- und Nutzungsstatistiken Ihrer App\n"
-"                      in unserer Online-Darstellung angezeigt werden können."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4144,12 +4079,8 @@ msgid "Submission ID"
 msgstr "Einreichungs-ID"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
-msgid ""
-"The submission ID can be found on the certificate sent to you.\n"
-"                              It is a numeric value like &quot;14&quot;."
+msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
 msgstr ""
-"Die Einreichungs-ID findet sich im Zertifikat, das Sie erhalten haben.\n"
-"                              Sie ist ein numerischer Wert wie „14“."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -7090,12 +7021,8 @@ msgid "Search Unavailable"
 msgstr "Suche nicht verfügbar"
 
 #: mkt/search/templates/search/down.html:10
-msgid ""
-"Search is temporarily unavailable. Please try again in a few\n"
-"             minutes."
+msgid "Search is temporarily unavailable. Please try again in a few minutes."
 msgstr ""
-"Die Suche ist temporär nicht verfügbar. Versuchen Sie es in einigen Minuten\n"
-"             erneut."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7478,8 +7405,8 @@ msgid "Reviewer escalation"
 msgstr "Weitergabe an nächsthöhere Stelle durch Überprüfer"
 
 #: mkt/site/log.py:488
-msgid "Video removed from {addon} because of a problem with the video. "
-msgstr "Das Video von {addon} wurde aufgrund eines Problems mit dem Video entfernt. "
+msgid "Video removed from {addon} because of a problem with the video."
+msgstr ""
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7668,12 +7595,8 @@ msgid "You tried to do something that you weren't allowed to."
 msgstr "Sie haben etwas versucht, was Sie nicht tun durften."
 
 #: mkt/site/templates/site/403.html:11
-msgid ""
-"Try going back to the previous page, refreshing and trying\n"
-"              again."
+msgid "Try going back to the previous page, refreshing and trying again."
 msgstr ""
-"Versuchen Sie, zur vorherigen Seite zurückzukehren, neuzuladen und es\n"
-"              erneut zu versuchen."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7684,22 +7607,12 @@ msgid "We're sorry, but we can't find what you're looking for."
 msgstr "Es tut uns leid, aber wir finden nicht, was Sie suchen."
 
 #: mkt/site/templates/site/404.html:11
-msgid ""
-"The page or file you requested wasn't found on our site. It's\n"
-"             possible that you clicked a link that's out of date, or typed in\n"
-"             the address incorrectly."
+msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
 msgstr ""
-"Die angeforderte Seite oder Datei wurde auf unserer Website nicht gefunden.\n"
-"             Möglicherweise haben Sie einen veralteten Link angeklickt oder \n"
-"             die Adresse falsch eingegeben."
 
 #: mkt/site/templates/site/404.html:16
-msgid ""
-"If you typed in the address, please double check the\n"
-"                 spelling."
+msgid "If you typed in the address, please double check the spelling."
 msgstr ""
-"Wenn Sie die Adresse eingetippt haben, überprüfen Sie bitte\n"
-"                 die Schreibweise."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7790,13 +7703,10 @@ msgstr "Datenschutzerklärung:"
 
 #: mkt/submit/forms.py:297
 msgid ""
-"A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
+"A privacy policy explains how you handle data received through your app. For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
-"Eine Datenschutzerklärung beschreibt, wie Sie über Ihre App erhaltene Daten verarbeiten.  Beispiel: Welche Daten erhalten Sie? Wie werden sie verwendet? Mit wem teilen Sie sie? Erhalten Sie "
-"personenbezogene Daten? Unternehmen Sie Schritte zur Anonymisierung? Welche Entscheidungsmöglichkeiten haben Nutzer darüber, welche Daten Sie und andere erhalten?  Geben Sie oben den Link zu oder "
-"den Text Ihrer Datenschutzerklärung ein.  Wenn Sie keine Datenschutzerklärung haben, <a href=\"{url}\" target=\"_blank\">erfahren Sie mehr darüber, wie man eine schreibt.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8335,6 +8245,156 @@ msgstr "Erforderliche Felder"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "(optional)"
+
+#~ msgid ""
+#~ "Can manage all aspects of the app's listing, including\n"
+#~ "            adding and removing other team members"
+#~ msgstr ""
+#~ "Kann alle Aspekte des Listeneintrags der App bearbeiten, einschließlich\n"
+#~ "            Hinzufügen und Entfernen anderer Teammitglieder"
+
+#~ msgid ""
+#~ "Can manage all aspects of the app's listing, except\n"
+#~ "            for adding and removing other team members and managing payments"
+#~ msgstr ""
+#~ "Kann alle Aspekte des Listeneintrags der App bearbeiten, außer\n"
+#~ "            Hinzufügen und Entfernen anderer Teammitglieder und Verwaltung von Zahlungen"
+
+#~ msgid ""
+#~ "Information about changes in this release, new features,\n"
+#~ "                              known bugs, and other useful information specific to this\n"
+#~ "                              release/version. This information is also shown in the\n"
+#~ "                              Apps Manager when updating."
+#~ msgstr ""
+#~ "Informationen über Änderungen in dieser Version, \n"
+#~ "                              bekannte Fehler und andere nützliche Informationen zu dieser\n"
+#~ "                              Version. Die Informationen werden auch bei der Aktualisisierung\n"
+#~ "                              im Apps-Manager angezeigt."
+
+#~ msgid ""
+#~ "Optionally, enter any information that may be useful\n"
+#~ "                              to the Reviewer reviewing this app, such as test\n"
+#~ "                              account information."
+#~ msgstr ""
+#~ "Geben Sie optional weitere Informationen ein, die für den Überprüfer,\n"
+#~ "                              der diese App überprüft, hilfreich sein könnten, wie\n"
+#~ "                              Informationen zu einem Testkonto."
+
+#~ msgid ""
+#~ "An e-mail address (or addresses separated by commas) of this\n"
+#~ "                   app's Mozilla contact that will be CC'd on any reviewer emails."
+#~ msgstr ""
+#~ "Eine E-Mail-Adresse (oder mehrere kommagetrennte Adressen) des Mozilla-\n"
+#~ "                   Ansprechpartners für diese App, der von allen E-Mails von Überprüfern Kopien bekommt."
+
+#~ msgid ""
+#~ "The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
+#~ "                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
+#~ "                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
+#~ "                       your app manifest."
+#~ msgstr ""
+#~ "Der App-Name ist eines der Felder, über die Suchergebnisse im Firefox Marketplace erzeugt werden.\n"
+#~ "                       Der App-Name erscheint auch auf der Detailseite der App. Geben Sie unbedingt einen aussagekräftigen Namen\n"
+#~ "                       in Ihrem App-Manifest an. Wenn Sie den App-Namen ändern möchten, müssen Sie dies\n"
+#~ "                       in Ihrem App-Manifest tun."
+
+#~ msgid ""
+#~ "Information about changes in the latest release, new features,\n"
+#~ "                                known bugs, and other useful information specific to this\n"
+#~ "                                release/version."
+#~ msgstr ""
+#~ "Informationen über Änderungen in der neuesten Version, neue Funktionen,\n"
+#~ "                                bekannte Fehler und andere hilfreiche Informationen\n"
+#~ "                                zu dieser Version."
+
+#~ msgid ""
+#~ "If your app has another homepage, enter its\n"
+#~ "                        address here. If your website is localized into other\n"
+#~ "                        languages multiple translations of this field can be\n"
+#~ "                        added."
+#~ msgstr ""
+#~ "Wenn Ihre App eine weitere Homepage besitzt, geben Sie hier\n"
+#~ "                        die Adresse ein. Wenn Ihre Website in mehrere Sprachen \n"
+#~ "                        übersetzt wurde, können weitere Übersetzungen dieses Felds\n"
+#~ "                        eingefügt werden."
+
+#~ msgid ""
+#~ "The email address used by end users to contact you\n"
+#~ "                        with support issues. If you have different addresses\n"
+#~ "                        for each language multiple translations of this field\n"
+#~ "                        can be added."
+#~ msgstr ""
+#~ "Die E-Mail-Adresse, über die Anwender Sie kontaktieren können, \n"
+#~ "                        wenn sie Probleme haben. Wenn Sie unterschiedliche Adressen\n"
+#~ "                        für jede Sprache haben, können mehrere Übersetzungen dieses Felds\n"
+#~ "                        hinzugefügt werden."
+
+#~ msgid ""
+#~ "If your app has a support website or forum, enter\n"
+#~ "                        its address here. If your website is localized into\n"
+#~ "                        other languages, multiple translations of this\n"
+#~ "                        field can be added."
+#~ msgstr ""
+#~ "Wenn Ihre App eine Hilfeseite oder ein Hilfeforum besitzt, geben Sie\n"
+#~ "                        hier die Adresse ein. Wenn Ihre Website in weitere\n"
+#~ "                        Sprachen übersetzt ist, können mehrere Übersetzungen\n"
+#~ "                        dieses Feldes hinzugefügt werden."
+
+#~ msgid ""
+#~ "Whether the install and usage stats of your app can\n"
+#~ "                      be displayed in our online viewer."
+#~ msgstr ""
+#~ "Ob die Installations- und Nutzungsstatistiken Ihrer App\n"
+#~ "                      in unserer Online-Darstellung angezeigt werden können."
+
+#~ msgid ""
+#~ "The submission ID can be found on the certificate sent to you.\n"
+#~ "                              It is a numeric value like &quot;14&quot;."
+#~ msgstr ""
+#~ "Die Einreichungs-ID findet sich im Zertifikat, das Sie erhalten haben.\n"
+#~ "                              Sie ist ein numerischer Wert wie „14“."
+
+#~ msgid ""
+#~ "Search is temporarily unavailable. Please try again in a few\n"
+#~ "             minutes."
+#~ msgstr ""
+#~ "Die Suche ist temporär nicht verfügbar. Versuchen Sie es in einigen Minuten\n"
+#~ "             erneut."
+
+#~ msgid "Video removed from {addon} because of a problem with the video. "
+#~ msgstr "Das Video von {addon} wurde aufgrund eines Problems mit dem Video entfernt. "
+
+#~ msgid ""
+#~ "Try going back to the previous page, refreshing and trying\n"
+#~ "              again."
+#~ msgstr ""
+#~ "Versuchen Sie, zur vorherigen Seite zurückzukehren, neuzuladen und es\n"
+#~ "              erneut zu versuchen."
+
+#~ msgid ""
+#~ "The page or file you requested wasn't found on our site. It's\n"
+#~ "             possible that you clicked a link that's out of date, or typed in\n"
+#~ "             the address incorrectly."
+#~ msgstr ""
+#~ "Die angeforderte Seite oder Datei wurde auf unserer Website nicht gefunden.\n"
+#~ "             Möglicherweise haben Sie einen veralteten Link angeklickt oder \n"
+#~ "             die Adresse falsch eingegeben."
+
+#~ msgid ""
+#~ "If you typed in the address, please double check the\n"
+#~ "                 spelling."
+#~ msgstr ""
+#~ "Wenn Sie die Adresse eingetippt haben, überprüfen Sie bitte\n"
+#~ "                 die Schreibweise."
+
+#~ msgid ""
+#~ "A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? "
+#~ "Do you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, "
+#~ "<a href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
+#~ msgstr ""
+#~ "Eine Datenschutzerklärung beschreibt, wie Sie über Ihre App erhaltene Daten verarbeiten.  Beispiel: Welche Daten erhalten Sie? Wie werden sie verwendet? Mit wem teilen Sie sie? Erhalten Sie "
+#~ "personenbezogene Daten? Unternehmen Sie Schritte zur Anonymisierung? Welche Entscheidungsmöglichkeiten haben Nutzer darüber, welche Daten Sie und andere erhalten?  Geben Sie oben den Link zu "
+#~ "oder den Text Ihrer Datenschutzerklärung ein.  Wenn Sie keine Datenschutzerklärung haben, <a href=\"{url}\" target=\"_blank\">erfahren Sie mehr darüber, wie man eine schreibt.</a>"
 
 #~ msgid "Password was incorrect.  App was not deleted."
 #~ msgstr "Passwort war falsch.  App wurde nicht gelöscht."
