@@ -2715,7 +2715,7 @@ msgstr "Апликација је избрисана."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Лозинка је нетачна. Апликација није обрисана."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2840,6 +2840,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> Постоје две основне употребе за Marketplace API. Са другог веб сајта користећи традиционални OAuth проток или из командне линије. О разликама је дискутовано у <a href=\"https://firefox-"
+"marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace документацији</a>. Свако тестирање би требало да се прикаже на <a href=\"https://marketplace-dev.allizom.org"
+"\">развојном серверу</a> а не на продукционом серверу. </p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3195,11 +3198,11 @@ msgstr "Апликације могу имати било који број чл
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Могу да управљају свим аспектима листинга апликације, укључујући и додавање и уклањање других чланова тима"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Може управљати свим аспектима листинга апликације, осим додавања и уклањања других чланова тима и управљања плаћањима"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3498,6 +3501,8 @@ msgstr "Белешке о верзији"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Информације о променама у овом издању, новим могућностима, познатим грешкама и друге корисне информације које су специфичне за ово издање/верзију. Ова информација је такође приказана у Apps Manager-"
+"у приликом ажурирања."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3505,7 +3510,7 @@ msgstr "Напомене за рецензенте"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "По избору, унесите било какве информације које могу бити корисне за рецензента који разматра ову апликацију, као што су информације о тест налогу."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3525,7 +3530,7 @@ msgstr "Mozilla контакт"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "Адреса е-поште (или адресе раздвојене зарезима) ове апликације је Mozilla контакт која ће бити CC на е-пошту било ког рецезента."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3569,6 +3574,8 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"Име апликација је једна од информација која се користи за претрагу на Firefox Marketplace-у. Назив апликација се такође појављује у детаљима странице апликације. Будите сигурни да сте укључили "
+"описно име у свом манифесту апликације. Ако желите да промените име апликације, мораћете то да урадите у манифесту ваше апликације."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3652,11 +3659,11 @@ msgstr "Белешке о издању"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Информације о променама у послењем издању, новим карактеристикама, познатим грешкама и другим корисним информацијама специфичним за ово издање/верзију."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Категорије су примарни начин који корисници користе за претрагу апликација. Изаберите било коју која одговара функционалности апликације у највећем случају."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3677,7 +3684,7 @@ msgstr "Почетна"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Ако апликација има још једну почетну страницу, укуцајте њену адресу овде. Ако је веб сајт преведен на други језик, вишеструки преводи ове области се могу додати."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3728,7 +3735,7 @@ msgstr "Информације о подршци за {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "Адреса е-поште која се користи да би крајњи корисници контактирли у случају подршке. Ако имате различите адресе за сваки језик, могуће је додати више превода поља."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3736,7 +3743,7 @@ msgstr "Веб сајт"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Ако апликација има веб сајт за подршку или форум, укуцајте његову адресу овде. Ако је веб сајт преведен на друге језике, вишеструки преводи овог поља могу бити додати."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3761,7 +3768,7 @@ msgstr "Јавна статистика?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Без обзира да ли су инсталиране и коришћене статистике Ваше апликације могу бити приказане на нашем онлајн приказивачу."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4081,7 +4088,7 @@ msgstr "ID подношења"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "Поднешен ID може бити нађен на сертификату који Вам је послат. Има нумеричку вредност као &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4089,7 +4096,7 @@ msgstr "Сигурносна лозинка"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Сигурносни код може бити нађен на сертификату који је послат. То је мешавина слова и бројева као &quot;AB12CD3&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4190,6 +4197,8 @@ msgstr "Кључеви за плаћања унутар апликације"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"The Firefox Marketplace омогућава да апликација има плаћање у оквиру ње. <a href=\"{guide}\">Водич за плаћања у оквиру апликације</a> објашњава како да подесите апликацију за плаћања са параметрима "
+"испод."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -5046,7 +5055,7 @@ msgstr "`description` не сме бити дужи од 132 карактера.
 #: mkt/extensions/validation.py:37
 #, python-format
 msgid "The icon file `%(icon_path)s` is not the specified dimensions of %(icon_size)s x %(icon_size)s as defined in the manifest."
-msgstr ""
+msgstr "Иконица датотеке `%(icon_path)s` нема димензије %(icon_size)s %(icon_size)s x %(icon_size)s као што је дефинисано у манифесту. "
 
 #: mkt/extensions/validation.py:40
 #, python-format
@@ -7016,7 +7025,7 @@ msgstr "Претрага је недоступна"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Претрага је тренутно недоступна. Покушајте поново за неколико минута."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7400,7 +7409,7 @@ msgstr "Ескалација рецезента"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Видео је уклољен из {addon} због проблема са снимком."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7590,7 +7599,7 @@ msgstr "Покушали сте да урадите нешто што није �
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Покушајте да се вратите на претходну страницу, освежите је и покушајте поново."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7602,11 +7611,11 @@ msgstr "Жао нам је, али не можемо да пронађемо о�
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Страница или датотека коју сте тражили нису пронађени на нашем сајту. Могуће је да сте кликнули на везу која је застарела, или да сте откуцали адресу погрешно."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Ако сте укуцали адресу, проверите правопис."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7701,6 +7710,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"Полиса приватности објашњава како се рукује са подацима који су добијени кроз апликацију. На пример: Које податке добијате? Како их користите? Са киме их делите? Да ли добијате личне податке? Да "
+"ли предузимате кораке да их учините анонимним? Какав избор корисници имају код контроле података које Ви и остали добијате? Унесите полису приватности или текст изнад. Ако немате полису "
+"приватности, <a href=\"{url}\" target=\"_blank\">сазнајте како да је направите.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"

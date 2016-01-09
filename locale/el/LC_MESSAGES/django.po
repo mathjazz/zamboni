@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: REMORA 0.1\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2016-01-07 11:57-0800\n"
-"PO-Revision-Date: 2011-10-28 22:44+0200\n"
+"PO-Revision-Date: 2016-01-08 21:44-0600\n"
 "Last-Translator: Αλέξανδρος Μιόγλου <alexandros@mioglou.me>\n"
 "Language-Team: el-GR <LL@li.org>\n"
 "Language: el\n"
@@ -3743,7 +3743,7 @@ msgstr "Δημόσια στατιστικά;"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Εάν τα στατιστικά εγκαταστάσεων και χρήσης της εφαρμογής σας μπορούν να προβληθούν στο διαδίκτυο."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -7361,7 +7361,7 @@ msgstr "Κλιμάκωση επιθεωρητή"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Το βίντεο αφαιρέθηκε από το {addon} εξαιτίας κάποιου προβλήματος με το βίντεο."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7551,7 +7551,7 @@ msgstr "Προσπαθήσατε να κάνετε κάτι που δεν σας
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Προσπαθήστε να επιστρέψετε στην προηγούμενη σελίδα, να ανανεώσετε και έπειτα δοκιμάστε ξανά."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7563,11 +7563,11 @@ msgstr "Λυπούμαστε, μα δε μπορούμε να βρούμε αυ�
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Η σελίδα ή το αρχείο που ζητήσατε δε βρέθηκε στον ιστότοπο μας. Μπορεί να χρησιμοποιήσατε έναν παλιό σύνδεσμο, ή να πληκτρολογήσατε λάθος διεύθυνση."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Αν πληκτρολογήσατε τη διεύθυνση, παρακαλώ ελέγξτε ξανά την ορθογραφία."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

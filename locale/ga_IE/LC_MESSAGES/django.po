@@ -2716,7 +2716,7 @@ msgstr "Scriosadh an aip."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Focal faire mícheart. Níor scriosadh an aip."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."

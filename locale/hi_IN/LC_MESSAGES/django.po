@@ -2278,7 +2278,7 @@ msgstr "यह स्लग पहले से ही उपयोग में
 #: mkt/developers/forms.py:576 mkt/submit/forms.py:372
 #, python-format
 msgid "The slug cannot be \"%s\". Please choose another."
-msgstr "यह स्लग \"%s\" नहीं हो सकता. कृपया दूसरा चुनें."
+msgstr "यह स्लग \"% s \" नहीं हो सकता. कृपया दूसरा चुनें."
 
 #: mkt/developers/forms.py:604
 msgid "Manifest URL changed from {before_url} to {after_url}"
@@ -2707,7 +2707,7 @@ msgstr "एप्लीकेशन हटा दी गई है."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr " पासवर्ड अशुद्ध था. एप्लीकेशन नहीं हट सकी."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -7548,7 +7548,7 @@ msgstr "आपने कुछ ऐसा करने की कोशिश क
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "पिछले पृष्ठ पर जाने की कोशिश करें, रीफ्रेश व पुनः प्रयास करें ।"
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7564,7 +7564,7 @@ msgstr ""
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "अगर आपने पते में लिखा है, तो कृपया वर्तनी का पुनः निरीक्षण करें ।"
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

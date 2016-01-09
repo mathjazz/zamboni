@@ -6982,7 +6982,7 @@ msgstr "Søgning ikke tilgængelig"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Søgning er i øjeblikket ikke tilgængelig. Prøv igen om et par minutter."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7556,7 +7556,7 @@ msgstr "Du forsøgte at gøre noget du ikke havde tilladelse til."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Prøv, at gå tilbage til den foregående side, genindlæs og prøv igen."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7568,11 +7568,11 @@ msgstr "Vi beklager, men vi kan ikke finde det, du leder efter."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Siden eller filen, du har anmodet om blev ikke fundet på vores websted. Det er muligt, at du har klikket på et link, der er forældet, eller indtastet adressen forkert."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Hvis du skrev i adresselinjen, skal du dobbelttjekke stavningen."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

@@ -2720,7 +2720,7 @@ msgstr "Aplikace byla smazána."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Heslo bylo zadáno nekorektně. Aplikace nebyla smazána."
 
 #: mkt/developers/views.py:214
 #, fuzzy
@@ -3516,17 +3516,21 @@ msgid "Version Notes"
 msgstr "Poznámky k verzii"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:26
+#, fuzzy
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Informácie o zmenách v tejto vydaní, nové funkcie, známe chyby a ďalšie užitočné informácie špecifické pre toto vydanie/verziu. Tieto informácie sú zobrazované v okne Správcu doplnkov pri "
+"aktualizácii doplnku."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
 msgstr "Poznámky ku kontrole"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
+#, fuzzy
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Voliteľné, môžete zadať informácie, ktoré by mohli byť užitočné pre editora pri kontrole tohto doplnku, ako napríklad informácie o testovacom účte."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3672,8 +3676,9 @@ msgid "Information about changes in the latest release, new features, known bugs
 msgstr ""
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
+#, fuzzy
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Kategorie jsou hlavní způsob, jakým uživatelé prochází aplikace. Zvolte takovou, která nejvíce odpovídá funkcionalitě aplikace."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3694,8 +3699,9 @@ msgid "Homepage"
 msgstr "Domovská stránka"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
+#, fuzzy
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Pokud má vaše aplikace jinou domovskou stránku, vložte adresu zde. Pokud je vaše stránka lokalizována do dalších jazyků, můžete přidat adresy pro jednotlivé z nich."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3748,6 +3754,7 @@ msgstr "Informácie o podpore pre doplnok {0}"
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
 msgstr ""
+"E-mailová adresa, ktorá bude používaná koncovými používateľmi ako kontakt pre riešenie problémov. Ak máte odlišné e-mailové adresy pre jednotlivé jazyky, môžete pridať adresy pre jednotlivé jazyky."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3755,7 +3762,7 @@ msgstr "Webová stránka"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Ak má vaša aplikácia stránky podpory alebo fórum, zadajte ich adresy sem. Ak je vaša webová stránka preložená do viacerých jazykov, môžete pre každý jazyk pridať vlastný odkaz."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3779,8 +3786,9 @@ msgid "Public Stats?"
 msgstr "Verejné štatistiky?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
+#, fuzzy
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Zda mají být informace o počtu instalací a používání vaší aplikace zobrazitelné anonymním uživatelům."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 #, fuzzy
@@ -7135,7 +7143,7 @@ msgstr "Vyhľadávanie nie je dostupné"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Vyhľadávanie je dočasne nedostupné. Skúste to prosím znovu neskôr."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7521,7 +7529,7 @@ msgstr "Postoupení na detailní kontrolu"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Video bolo odstránené z doplnku {addon}, pretože sa pri tomto videu vyskytol problém."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7713,8 +7721,9 @@ msgid "You tried to do something that you weren't allowed to."
 msgstr "Skúsili ste niečo, čo nie je povolené."
 
 #: mkt/site/templates/site/403.html:11
+#, fuzzy
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Zkuste přejít na předchozí stránku, obnovit ji a zkusit to znovu."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7726,11 +7735,11 @@ msgstr "Ospravedlňujeme sa, ale nie je možné nájsť, čo ste hľadali."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Stránka alebo súbor, ktorý požadujete, sa na&nbsp;našej stránke nenašli. Je možné, že ste klikli na&nbsp;neplatný odkaz, alebo ste nesprávne zadali adresu."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Ak ste adresu zadávali, skontrolujte dvakrát správnosť."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

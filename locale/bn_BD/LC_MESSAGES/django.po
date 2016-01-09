@@ -2707,7 +2707,7 @@ msgstr "অ্যাপ মুছে ফেলা হয়েছে।"
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "পাসওয়ার্ড ভুল ছিল। অ্যাপ মুছে ফেলা হয় নি।"
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2832,6 +2832,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> মার্কেটপ্লেস এপিআই এর দুটি প্রধান ব্যবহার রয়েছে। অন্য ওয়েব সাইট থেকে একটি ঐতিহ্যগত OAuth কী প্রবাহ বা একটি কমান্ড লাইন টুল থেকে ব্যবহার করা হয়। পার্থক্য আলোচনা করা হয় <a href=\"https://firefox-marketplace-"
+"api.readthedocs.org/en/latest/topics/authentication.html#oauth\">মার্কেটপ্লেস ডকুমেন্টে</a>। কোন পরীক্ষা উৎপাদন সার্ভারে না ঘটে <a href=\"https://marketplace-dev.allizom.org\">উন্নয়ন সার্ভারে</a> ঘটা উচিত।"
+"</p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3184,11 +3187,11 @@ msgstr "অ্যাপ এর যে কোন পরিমাণ এর টি
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "তালিকাভুক্ত অ্যাপগুলু সব দিক পরিচালনা করতে পারেন, অন্যান্য দলের সদস্যদের যোগ এবং অপসারণ সহ"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "তালিকাভুক্ত অ্যাপগুলু সব দিক পরিচালনা করতে পারেন, শুধুমাত্র অন্যান্য দলের সদস্যদের যোগ, অপসারণ এবং পেমেন্ট পরিচালনা ব্যতীত"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3658,7 +3661,7 @@ msgstr "প্রধান পাতা"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "যদি আপনার অ্যাপ্লিকেশনের অন্য কোনো হোমপেজ থাকে, তাহলে এখানে তার ঠিকানা লিখুন। যদি আপনার ওয়েবসাইট অন্যান্য ভাষায় অনূদিত হয়, এই ফিল্ড একাধিক অনুবাদ যোগ করা যেতে পারে।"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3717,7 +3720,7 @@ msgstr "ওয়েবসাইট"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "যদি আপনার অ্যাপের সহায়তা ওয়েবসাইট বা ফোরাম থাকে, এখানে তার ঠিকানা লিখুন। আপনার ওয়েবসাইট অন্যান্য ভাষায় অনূদিত হলে, এই ক্ষেত্র একাধিক অনুবাদ যোগ করা যেতে পারে।"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -6975,7 +6978,7 @@ msgstr "অনুসন্ধান পাওয়া যাচ্ছে না"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "অনুসন্ধান করার সুবিধাটি সাময়িকভাবে পাওয়া যাচ্ছে না। অনুগ্রহ করে, কয়েক মিনিট পর আবার চেষ্টা করে দেখুন।"
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7359,7 +7362,7 @@ msgstr "পর্যালোচক তুলে নিয়েছেন"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "ভিডিওতে সমস্যা থাকার কারনে {addon} থেকে অপসারন করা হয়েছে।"
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7549,7 +7552,7 @@ msgstr "আপনি এমন কিছু চেষ্টা করেছে�
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "আগের পেজে ফিরে গিয়ে পুনরায় লোড করুন এবং আবার চেষ্টা করুন।"
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7561,11 +7564,11 @@ msgstr "আমরা দুঃখিত, আপনি যা খুঁজছে�
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "আপনার অনুরোধ করা পাতা অথবা ফাইল পাওয়া যায়নি। হতে পারে যে আপনি মেয়াদোত্তীর্ণ লিঙ্কে ক্লিক করেছেন অথবা ঠিকানাটি ভুল টাইপ করেছেন।"
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "আপনি যদি অ্যাড্রেসটি টাইপ করে থাকেন , তাহলে টাইপ করার সময় বানানগুলো পুনরায় চেক করে নিন।"
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

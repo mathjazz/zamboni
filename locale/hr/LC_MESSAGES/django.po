@@ -7001,7 +7001,7 @@ msgstr "Pretraživanje nije dostupno"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Pretraživanje trenutno nije dostupno. Pokušajte ponovno za nekoliko minuta."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"

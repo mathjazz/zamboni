@@ -2721,7 +2721,7 @@ msgstr "Aplikacja usunięta."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Hasło jest nieprawidłowe. Aplikacja nie została usunięta."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -3199,11 +3199,11 @@ msgstr "Aplikacje mogą mieć dowolną liczbę członków zespołu z 4 czterema 
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Może zarządzać wszystkimi aspektami aplikacji, w tym dodawaniem i usuwaniem innych członków zespołu"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Może zarządzać wszystkimi aspektami aplikacji, z wyjątkiem dodawania i usuwania innych członków zespołu i zarządzania płatnościami"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3500,6 +3500,8 @@ msgstr "Informacje o wersji"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Informacja o zmianach w tym wydaniu, nowych funkcjach, znanych błędach oraz inne przydatne informacje, związane z tym wydaniem lub wersją. Ta informacja jest wyświetlana również w menedżerze "
+"aplikacji podczas aktualizacji."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3507,7 +3509,7 @@ msgstr "Informacje dla recenzentów"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Opcjonalne podaj informacje, które mogą być przydatne dla recenzenta podczas sprawdzania tej aplikacji, np. informacje o koncie testowym."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3527,7 +3529,7 @@ msgstr "Kontakt z Mozillą"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "Adres e-mail (lub adresy oddzielone przecinkami) kontaktu do Mozilli dla tej aplikacji, na które będą przesyłanie kopie wszystkich e-maili recenzentów."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3654,11 +3656,11 @@ msgstr "Informacje o wydaniu"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Informacje o zmianach w ostatniej wersji, nowe funkcje, znane błędy oraz inne przydatne informacje specyficzne dla tego wydania lub wersji."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Kategorie są podstawowym sposobem przeglądania aplikacji przez użytkowników. Wybierz kategorie pasujące do funkcji aplikacji w celu lepszego wyeksponowania."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3679,7 +3681,7 @@ msgstr "Strona domowa"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Jeśli ta aplikacja ma inną stronę domową, wprowadź tutaj jej adres. Jeśli witryna jest przetłumaczona na inne języki, można dodać wiele tłumaczeń tego pola."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3738,7 +3740,7 @@ msgstr "Witryna"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Jeśli aplikacja ma stronę lub forum pomocy, wprowadź tu jej adres. Jeśli strona jest przetłumaczona na inne języki, można dodać wiele tłumaczeń tego pola."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3763,7 +3765,7 @@ msgstr "Upublicznić statystyki?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Czy statystyki instalacji i użycia twojej aplikacji mogą być wyświetlane przez nas online?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4081,7 +4083,7 @@ msgstr "ID zgłoszenia"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "ID zgłoszenia można znaleźć na certyfikacie przesłanym do ciebie. Jest to wartość liczbowa jak &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4089,7 +4091,7 @@ msgstr "Kod bezpieczeństwa"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Kod bezpieczeństwa można znaleźć na certyfikacie przesłanym do ciebie. Jest to zestaw liter i liczba jak  &quot;AB12CD3&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4190,6 +4192,8 @@ msgstr "Klucze płatności w aplikacji"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"Firefox Marketplace pozwala na realizację płatności wbudowanych w aplikację. <a href=\"{guide}\">Przewodnik płatności w aplikacji</a> wyjaśnia, jak skonfigurować aplikację do płatności z poniższymi "
+"parametrami."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -7017,7 +7021,7 @@ msgstr "Wyszukiwanie niedostępne"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Wyszukiwanie jest czasowo niedostępne. Spróbuj ponownie za kilka minut."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7401,7 +7405,7 @@ msgstr "Przekazanie recenzenta"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Usunięto wideo z {addon} z powodu problemów z nim związanych."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7591,7 +7595,7 @@ msgstr "Próbujesz zrobić coś, do czego nie masz uprawnień."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Spróbuj wrócić do poprzedniej strony, odświeżyć i spróbować ponownie."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7603,11 +7607,11 @@ msgstr "Przepraszamy, ale nie możemy znaleźć tego, czego szukasz."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Na naszej witrynie nie znaleziono żądanej strony lub pliku. Możliwe, że kliknięty został nieaktualny odnośnik lub wpisano nieprawidłowo adres."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Jeśli wpisałeś adres, sprawdź dokładnie pisownię."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

@@ -2721,7 +2721,7 @@ msgstr "Application supprimée."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Mot de passe incorrect. L'application n'a pas été supprimée."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2846,6 +2846,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> Il existe deux cas d'utilisation principaux pour l'API du Marketplace. Depuis un autre site web avec le flux OAuth classique ou depuis un outil en ligne de commande. La différence est "
+"explicitée <a href=\"https://firefox-marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">dans la documentation du Marketplace</a>. Tous les tests doivent se faire sur <a "
+"href=\"https://marketplace-dev.allizom.org\">le serveur de développement</a> et pas sur le serveur de production. </p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3201,11 +3204,11 @@ msgstr "Les applications peuvent avoir un nombre non limité de membres d'équip
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Peut gérer tous les aspects du listing de l'application, dont l'ajout et la suppression d'autres membres dans l'équipe"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Peut gérer tous les aspects du listing de l'application, sauf l'ajout et la suppression d'autres membres dans l'équipe et la gestion des paiements"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3504,6 +3507,8 @@ msgstr "Notes de version"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Information à propos des changements de cette versions, nouvelles fonctionnalités, problèmes connus et autres informations spécifiques à cette version. Cette information est également affichée dans "
+"le gestionnaire de modules complémentaires lors des mises à jour."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3511,7 +3516,7 @@ msgstr "Notes aux testeurs"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Optionnellement, saisissez toute information qui peut être utile à l'Éditeur qui vérifiera ce module, tels que des comptes de test."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3531,7 +3536,7 @@ msgstr "Contact Mozilla"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "Une adresse courriel (ou plusieurs, séparées par des virgules) qui sera mise en copie de toutes les communications pour la validation."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3575,6 +3580,9 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"Le nom de l'application est un des champs utilisés pour renvoyer des résultats de recherche dans le Firefox Marketplace. Le nom de l'application apparaît également dans la page descriptive de "
+"l'application. Assurez-vous que vous avez bien inclus un nom pertinent dans le manifeste de votre application. Si vous souhaitez changer le nom de votre application, il faudra faire la modification "
+"dans le manifeste de l'application."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3658,11 +3666,12 @@ msgstr "Notes de version"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Informations à propos des changements dans la dernière version, nouvelles fonctionnalités, problèmes connus, et autres informations utiles spécifiques à cette version."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
 msgstr ""
+"Les catégories sont la première manière pour les utilisateurs de parcourir les applications. Choisissez-en qui correspondent aux fonctionnalités de votre application pour une exposition maximale."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3683,7 +3692,7 @@ msgstr "Page d'accueil"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Si votre application a une autre page d'accueil, indiquez son adresse ici. Si votre site est traduit dans d'autres langues, de multiples traductions de ce champ peuvent être ajoutées."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3735,6 +3744,7 @@ msgstr "Informations d'assistance pour {0}"
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
 msgstr ""
+"L'adresse de courriel fournie aux utilisateurs pour vous contacter avec leurs problèmes. Si vous avez différentes adresses pour chaque langue, plusieurs valeurs de ce champ peuvent être ajoutées."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3742,7 +3752,7 @@ msgstr "Site Web"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Si votre application a un site ou un forum d'assistance, indiquez l'adresse ici. S'il est disponible dans d'autres langues, de multiples traductions de ce champs peuvent être ajoutées."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3767,7 +3777,7 @@ msgstr "Statistiques publiques ?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Permettre l'affichage dans notre visualiseur en ligne des statistiques d'installation et d'utilisation de votre application."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4089,7 +4099,7 @@ msgstr "Identifiant de soumission"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "L'identifiant de soumission peut être obtenu sur le certificat qui vous a été envoyé. Il s'agit d'une valeur numérique, comme &quot; 14 &quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4097,7 +4107,7 @@ msgstr "Code de sécurité"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Le code de sécurité peut être obtenu sur le certificat qui vous a été envoyé. C'est un ensemble de lettres et de chiffre, comme &quot; AB12CD3 &quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4198,6 +4208,7 @@ msgstr "Clés de paiement in-app"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"Le Marketplace Firefox permet les micro-paiements. Le <a href=\"{guide}\">guide de ces paiements</a> explique comment configurer votre application pour les paiements avec les paramètres ci-dessous."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -5065,7 +5076,7 @@ msgstr "La propriété `description` ne doit pas dépasser 132 caractères."
 #: mkt/extensions/validation.py:37
 #, python-format
 msgid "The icon file `%(icon_path)s` is not the specified dimensions of %(icon_size)s x %(icon_size)s as defined in the manifest."
-msgstr ""
+msgstr "Les dimensions du fichier d'icône `%(icon_path)s` ne correspondent pas aux dimensions %(icon_size)s x %(icon_size)s définies dans le manifeste."
 
 #: mkt/extensions/validation.py:40
 #, python-format
@@ -7031,7 +7042,7 @@ msgstr "Recherche non disponible"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "La recherche est temporairement indisponible. Merci de réessayer dans quelques minutes."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7415,7 +7426,7 @@ msgstr "Escalade par l'éditeur"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Vidéo supprimée de {addon} suite à un problème avec la vidéo."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7605,7 +7616,7 @@ msgstr "Vous avez essayé de faire une action qui vous est interdite."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Essayez de revenir à la page précédente, recharger et d'essayer encore."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7617,11 +7628,11 @@ msgstr "Nous sommes désolé, mais nous ne trouvons pas ce que vous cherchez."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "La page ou le fichier que vous avez demandé n'a pas été trouvé sur notre site. Il est possible que vous ayez cliqué sur un lien périmé, ou tapé une adresse incorrecte."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Si vous avez tapé l'adresse, merci de revérifier."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7716,6 +7727,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"Une politique de confidentialité explique comment vous traitez les données reçues via votre app. Par exemple, quelles sont les données reçues, comment les utilisez-vous, avec qui sont-elles "
+"partagées, recevez-vous des informations personnelles, que faites-vous pour les rendre anonymes, quels sont les choix de l'utilisateur pour contrôler les données que vous et d'autres reçoivent. "
+"Donnez le lien ou texte de votre politique de confidentialité ci-dessus. Si vous n'en avez pas, <a href=\"{url}\" target=\"_blank\">découvrez comment écrire une politique de confidentialité</a>."
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"

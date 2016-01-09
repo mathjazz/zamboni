@@ -4,7 +4,7 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2016-01-07 11:57-0800\n"
-"PO-Revision-Date: 2015-12-02 21:30+0000\n"
+"PO-Revision-Date: 2016-01-08 21:44-0600\n"
 "Last-Translator: Michael Wolf <milupo@sorbzilla.de>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: dsb\n"
@@ -2712,7 +2712,7 @@ msgstr "Nałoženje wulašowane."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Gronidło jo wopaki było. Nałoženje njejo se wulašowało."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2837,6 +2837,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p>Stej dwa głownej nałožowańskej zaměra za API Marketplace. Z drugego websedła z pomocu tradicionelnego OAuth-wobběga abo z rěda pśikazoweje smužki. Rozdźěl se w <a href=\"https://firefox-"
+"marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">dokumentaciji Marketplace</a> diskutěrujo. Testowanje by měło se na <a href=\"https://marketplace-dev.allizom.org"
+"\">wuwijańskem serwerje</a> wótměwaś a nic na produkciskem serwerje.</p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3193,11 +3196,11 @@ msgstr "Nałoženja mógu wjele teamowych cłonkow z 4 móžnymi rolami měś:"
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Móžo wšykne aspekty lisćinowego zapiska zastojaś inkluziwnje pśidawanje a wótpóranje drugich teamowych cłonkow"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Móžo wšykne aspekty lisćinowego zapiska zastojaś, mimo pśidawanja a wótpóranja drugich teamowych cłonkow a zastojanja płaśenjow"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3494,6 +3497,8 @@ msgstr "Pśipiski k wersiji"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Informacije wó změnach w toś tej wersiji, nowe funkcije, znate programowe zmólki a druge wužytne informacije, kótarež su specialne k toś tej wersiji. Toś te informacije pokazuju se pśi "
+"aktualizěrowanju teke w zastojniku nałoženjow."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3501,7 +3506,7 @@ msgstr "Pokaze za pśepytowarjow"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Na žycenje móžośo teke informacije zapódaś, kótarež su wužytne za pśepytowarja toś togo nałoženja, ako na pśikład informacije k testowym kontam."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3521,7 +3526,7 @@ msgstr "Kontakt Mozilla"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "E-mailowa adresa (abo adrese źělone pśez komy) za kontakt z Mozilla toś togo nałoženja, na kótaruž se za mejlki pogódnośowarjow kopija sćelo."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3565,6 +3570,8 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"Mě nałoženja jo jadno z pólow, kótarež se wužywaju, abychu pytańske wuslědki we Wikowanišću Firefox pódawali. Mě nałoženja pokazujo se teke na boku drobnostkow nałoženja. Pódajśo na kuždy pad "
+"wugroniwe mě w manifeśce swójogo nałoženja. Jolic cośo mě nałoženja změniś, musyśo to w manifesće swójogo nałoženja cyniś."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3648,11 +3655,13 @@ msgstr "Wersijowe informacije"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Informacije wó změnach w nejnowšej wersiji, nowych funkcijach, znatych zmólkach a drugich wužytnych informacijach za toś tu wersiju."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
 msgstr ""
+"Kategorije su głowny srědk, kótaryž wužywarje wužywaju, aby nałoženja pśepytowali. Wubjeŕśo kategoriju, kótaraž dajo se k funkcionalnosći wašogo nałoženja, aby se tak k wjelilkemu ako móžny "
+"publikum pśigroniś."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3673,7 +3682,7 @@ msgstr "Startowa bok"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Jolic wašo nałoženje ma dalšny webbok, zapódajśo how jogo adresu. Jolic wašo websedło jo se do drugich rěcow pśełožyło, móžośo za toś to pólo někotare pśełožki zapódaś."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3724,7 +3733,7 @@ msgstr "Informacije pomocy za {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "E-mailowa adresa, kótaraž se wót kóńcnych wužywarjow wužywa, aby was pśi problemach kontaktěrowali. Jolic maśo rozdźělne adresy za kuždu rěc, daju se někotare pśełožki pśidaś."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3732,7 +3741,7 @@ msgstr "Websedło"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Jolic wašo nałoženje ma websedło pomocy abo forum, zapódajśo how jogo adresu. Jolic wašo websedło jo se do drugich rěcow pśełožyło, móžośo někotare pśełožki w toś tom pólu pśidaś."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3757,7 +3766,7 @@ msgstr "Zjawne statistiki?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Lěc instalaciske a wužywańske statistiki wašogo nałoženja daju se w našom online-zwobraznjenju pokazowaś."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4079,7 +4088,7 @@ msgstr "Zapódawański ID"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "Zapódawański ID dajo se na certifikaśe namakaś, kótaryž jo so wam pśipósłał. Jo numeriska gódnota ako &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4087,7 +4096,7 @@ msgstr "Wěstotny kod"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Wěstotny kod dajo se na certifikaśe namakaś, kótaryž jo se wam pśipósłał. Jo měšańca pismikow a licbow ako &quot;AB12CD2&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4189,6 +4198,8 @@ msgstr "Kluce za płaśenja w nałoženju"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"Wikowanišćo Firefox dowólujo wašomu nałoženjeju, płaśenja w nałoženju akceptěrowaś. <a href=\"{guide}\">Wjednik za płaśenja w nałoženju</a> wujasnjujo, kak móžośo swójo nałoženje za płaśenja ze "
+"slědujucymi parametrami konfigurěrowaś."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -5044,7 +5055,7 @@ msgstr "Kakosć 'description' njesmějo dlejša ako 132 znamuškow byś."
 #: mkt/extensions/validation.py:37
 #, python-format
 msgid "The icon file `%(icon_path)s` is not the specified dimensions of %(icon_size)s x %(icon_size)s as defined in the manifest."
-msgstr ""
+msgstr "Symbolowa dataja %(icon_path)s njama pódane wótměry %(icon_size)s x %(icon_size)s ako w manifesće definěrowane."
 
 #: mkt/extensions/validation.py:40
 #, python-format
@@ -7021,7 +7032,7 @@ msgstr "Pytanje nic k dispoziciji"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Pytanje njejo nachylu k dispoziciji. Pšosym wopytajśo hyšći raz za pór minutow."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7405,7 +7416,7 @@ msgstr "Dalejdaśe pśiducemu wušemu městnoju pśez pśepytowarja"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Wideo dodanka {addon} jo se problema z wideo dla wótpórało."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7595,7 +7606,7 @@ msgstr "Sćo wopytał, něco cyniś, což njejsćo směł cyniś."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Wopytajśo se k pjerwjejšnemu bokoju wrośiś, zacytajśo jen znowego a wopytajśo hyšći raz."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7607,11 +7618,11 @@ msgstr "Bóžko njamóžomy namakaś, což pytaśo."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Bok abo dataja, kótaruž sćo pominał, njejo se na našom sedle namakała. Snaź sćo na wótkaz kliknuł, kótaryž jo zestarjony abo adresu wopak zapódał."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Gaž sćo adresu zapódał, pśeglědajśo pšawopis hyšći raz."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7705,7 +7716,7 @@ msgid ""
 "A privacy policy explains how you handle data received through your app. For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? Do "
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
-msgstr ""
+msgstr "Pšawidła priwatnosći wujasnjuju, kak wobchadaśo z datami, kótarež dostawaśo pśez wašo nałoženje. Na pśikład: kótare daty dostawaśo? Kak je wužywaśo? Z kim je źěliśo? Dostawaśo wósobinske informacije? Zapśimujośo napšawy, aby je anonymne cynił? Kótare wuběrańske móžnosći maju wužywarje, aby kontrolěrowali, kótare daty wy a druge dostawaju? Zapódajśo wótkaz abo tekst k swójim pšawidłam priwatnosći. Jolic njamaśo pšawidła priwatnosći, <a href=\"{url}\" target=\"_blank\">zgóńśo wěcej wó tom, kak móžośo je pisaś</a>."
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"

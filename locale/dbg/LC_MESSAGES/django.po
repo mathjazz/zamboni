@@ -1,7 +1,7 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PROJECT 1.0\n"
+"Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2016-01-07 11:57-0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -11,7 +11,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.1.1\n"
+"X-Generator: Translate Toolkit 1.12.0\n"
 
 #: mkt/abuse/forms.py:70
 #, python-format
@@ -2708,7 +2708,7 @@ msgstr "Ȧƥƥ ḓḗŀḗŧḗḓ."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Ƥȧşşẇǿřḓ ẇȧş īƞƈǿřřḗƈŧ. Ȧƥƥ ẇȧş ƞǿŧ ḓḗŀḗŧḗḓ."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2833,6 +2833,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> Ŧħḗřḗ ȧřḗ ŧẇǿ ḿȧīƞ ŭşḗş ƒǿř ŧħḗ Ḿȧřķḗŧƥŀȧƈḗ ȦƤĪ. Ƒřǿḿ ȧƞǿŧħḗř ẇḗƀ şīŧḗ ŭşīƞɠ ȧ ŧřȧḓīŧīǿƞȧŀ ǾȦŭŧħ ƒŀǿẇ ǿř ƒřǿḿ ȧ ƈǿḿḿȧƞḓ ŀīƞḗ ŧǿǿŀ. Ŧħḗ ḓīƒƒḗřḗƞƈḗ īş ḓīşƈŭşşḗḓ īƞ ŧħḗ <a href=\"https://firefox-"
+"marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Ḿȧřķḗŧƥŀȧƈḗ ḓǿƈŭḿḗƞŧȧŧīǿƞ</a>. Ȧƞẏ ŧḗşŧīƞɠ şħǿŭŀḓ ǿƈƈŭř ǿƞ ŧħḗ <a href=\"https://marketplace-dev.allizom.org"
+"\">ḓḗṽḗŀǿƥḿḗƞŧ şḗřṽḗř</a> ȧƞḓ ƞǿŧ ŧħḗ ƥřǿḓŭƈŧīǿƞ şḗřṽḗř. </p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3187,11 +3190,11 @@ msgstr "Ȧƥƥş ƈȧƞ ħȧṽḗ ȧƞẏ ƞŭḿƀḗř ǿƒ ŧḗȧḿ ḿḗ
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Ƈȧƞ ḿȧƞȧɠḗ ȧŀŀ ȧşƥḗƈŧş ǿƒ ŧħḗ ȧƥƥ'ş ŀīşŧīƞɠ, īƞƈŀŭḓīƞɠ ȧḓḓīƞɠ ȧƞḓ řḗḿǿṽīƞɠ ǿŧħḗř ŧḗȧḿ ḿḗḿƀḗřş"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Ƈȧƞ ḿȧƞȧɠḗ ȧŀŀ ȧşƥḗƈŧş ǿƒ ŧħḗ ȧƥƥ'ş ŀīşŧīƞɠ, ḗẋƈḗƥŧ ƒǿř ȧḓḓīƞɠ ȧƞḓ řḗḿǿṽīƞɠ ǿŧħḗř ŧḗȧḿ ḿḗḿƀḗřş ȧƞḓ ḿȧƞȧɠīƞɠ ƥȧẏḿḗƞŧş"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3488,14 +3491,14 @@ msgstr "Ṽḗřşīǿƞ Ƞǿŧḗş"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Īƞƒǿřḿȧŧīǿƞ ȧƀǿŭŧ ƈħȧƞɠḗş īƞ ŧħīş řḗŀḗȧşḗ, ƞḗẇ ƒḗȧŧŭřḗş, ķƞǿẇƞ ƀŭɠş, ȧƞḓ ǿŧħḗř ŭşḗƒŭŀ īƞƒǿřḿȧŧīǿƞ şƥḗƈīƒīƈ ŧǿ ŧħīş řḗŀḗȧşḗ/version. Ŧħīş īƞƒǿřḿȧŧīǿƞ īş ȧŀşǿ şħǿẇƞ īƞ ŧħḗ Ȧƥƥş Ḿȧƞȧɠḗř ẇħḗƞ ŭƥḓȧŧīƞɠ."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
 msgstr "Ƞǿŧḗş ƒǿř Řḗṽīḗẇḗřş"
 
-#: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Ǿƥŧīǿƞȧŀŀẏ, ḗƞŧḗř ȧƞẏ īƞƒǿřḿȧŧīǿƞ ŧħȧŧ ḿȧẏ ƀḗ ŭşḗƒŭŀ ŧǿ ŧħḗ Řḗṽīḗẇḗř řḗṽīḗẇīƞɠ ŧħīş ȧƥƥ, şŭƈħ ȧş ŧḗşŧ ȧƈƈǿŭƞŧ īƞƒǿřḿȧŧīǿƞ."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3515,7 +3518,7 @@ msgstr "Ḿǿzīŀŀȧ Ƈǿƞŧȧƈŧ"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "Ȧƞ ḗ-ḿȧīŀ ȧḓḓřḗşş (ǿř ȧḓḓřḗşşḗş şḗƥȧřȧŧḗḓ ƀẏ ƈǿḿḿȧş) ǿƒ ŧħīş ȧƥƥ'ş Ḿǿzīŀŀȧ ƈǿƞŧȧƈŧ ŧħȧŧ ẇīŀŀ ƀḗ ƇƇ'ḓ ǿƞ ȧƞẏ řḗṽīḗẇḗř ḗḿȧīŀş."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3559,6 +3562,8 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"Ŧħḗ ȧƥƥ ƞȧḿḗ īş ǿƞḗ ǿƒ ŧħḗ ƒīḗŀḓş ŭşḗḓ ŧǿ řḗŧŭřƞ şḗȧřƈħ řḗşŭŀŧş īƞ ŧħḗ Ƒīřḗƒǿẋ Ḿȧřķḗŧƥŀȧƈḗ. Ŧħḗ ȧƥƥ ƞȧḿḗ ȧŀşǿ ȧƥƥḗȧřş ǿƞ ŧħḗ ȧƥƥ’ş ḓḗŧȧīŀ ƥȧɠḗ. Ɓḗ şŭřḗ ẏǿŭ’ṽḗ īƞƈŀŭḓḗḓ ȧ ḓḗşƈřīƥŧīṽḗ ƞȧḿḗ īƞ ẏǿŭř "
+"ȧƥƥ ḿȧƞīƒḗşŧ. Īƒ ẏǿŭ ẇȧƞŧ ŧǿ ƈħȧƞɠḗ ŧħḗ ȧƥƥ ƞȧḿḗ, ẏǿŭ’ŀŀ ƞḗḗḓ ŧǿ ḓǿ ŧħȧŧ īƞ ẏǿŭř ȧƥƥ ḿȧƞīƒḗşŧ."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3642,11 +3647,11 @@ msgstr "Řḗŀḗȧşḗ Ƞǿŧḗş"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Īƞƒǿřḿȧŧīǿƞ ȧƀǿŭŧ ƈħȧƞɠḗş īƞ ŧħḗ ŀȧŧḗşŧ řḗŀḗȧşḗ, ƞḗẇ ƒḗȧŧŭřḗş, ķƞǿẇƞ ƀŭɠş, ȧƞḓ ǿŧħḗř ŭşḗƒŭŀ īƞƒǿřḿȧŧīǿƞ şƥḗƈīƒīƈ ŧǿ ŧħīş řḗŀḗȧşḗ/version."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Ƈȧŧḗɠǿřīḗş ȧřḗ ŧħḗ ƥřīḿȧřẏ ẇȧẏ ŭşḗřş ƀřǿẇşḗ ŧħřǿŭɠħ ȧƥƥş. Ƈħǿǿşḗ ȧƞẏ ŧħȧŧ ƒīŧ ẏǿŭř ȧƥƥ'ş ƒŭƞƈŧīǿƞȧŀīŧẏ ƒǿř ŧħḗ ḿǿşŧ ḗẋƥǿşŭřḗ."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3667,7 +3672,7 @@ msgstr "Ħǿḿḗƥȧɠḗ"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Īƒ ẏǿŭř ȧƥƥ ħȧş ȧƞǿŧħḗř ħǿḿḗƥȧɠḗ, ḗƞŧḗř īŧş ȧḓḓřḗşş ħḗřḗ. Īƒ ẏǿŭř ẇḗƀşīŧḗ īş ŀǿƈȧŀīzḗḓ īƞŧǿ ǿŧħḗř ŀȧƞɠŭȧɠḗş ḿŭŀŧīƥŀḗ ŧřȧƞşŀȧŧīǿƞş ǿƒ ŧħīş ƒīḗŀḓ ƈȧƞ ƀḗ ȧḓḓḗḓ."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3718,7 +3723,7 @@ msgstr "Şŭƥƥǿřŧ Īƞƒǿřḿȧŧīǿƞ ƒǿř {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "Ŧħḗ ḗḿȧīŀ ȧḓḓřḗşş ŭşḗḓ ƀẏ ḗƞḓ ŭşḗřş ŧǿ ƈǿƞŧȧƈŧ ẏǿŭ ẇīŧħ şŭƥƥǿřŧ īşşŭḗş. Īƒ ẏǿŭ ħȧṽḗ ḓīƒƒḗřḗƞŧ ȧḓḓřḗşşḗş ƒǿř ḗȧƈħ ŀȧƞɠŭȧɠḗ ḿŭŀŧīƥŀḗ ŧřȧƞşŀȧŧīǿƞş ǿƒ ŧħīş ƒīḗŀḓ ƈȧƞ ƀḗ ȧḓḓḗḓ."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3726,7 +3731,7 @@ msgstr "Ẇḗƀşīŧḗ"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Īƒ ẏǿŭř ȧƥƥ ħȧş ȧ şŭƥƥǿřŧ ẇḗƀşīŧḗ ǿř ƒǿřŭḿ, ḗƞŧḗř īŧş ȧḓḓřḗşş ħḗřḗ. Īƒ ẏǿŭř ẇḗƀşīŧḗ īş ŀǿƈȧŀīzḗḓ īƞŧǿ ǿŧħḗř ŀȧƞɠŭȧɠḗş, ḿŭŀŧīƥŀḗ ŧřȧƞşŀȧŧīǿƞş ǿƒ ŧħīş ƒīḗŀḓ ƈȧƞ ƀḗ ȧḓḓḗḓ."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3751,7 +3756,7 @@ msgstr "Ƥŭƀŀīƈ Şŧȧŧş?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Ẇħḗŧħḗř ŧħḗ īƞşŧȧŀŀ ȧƞḓ ŭşȧɠḗ şŧȧŧş ǿƒ ẏǿŭř ȧƥƥ ƈȧƞ ƀḗ ḓīşƥŀȧẏḗḓ īƞ ǿŭř ǿƞŀīƞḗ ṽīḗẇḗř."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4071,7 +4076,7 @@ msgstr "Şŭƀḿīşşīǿƞ ĪḒ"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "Ŧħḗ şŭƀḿīşşīǿƞ ĪḒ ƈȧƞ ƀḗ ƒǿŭƞḓ ǿƞ ŧħḗ ƈḗřŧīƒīƈȧŧḗ şḗƞŧ ŧǿ ẏǿŭ. Īŧ īş ȧ ƞŭḿḗřīƈ ṽȧŀŭḗ ŀīķḗ &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4079,7 +4084,7 @@ msgstr "Şḗƈŭřīŧẏ Ƈǿḓḗ"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Ŧħḗ şḗƈŭřīŧẏ ƈǿḓḗ ƈȧƞ ƀḗ ƒǿŭƞḓ ǿƞ ŧħḗ ƈḗřŧīƒīƈȧŧḗ şḗƞŧ ŧǿ ẏǿŭ. Īŧ īş ȧ ḿīẋ ǿƒ ŀḗŧŧḗřş ȧƞḓ ƞŭḿƀḗřş ŀīķḗ &quot;ȦƁ12ƇḒ3&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4178,7 +4183,7 @@ msgstr "Īƞ-Ȧƥƥ Ƥȧẏḿḗƞŧş Ķḗẏş"
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
-msgstr ""
+msgstr "Ŧħḗ Ƒīřḗƒǿẋ Ḿȧřķḗŧƥŀȧƈḗ ȧŀŀǿẇş ẏǿŭř ȧƥƥ ŧǿ ŧȧķḗ īƞ-ȧƥƥ ƥȧẏḿḗƞŧş. Ŧħḗ <a href=\"{guide}\">īƞ-ȧƥƥ ƥȧẏḿḗƞŧ ɠŭīḓḗ</a> ḗẋƥŀȧīƞş ħǿẇ ŧǿ ƈǿƞƒīɠŭřḗ ẏǿŭř ȧƥƥ ƒǿř ƥȧẏḿḗƞŧş ẇīŧħ ŧħḗ ƥȧřȧḿḗŧḗřş ƀḗŀǿẇ."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -5033,7 +5038,7 @@ msgstr "Ŧħḗ `ḓḗşƈřīƥŧīǿƞ` ƥřǿƥḗřŧẏ ƈȧƞƞǿŧ ƀḗ
 #: mkt/extensions/validation.py:37
 #, python-format
 msgid "The icon file `%(icon_path)s` is not the specified dimensions of %(icon_size)s x %(icon_size)s as defined in the manifest."
-msgstr ""
+msgstr "Ŧħḗ īƈǿƞ ƒīŀḗ `%(icon_path)s` īş ƞǿŧ ŧħḗ şƥḗƈīƒīḗḓ ḓīḿḗƞşīǿƞş ǿƒ %(icon_size)s ẋ %(icon_size)s ȧş ḓḗƒīƞḗḓ īƞ ŧħḗ ḿȧƞīƒḗşŧ."
 
 #: mkt/extensions/validation.py:40
 #, python-format
@@ -5226,7 +5231,7 @@ msgid "Download {0}"
 msgstr "Ḓǿẇƞŀǿȧḓ {0}"
 
 #: mkt/files/templates/fileviewer/file.html:6
-#, python-format
+#, fuzzy, python-format
 msgid "Version: %(version)s &bull; Size: %(size)s &bull; MD5 hash: %(md5)s &bull; Mimetype: %(mimetype)s"
 msgstr "Ṽḗřşīǿƞ: %(version)s &bull; Şīzḗ: %(size)s &bull; ḾḒ5 ħȧşħ: %(ḿḓ5)ş &bull; Ḿīḿḗŧẏƥḗ: %(mimetype)s"
 
@@ -6996,7 +7001,7 @@ msgstr "Şḗȧřƈħ Ŭƞȧṽȧīŀȧƀŀḗ"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Şḗȧřƈħ īş ŧḗḿƥǿřȧřīŀẏ ŭƞȧṽȧīŀȧƀŀḗ. Ƥŀḗȧşḗ ŧřẏ ȧɠȧīƞ īƞ ȧ ƒḗẇ ḿīƞŭŧḗş."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7380,7 +7385,7 @@ msgstr "Řḗṽīḗẇḗř ḗşƈȧŀȧŧīǿƞ"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Ṽīḓḗǿ řḗḿǿṽḗḓ ƒřǿḿ {ȧḓḓǿƞ} ƀḗƈȧŭşḗ ǿƒ ȧ ƥřǿƀŀḗḿ ẇīŧħ ŧħḗ ṽīḓḗǿ."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7570,7 +7575,7 @@ msgstr "Ẏǿŭ ŧřīḗḓ ŧǿ ḓǿ şǿḿḗŧħīƞɠ ŧħȧŧ ẏǿŭ �
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Ŧřẏ ɠǿīƞɠ ƀȧƈķ ŧǿ ŧħḗ ƥřḗṽīǿŭş ƥȧɠḗ, řḗƒřḗşħīƞɠ ȧƞḓ ŧřẏīƞɠ ȧɠȧīƞ."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7582,11 +7587,10 @@ msgstr "Ẇḗ'řḗ şǿřřẏ, ƀŭŧ ẇḗ ƈȧƞ'ŧ ƒīƞḓ ẇħȧŧ �
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Ŧħḗ ƥȧɠḗ ǿř ƒīŀḗ ẏǿŭ řḗɋŭḗşŧḗḓ ẇȧşƞ'ŧ ƒǿŭƞḓ ǿƞ ǿŭř şīŧḗ. Īŧ'ş ƥǿşşīƀŀḗ ŧħȧŧ ẏǿŭ ƈŀīƈķḗḓ ȧ ŀīƞķ ŧħȧŧ'ş ǿŭŧ ǿƒ ḓȧŧḗ, ǿř ŧẏƥḗḓ īƞ ŧħḗ ȧḓḓřḗşş īƞƈǿřřḗƈŧŀẏ."
 
-#: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Īƒ ẏǿŭ ŧẏƥḗḓ īƞ ŧħḗ ȧḓḓřḗşş, ƥŀḗȧşḗ ḓǿŭƀŀḗ ƈħḗƈķ ŧħḗ şƥḗŀŀīƞɠ."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7681,6 +7685,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"Ȧ ƥřīṽȧƈẏ ƥǿŀīƈẏ ḗẋƥŀȧīƞş ħǿẇ ẏǿŭ ħȧƞḓŀḗ ḓȧŧȧ řḗƈḗīṽḗḓ ŧħřǿŭɠħ ẏǿŭř ȧƥƥ.  Ƒǿř ḗẋȧḿƥŀḗ: ẇħȧŧ ḓȧŧȧ ḓǿ ẏǿŭ řḗƈḗīṽḗ? Ħǿẇ ḓǿ ẏǿŭ ŭşḗ īŧ? Ẇħǿ ḓǿ ẏǿŭ şħȧřḗ īŧ ẇīŧħ? Ḓǿ ẏǿŭ řḗƈḗīṽḗ ƥḗřşǿƞȧŀ īƞƒǿřḿȧŧīǿƞ? Ḓǿ "
+"ẏǿŭ ŧȧķḗ şŧḗƥş ŧǿ ḿȧķḗ īŧ ȧƞǿƞẏḿǿŭş? Ẇħȧŧ ƈħǿīƈḗş ḓǿ ŭşḗřş ħȧṽḗ ŧǿ ƈǿƞŧřǿŀ ẇħȧŧ ḓȧŧȧ ẏǿŭ ȧƞḓ ǿŧħḗřş řḗƈḗīṽḗ? Ḗƞŧḗř ẏǿŭř ƥřīṽȧƈẏ ƥǿŀīƈẏ ŀīƞķ ǿř ŧḗẋŧ ȧƀǿṽḗ.  Īƒ ẏǿŭ ḓǿƞ'ŧ ħȧṽḗ ȧ ƥřīṽȧƈẏ ƥǿŀīƈẏ, <a "
+"href=\"{url}\" target=\"_blank\">ŀḗȧřƞ ḿǿřḗ ǿƞ ħǿẇ ŧǿ ẇřīŧḗ ǿƞḗ.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8214,212 +8221,3 @@ msgstr "Řḗɋŭīřḗḓ ƒīḗŀḓş"
 msgid "(optional)"
 msgstr "(ǿƥŧīǿƞȧŀ)"
 
-#~ msgid ""
-#~ "Can manage all aspects of the app's listing, including\n"
-#~ "            adding and removing other team members"
-#~ msgstr ""
-#~ "Ƈȧƞ ḿȧƞȧɠḗ ȧŀŀ ȧşƥḗƈŧş ǿƒ ŧħḗ ȧƥƥ'ş ŀīşŧīƞɠ, īƞƈŀŭḓīƞɠ\n"
-#~ "            ȧḓḓīƞɠ ȧƞḓ řḗḿǿṽīƞɠ ǿŧħḗř ŧḗȧḿ ḿḗḿƀḗřş"
-
-#~ msgid ""
-#~ "Can manage all aspects of the app's listing, except\n"
-#~ "            for adding and removing other team members and managing payments"
-#~ msgstr ""
-#~ "Ƈȧƞ ḿȧƞȧɠḗ ȧŀŀ ȧşƥḗƈŧş ǿƒ ŧħḗ ȧƥƥ'ş ŀīşŧīƞɠ, ḗẋƈḗƥŧ\n"
-#~ "            ƒǿř ȧḓḓīƞɠ ȧƞḓ řḗḿǿṽīƞɠ ǿŧħḗř ŧḗȧḿ ḿḗḿƀḗřş ȧƞḓ ḿȧƞȧɠīƞɠ ƥȧẏḿḗƞŧş"
-
-#~ msgid ""
-#~ "Information about changes in this release, new features,\n"
-#~ "                              known bugs, and other useful information specific to this\n"
-#~ "                              release/version. This information is also shown in the\n"
-#~ "                              Apps Manager when updating."
-#~ msgstr ""
-#~ "Īƞƒǿřḿȧŧīǿƞ ȧƀǿŭŧ ƈħȧƞɠḗş īƞ ŧħīş řḗŀḗȧşḗ, ƞḗẇ ƒḗȧŧŭřḗş,\n"
-#~ "                              ķƞǿẇƞ ƀŭɠş, ȧƞḓ ǿŧħḗř ŭşḗƒŭŀ īƞƒǿřḿȧŧīǿƞ şƥḗƈīƒīƈ ŧǿ ŧħīş\n"
-#~ "                              řḗŀḗȧşḗ/version. Ŧħīş īƞƒǿřḿȧŧīǿƞ īş ȧŀşǿ şħǿẇƞ īƞ ŧħḗ\n"
-#~ "                              Ȧƥƥş Ḿȧƞȧɠḗř ẇħḗƞ ŭƥḓȧŧīƞɠ."
-
-#~ msgid ""
-#~ "Optionally, enter any information that may be useful\n"
-#~ "                              to the Reviewer reviewing this app, such as test\n"
-#~ "                              account information."
-#~ msgstr ""
-#~ "Ǿƥŧīǿƞȧŀŀẏ, ḗƞŧḗř ȧƞẏ īƞƒǿřḿȧŧīǿƞ ŧħȧŧ ḿȧẏ ƀḗ ŭşḗƒŭŀ\n"
-#~ "                              ŧǿ ŧħḗ Řḗṽīḗẇḗř řḗṽīḗẇīƞɠ ŧħīş ȧƥƥ, şŭƈħ ȧş ŧḗşŧ\n"
-#~ "                              ȧƈƈǿŭƞŧ īƞƒǿřḿȧŧīǿƞ."
-
-#~ msgid ""
-#~ "An e-mail address (or addresses separated by commas) of this\n"
-#~ "                   app's Mozilla contact that will be CC'd on any reviewer emails."
-#~ msgstr ""
-#~ "Ȧƞ ḗ-ḿȧīŀ ȧḓḓřḗşş (ǿř ȧḓḓřḗşşḗş şḗƥȧřȧŧḗḓ ƀẏ ƈǿḿḿȧş) ǿƒ ŧħīş\n"
-#~ "                   ȧƥƥ'ş Ḿǿzīŀŀȧ ƈǿƞŧȧƈŧ ŧħȧŧ ẇīŀŀ ƀḗ ƇƇ'ḓ ǿƞ ȧƞẏ řḗṽīḗẇḗř ḗḿȧīŀş."
-
-#~ msgid ""
-#~ "The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-#~ "                       The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-#~ "                       name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-#~ "                       your app manifest."
-#~ msgstr ""
-#~ "Ŧħḗ ȧƥƥ ƞȧḿḗ īş ǿƞḗ ǿƒ ŧħḗ ƒīḗŀḓş ŭşḗḓ ŧǿ řḗŧŭřƞ şḗȧřƈħ řḗşŭŀŧş īƞ ŧħḗ Ƒīřḗƒǿẋ Ḿȧřķḗŧƥŀȧƈḗ.\n"
-#~ "                       Ŧħḗ ȧƥƥ ƞȧḿḗ ȧŀşǿ ȧƥƥḗȧřş ǿƞ ŧħḗ ȧƥƥ’ş ḓḗŧȧīŀ ƥȧɠḗ. Ɓḗ şŭřḗ ẏǿŭ’ṽḗ īƞƈŀŭḓḗḓ ȧ ḓḗşƈřīƥŧīṽḗ\n"
-#~ "                       ƞȧḿḗ īƞ ẏǿŭř ȧƥƥ ḿȧƞīƒḗşŧ. Īƒ ẏǿŭ ẇȧƞŧ ŧǿ ƈħȧƞɠḗ ŧħḗ ȧƥƥ ƞȧḿḗ, ẏǿŭ’ŀŀ ƞḗḗḓ ŧǿ ḓǿ ŧħȧŧ īƞ\n"
-#~ "                       ẏǿŭř ȧƥƥ ḿȧƞīƒḗşŧ."
-
-#~ msgid ""
-#~ "Information about changes in the latest release, new features,\n"
-#~ "                                known bugs, and other useful information specific to this\n"
-#~ "                                release/version."
-#~ msgstr ""
-#~ "Īƞƒǿřḿȧŧīǿƞ ȧƀǿŭŧ ƈħȧƞɠḗş īƞ ŧħḗ ŀȧŧḗşŧ řḗŀḗȧşḗ, ƞḗẇ ƒḗȧŧŭřḗş,\n"
-#~ "                                ķƞǿẇƞ ƀŭɠş, ȧƞḓ ǿŧħḗř ŭşḗƒŭŀ īƞƒǿřḿȧŧīǿƞ şƥḗƈīƒīƈ ŧǿ ŧħīş\n"
-#~ "                                řḗŀḗȧşḗ/version."
-
-#~ msgid ""
-#~ "If your app has another homepage, enter its\n"
-#~ "                        address here. If your website is localized into other\n"
-#~ "                        languages multiple translations of this field can be\n"
-#~ "                        added."
-#~ msgstr ""
-#~ "Īƒ ẏǿŭř ȧƥƥ ħȧş ȧƞǿŧħḗř ħǿḿḗƥȧɠḗ, ḗƞŧḗř īŧş\n"
-#~ "                        ȧḓḓřḗşş ħḗřḗ. Īƒ ẏǿŭř ẇḗƀşīŧḗ īş ŀǿƈȧŀīzḗḓ īƞŧǿ ǿŧħḗř\n"
-#~ "                        ŀȧƞɠŭȧɠḗş ḿŭŀŧīƥŀḗ ŧřȧƞşŀȧŧīǿƞş ǿƒ ŧħīş ƒīḗŀḓ ƈȧƞ ƀḗ\n"
-#~ "                        ȧḓḓḗḓ."
-
-#~ msgid ""
-#~ "The email address used by end users to contact you\n"
-#~ "                        with support issues. If you have different addresses\n"
-#~ "                        for each language multiple translations of this field\n"
-#~ "                        can be added."
-#~ msgstr ""
-#~ "Ŧħḗ ḗḿȧīŀ ȧḓḓřḗşş ŭşḗḓ ƀẏ ḗƞḓ ŭşḗřş ŧǿ ƈǿƞŧȧƈŧ ẏǿŭ\n"
-#~ "                        ẇīŧħ şŭƥƥǿřŧ īşşŭḗş. Īƒ ẏǿŭ ħȧṽḗ ḓīƒƒḗřḗƞŧ ȧḓḓřḗşşḗş\n"
-#~ "                        ƒǿř ḗȧƈħ ŀȧƞɠŭȧɠḗ ḿŭŀŧīƥŀḗ ŧřȧƞşŀȧŧīǿƞş ǿƒ ŧħīş ƒīḗŀḓ\n"
-#~ "                        ƈȧƞ ƀḗ ȧḓḓḗḓ."
-
-#~ msgid ""
-#~ "If your app has a support website or forum, enter\n"
-#~ "                        its address here. If your website is localized into\n"
-#~ "                        other languages, multiple translations of this\n"
-#~ "                        field can be added."
-#~ msgstr ""
-#~ "Īƒ ẏǿŭř ȧƥƥ ħȧş ȧ şŭƥƥǿřŧ ẇḗƀşīŧḗ ǿř ƒǿřŭḿ, ḗƞŧḗř\n"
-#~ "                        īŧş ȧḓḓřḗşş ħḗřḗ. Īƒ ẏǿŭř ẇḗƀşīŧḗ īş ŀǿƈȧŀīzḗḓ īƞŧǿ\n"
-#~ "                        ǿŧħḗř ŀȧƞɠŭȧɠḗş, ḿŭŀŧīƥŀḗ ŧřȧƞşŀȧŧīǿƞş ǿƒ ŧħīş\n"
-#~ "                        ƒīḗŀḓ ƈȧƞ ƀḗ ȧḓḓḗḓ."
-
-#~ msgid ""
-#~ "Whether the install and usage stats of your app can\n"
-#~ "                      be displayed in our online viewer."
-#~ msgstr ""
-#~ "Ẇħḗŧħḗř ŧħḗ īƞşŧȧŀŀ ȧƞḓ ŭşȧɠḗ şŧȧŧş ǿƒ ẏǿŭř ȧƥƥ ƈȧƞ\n"
-#~ "                      ƀḗ ḓīşƥŀȧẏḗḓ īƞ ǿŭř ǿƞŀīƞḗ ṽīḗẇḗř."
-
-#~ msgid ""
-#~ "The submission ID can be found on the certificate sent to you.\n"
-#~ "                              It is a numeric value like &quot;14&quot;."
-#~ msgstr ""
-#~ "Ŧħḗ şŭƀḿīşşīǿƞ ĪḒ ƈȧƞ ƀḗ ƒǿŭƞḓ ǿƞ ŧħḗ ƈḗřŧīƒīƈȧŧḗ şḗƞŧ ŧǿ ẏǿŭ.\n"
-#~ "                              Īŧ īş ȧ ƞŭḿḗřīƈ ṽȧŀŭḗ ŀīķḗ &quot;14&quot;."
-
-#~ msgid ""
-#~ "Search is temporarily unavailable. Please try again in a few\n"
-#~ "             minutes."
-#~ msgstr ""
-#~ "Şḗȧřƈħ īş ŧḗḿƥǿřȧřīŀẏ ŭƞȧṽȧīŀȧƀŀḗ. Ƥŀḗȧşḗ ŧřẏ ȧɠȧīƞ īƞ ȧ ƒḗẇ\n"
-#~ "             ḿīƞŭŧḗş."
-
-#~ msgid "Video removed from {addon} because of a problem with the video. "
-#~ msgstr "Ṽīḓḗǿ řḗḿǿṽḗḓ ƒřǿḿ {ȧḓḓǿƞ} ƀḗƈȧŭşḗ ǿƒ ȧ ƥřǿƀŀḗḿ ẇīŧħ ŧħḗ ṽīḓḗǿ. "
-
-#~ msgid ""
-#~ "Try going back to the previous page, refreshing and trying\n"
-#~ "              again."
-#~ msgstr ""
-#~ "Ŧřẏ ɠǿīƞɠ ƀȧƈķ ŧǿ ŧħḗ ƥřḗṽīǿŭş ƥȧɠḗ, řḗƒřḗşħīƞɠ ȧƞḓ ŧřẏīƞɠ\n"
-#~ "              ȧɠȧīƞ."
-
-#~ msgid ""
-#~ "The page or file you requested wasn't found on our site. It's\n"
-#~ "             possible that you clicked a link that's out of date, or typed in\n"
-#~ "             the address incorrectly."
-#~ msgstr ""
-#~ "Ŧħḗ ƥȧɠḗ ǿř ƒīŀḗ ẏǿŭ řḗɋŭḗşŧḗḓ ẇȧşƞ'ŧ ƒǿŭƞḓ ǿƞ ǿŭř şīŧḗ. Īŧ'ş\n"
-#~ "             ƥǿşşīƀŀḗ ŧħȧŧ ẏǿŭ ƈŀīƈķḗḓ ȧ ŀīƞķ ŧħȧŧ'ş ǿŭŧ ǿƒ ḓȧŧḗ, ǿř ŧẏƥḗḓ īƞ\n"
-#~ "             ŧħḗ ȧḓḓřḗşş īƞƈǿřřḗƈŧŀẏ."
-
-#~ msgid ""
-#~ "If you typed in the address, please double check the\n"
-#~ "                 spelling."
-#~ msgstr ""
-#~ "Īƒ ẏǿŭ ŧẏƥḗḓ īƞ ŧħḗ ȧḓḓřḗşş, ƥŀḗȧşḗ ḓǿŭƀŀḗ ƈħḗƈķ ŧħḗ\n"
-#~ "                 şƥḗŀŀīƞɠ."
-
-#~ msgid ""
-#~ "A privacy policy explains how you handle data received through your app.  For example: what data do you receive? How do you use it? Who do you share it with? Do you receive personal information? "
-#~ "Do you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, "
-#~ "<a href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
-#~ msgstr ""
-#~ "Ȧ ƥřīṽȧƈẏ ƥǿŀīƈẏ ḗẋƥŀȧīƞş ħǿẇ ẏǿŭ ħȧƞḓŀḗ ḓȧŧȧ řḗƈḗīṽḗḓ ŧħřǿŭɠħ ẏǿŭř ȧƥƥ.  Ƒǿř ḗẋȧḿƥŀḗ: ẇħȧŧ ḓȧŧȧ ḓǿ ẏǿŭ řḗƈḗīṽḗ? Ħǿẇ ḓǿ ẏǿŭ ŭşḗ īŧ? Ẇħǿ ḓǿ ẏǿŭ şħȧřḗ īŧ ẇīŧħ? Ḓǿ ẏǿŭ řḗƈḗīṽḗ ƥḗřşǿƞȧŀ īƞƒǿřḿȧŧīǿƞ? "
-#~ "Ḓǿ ẏǿŭ ŧȧķḗ şŧḗƥş ŧǿ ḿȧķḗ īŧ ȧƞǿƞẏḿǿŭş? Ẇħȧŧ ƈħǿīƈḗş ḓǿ ŭşḗřş ħȧṽḗ ŧǿ ƈǿƞŧřǿŀ ẇħȧŧ ḓȧŧȧ ẏǿŭ ȧƞḓ ǿŧħḗřş řḗƈḗīṽḗ? Ḗƞŧḗř ẏǿŭř ƥřīṽȧƈẏ ƥǿŀīƈẏ ŀīƞķ ǿř ŧḗẋŧ ȧƀǿṽḗ.  Īƒ ẏǿŭ ḓǿƞ'ŧ ħȧṽḗ ȧ ƥřīṽȧƈẏ ƥǿŀīƈẏ, "
-#~ "<a href=\"{url}\" target=\"_blank\">ŀḗȧřƞ ḿǿřḗ ǿƞ ħǿẇ ŧǿ ẇřīŧḗ ǿƞḗ.</a>"
-
-#~ msgid "Password was incorrect.  App was not deleted."
-#~ msgstr "Ƥȧşşẇǿřḓ ẇȧş īƞƈǿřřḗƈŧ.  Ȧƥƥ ẇȧş ƞǿŧ ḓḗŀḗŧḗḓ."
-
-#~ msgid ""
-#~ "<p> There are two main uses for the Marketplace API. From another web site using a traditional OAuth flow or from a command line tool. The difference is discussed in the  <a href=\"https://"
-#~ "firefox-marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
-#~ "\">development server</a> and not the production server. </p>"
-#~ msgstr ""
-#~ "<p> Ŧħḗřḗ ȧřḗ ŧẇǿ ḿȧīƞ ŭşḗş ƒǿř ŧħḗ Ḿȧřķḗŧƥŀȧƈḗ ȦƤĪ. Ƒřǿḿ ȧƞǿŧħḗř ẇḗƀ şīŧḗ ŭşīƞɠ ȧ ŧřȧḓīŧīǿƞȧŀ ǾȦŭŧħ ƒŀǿẇ ǿř ƒřǿḿ ȧ ƈǿḿḿȧƞḓ ŀīƞḗ ŧǿǿŀ. Ŧħḗ ḓīƒƒḗřḗƞƈḗ īş ḓīşƈŭşşḗḓ īƞ ŧħḗ  <a href=\"https://"
-#~ "firefox-marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Ḿȧřķḗŧƥŀȧƈḗ ḓǿƈŭḿḗƞŧȧŧīǿƞ</a>. Ȧƞẏ ŧḗşŧīƞɠ şħǿŭŀḓ ǿƈƈŭř ǿƞ ŧħḗ <a href=\"https://marketplace-dev.allizom.org"
-#~ "\">ḓḗṽḗŀǿƥḿḗƞŧ şḗřṽḗř</a> ȧƞḓ ƞǿŧ ŧħḗ ƥřǿḓŭƈŧīǿƞ şḗřṽḗř. </p>"
-
-#~ msgid ""
-#~ "The app description is one of the fields used to return search results in the Firefox Marketplace. The app description\n"
-#~ "                       also appears on the app's detail page. Be sure to include a description that accurately represents your app."
-#~ msgstr ""
-#~ "Ŧħḗ ȧƥƥ ḓḗşƈřīƥŧīǿƞ īş ǿƞḗ ǿƒ ŧħḗ ƒīḗŀḓş ŭşḗḓ ŧǿ řḗŧŭřƞ şḗȧřƈħ řḗşŭŀŧş īƞ ŧħḗ Ƒīřḗƒǿẋ Ḿȧřķḗŧƥŀȧƈḗ. Ŧħḗ ȧƥƥ ḓḗşƈřīƥŧīǿƞ\n"
-#~ "                       ȧŀşǿ ȧƥƥḗȧřş ǿƞ ŧħḗ ȧƥƥ'ş ḓḗŧȧīŀ ƥȧɠḗ. Ɓḗ şŭřḗ ŧǿ īƞƈŀŭḓḗ ȧ ḓḗşƈřīƥŧīǿƞ ŧħȧŧ ȧƈƈŭřȧŧḗŀẏ řḗƥřḗşḗƞŧş ẏǿŭř ȧƥƥ."
-
-#~ msgid ""
-#~ "Categories are the primary way users browse through apps.\n"
-#~ "                      Choose any that fit your app's functionality for the\n"
-#~ "                      most exposure."
-#~ msgstr ""
-#~ "Ƈȧŧḗɠǿřīḗş ȧřḗ ŧħḗ ƥřīḿȧřẏ ẇȧẏ ŭşḗřş ƀřǿẇşḗ ŧħřǿŭɠħ ȧƥƥş.\n"
-#~ "                      Ƈħǿǿşḗ ȧƞẏ ŧħȧŧ ƒīŧ ẏǿŭř ȧƥƥ'ş ƒŭƞƈŧīǿƞȧŀīŧẏ ƒǿř ŧħḗ\n"
-#~ "                      ḿǿşŧ ḗẋƥǿşŭřḗ."
-
-#~ msgid ""
-#~ "The security code can be found on the certificate sent to you.\n"
-#~ "                              It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-#~ msgstr ""
-#~ "Ŧħḗ şḗƈŭřīŧẏ ƈǿḓḗ ƈȧƞ ƀḗ ƒǿŭƞḓ ǿƞ ŧħḗ ƈḗřŧīƒīƈȧŧḗ şḗƞŧ ŧǿ ẏǿŭ.\n"
-#~ "                              Īŧ īş ȧ ḿīẋ ǿƒ ŀḗŧŧḗřş ȧƞḓ ƞŭḿƀḗřş ŀīķḗ &quot;ȦƁ12ƇḒ3&quot;."
-
-#~ msgid ""
-#~ "The Firefox Marketplace allows your app to take in-app payments.\n"
-#~ "                The <a href=\"{guide}\">in-app payment guide</a> explains how to\n"
-#~ "                configure your app for payments with the parameters below.\n"
-#~ "                "
-#~ msgstr ""
-#~ "Ŧħḗ Ƒīřḗƒǿẋ Ḿȧřķḗŧƥŀȧƈḗ ȧŀŀǿẇş ẏǿŭř ȧƥƥ ŧǿ ŧȧķḗ īƞ-ȧƥƥ ƥȧẏḿḗƞŧş.\n"
-#~ "                Ŧħḗ <a href=\"{guide}\">īƞ-ȧƥƥ ƥȧẏḿḗƞŧ ɠŭīḓḗ</a> ḗẋƥŀȧīƞş ħǿẇ ŧǿ\n"
-#~ "                ƈǿƞƒīɠŭřḗ ẏǿŭř ȧƥƥ ƒǿř ƥȧẏḿḗƞŧş ẇīŧħ ŧħḗ ƥȧřȧḿḗŧḗřş ƀḗŀǿẇ.\n"
-#~ "                "
-
-#~ msgid "The icon file `%(icon_path)s` is not the specified dimensions  of %(icon_size)s x %(icon_size)s as defined in the manifest."
-#~ msgstr "Ŧħḗ īƈǿƞ ƒīŀḗ `%(icon_path)s` īş ƞǿŧ ŧħḗ şƥḗƈīƒīḗḓ ḓīḿḗƞşīǿƞş  ǿƒ %(icon_size)s ẋ %(icon_size)s ȧş ḓḗƒīƞḗḓ īƞ ŧħḗ ḿȧƞīƒḗşŧ."
-
-#~ msgid ""
-#~ "The app name is one of the fields used to return search results in the Firefox Marketplace.\n"
-#~ "                            The app name also appears on the app’s detail page. Be sure you’ve included a descriptive\n"
-#~ "                            name in your app manifest. If you want to change the app name, you’ll need to do that in\n"
-#~ "                            your app manifest."
-#~ msgstr ""
-#~ "Ŧħḗ ȧƥƥ ƞȧḿḗ īş ǿƞḗ ǿƒ ŧħḗ ƒīḗŀḓş ŭşḗḓ ŧǿ řḗŧŭřƞ şḗȧřƈħ řḗşŭŀŧş īƞ ŧħḗ Ƒīřḗƒǿẋ Ḿȧřķḗŧƥŀȧƈḗ.\n"
-#~ "                            Ŧħḗ ȧƥƥ ƞȧḿḗ ȧŀşǿ ȧƥƥḗȧřş ǿƞ ŧħḗ ȧƥƥ’ş ḓḗŧȧīŀ ƥȧɠḗ. Ɓḗ şŭřḗ ẏǿŭ’ṽḗ īƞƈŀŭḓḗḓ ȧ ḓḗşƈřīƥŧīṽḗ\n"
-#~ "                            ƞȧḿḗ īƞ ẏǿŭř ȧƥƥ ḿȧƞīƒḗşŧ. Īƒ ẏǿŭ ẇȧƞŧ ŧǿ ƈħȧƞɠḗ ŧħḗ ȧƥƥ ƞȧḿḗ, ẏǿŭ’ŀŀ ƞḗḗḓ ŧǿ ḓǿ ŧħȧŧ īƞ\n"
-#~ "                            ẏǿŭř ȧƥƥ ḿȧƞīƒḗşŧ."

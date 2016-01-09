@@ -7357,7 +7357,7 @@ msgstr "Redaktør-eskalering"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Video fjernet fra {addon} på grunn av et problem med videoen."
 
 #: mkt/site/log.py:490
 msgid "Video removed"

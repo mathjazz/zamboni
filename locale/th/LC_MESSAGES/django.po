@@ -7354,7 +7354,7 @@ msgstr ""
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "วิดีโอถูกถอดออกจาก {addon} เนื่องจากเกิดปัญหาเกี่ยวกับวิดีโอ"
 
 #: mkt/site/log.py:490
 msgid "Video removed"

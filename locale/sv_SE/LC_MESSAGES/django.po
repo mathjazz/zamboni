@@ -4,8 +4,8 @@ msgstr ""
 "Project-Id-Version: Marketplace 0.1\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2016-01-07 11:57-0800\n"
-"PO-Revision-Date: 2016-01-07 13:28+0000\n"
-"Last-Translator: Luna Jernberg <bittin@cafe8bitar.se>\n"
+"PO-Revision-Date: 2015-12-02 19:52+0000\n"
+"Last-Translator: Andreas Pettersson <az@kth.se>\n"
 "Language-Team: Den svenska L10n-gruppen <community-sweden@lists.mozilla.org>\n"
 "Language: sv_SE\n"
 "MIME-Version: 1.0\n"
@@ -2712,7 +2712,7 @@ msgstr "App borttagen."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Lösenordet var felaktigt. Appen togs inte bort."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2837,6 +2837,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> Det finns två huvudsakliga användningsområden för Marketplace API. Från en annan webbplats med hjälp av en traditionell OAuth-flöde eller från ett kommandoradsverktyg. Skillnaden diskuteras i "
+"<a href=\"https://firefox-marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace dokumentation</a>. Eventuella tester ska ske på <a href=\"https://marketplace-dev."
+"allizom.org\">utvecklingsservern</a> och inte på produktionsservern. </p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3191,11 +3194,11 @@ msgstr "Appar kan ha valfritt antal gruppmedlemmar med 4 möjliga roller:"
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Kan hantera alla aspekter av appens listning, inklusive att lägga till och ta bort andra gruppmedlemmar"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Kan hantera alla aspekter av appens listning, med undantag av att lägga till och ta bort andra gruppmedlemmar och hantera betalningar"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3493,6 +3496,8 @@ msgstr "Versionsanteckningar"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Information om ändringar i denna utgåva, nya funktioner, kända buggar och annan nyttig information som är specifik för denna utgåva/version. Denna information visas även i App-hanteraren vid "
+"uppdatering."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3500,7 +3505,7 @@ msgstr "Anteckningar för granskare"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Alternativt, ange all information som kan vara till nytta för den som granskar denna app, till exempel testkontoinformation."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3520,7 +3525,7 @@ msgstr "Kontakt på Mozilla"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "En e-postadress (eller flera adresser separerade med kommatecken) för denna apps kontakt på Mozilla som kommer att få en kopia på all e-post från granskare."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3564,6 +3569,8 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"Appens namn är ett av de områden som används för att returnera sökresultat i Firefox Marketplace. Appens namn visas också på appens detaljsida. Se till att du har inkluderat ett beskrivande namn i "
+"din apps manifest. Om du vill ändra namnet på appen, måste du göra det i din apps manifest."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3647,11 +3654,11 @@ msgstr "Versionsanteckningar"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Information om förändringar i den senaste versionen, nya funktioner, kända buggar och annan nyttig information som är specifika för denna utgåva/version."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Kategorier är det främsta sättet användarna bläddra igenom appar. Välj något som passar din apps funktionalitet för mest exponering."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3672,7 +3679,7 @@ msgstr "Hemsida"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Om din app har en annan hemsida, skriver du in adressen här. Om din webbplats är översatt till andra språk, flera översättningar av detta fält kan läggas till."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3723,7 +3730,7 @@ msgstr "Hjälpinformation för {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "Den e-postadress som används av slutanvändare för att kontakta dig med supportfrågor. Om du har olika adresser för varje språk, flera översättningar av detta fält kan läggas till."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3731,7 +3738,7 @@ msgstr "Webbplats"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Om din app har en supportwebbplats eller forum, skriver du in adressen här. Om din webbplats är översatt till andra språk, kan flera översättningar av detta fält läggas till."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3756,7 +3763,7 @@ msgstr "Publik statistik?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Huruvida installations- och användningsstatistik för din app kan visas i vår visare online."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4076,7 +4083,7 @@ msgstr "Inskicknings-ID"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "Inskicknings-ID finns på certifikatet som skickas till dig. Det är ett numeriskt värde som &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4084,7 +4091,7 @@ msgstr "Säkerhetskod"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Säkerhetskoden finns på certifikatet som har skickats till dig. Det är en blandning av bokstäver och siffror som &quot;AB12CD3&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4183,7 +4190,7 @@ msgstr "Nycklar för in-app betalningar"
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
-msgstr ""
+msgstr "Firefox Marketplace låter din app ta in-app betalningar. <a href=\"{guide}\">In-app betalningsguiden</a> förklarar hur du konfigurerar din app för betalningar med parametrarna nedan."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -5037,7 +5044,7 @@ msgstr "Egenskapen `beskrivning` kan inte vara längre än 132 tecken."
 #: mkt/extensions/validation.py:37
 #, python-format
 msgid "The icon file `%(icon_path)s` is not the specified dimensions of %(icon_size)s x %(icon_size)s as defined in the manifest."
-msgstr ""
+msgstr "Ikonfilen `%(icon_path)s` har inte de angivna dimensionerna av %(icon_size)s x %(icon_size)s som definierats i manifestet."
 
 #: mkt/extensions/validation.py:40
 #, python-format
@@ -7000,7 +7007,7 @@ msgstr "Sökning ej tillgänglig"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Sökning är ej tillgänglig för tillfället. Försök igen om några minuter."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7384,7 +7391,7 @@ msgstr "Upptrappning granskare"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Video tas bort från {addon} på grund av ett problem med videon."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7574,7 +7581,7 @@ msgstr "Du försökte göra något som du inte fick."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Försök att gå tillbaka till föregående sida, uppdatera och försök igen."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7586,11 +7593,11 @@ msgstr "Vi ber om ursäkt, men vi kan inte hitta det du letar efter."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Sidan eller filen du begärde hittades inte på vår webbplats. Det är möjligt att du klickat på en länk som är inaktuell eller att du har skrivit in en felaktig adress."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Om du skrev in adressen, vänligen dubbelkolla stavningen."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7685,6 +7692,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"En sekretesspolicy förklarar hur du hanterar data som tas emot via din app. Till exempel: vilka data mottar du? Hur använder du den? Vem delar du den med? Tar du emot personlig information? "
+"Vidtar du åtgärder för att göra den anonym? Vilka val har användarna för att kontrollera vilken data som du och andra tar emot? Ange din länk till sekretesspolicyn eller text ovan. Om du inte "
+"har en sekretesspolicy, <a href=\"{url}\" target=\"_blank\">lära dig mer om hur man skriver en.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8220,16 +8230,3 @@ msgstr "Obligatoriska fält"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "(valfri)"
-
-#~ msgid "Video removed from {addon} because of a problem with the video. "
-#~ msgstr "Video borttagen från {addon} för att det var ett problem med videon. "
-
-#~ msgid ""
-#~ "Try going back to the previous page, refreshing and trying\n"
-#~ "              again."
-#~ msgstr ""
-#~ "Prova att gå tillbaka till förra sidan, ladda om och försök \n"
-#~ "              igen."
-
-#~ msgid "Password was incorrect.  App was not deleted."
-#~ msgstr "Lösenordet var fel.   Appen blev inte borttagen."

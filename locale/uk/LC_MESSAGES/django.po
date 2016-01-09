@@ -7580,7 +7580,7 @@ msgstr ""
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Якщо ви ввели адресу, будь ласка, двічі перевірте орфографію."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7675,6 +7675,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"Політика приватності пояснює як ви обробляєте дані, отримані через ваш застосунок. Наприклад: які дані ви отримуєте? Як ви їх використовуєте? З ким ділитесь ними? Чи отримуєте ви особисту "
+"інформацію? Чи робите ви щось, щоб зробити її анонімною? Який вибір мають користувачі для контролю того , які дані отримуєте ви та інші? Введіть посилання на вашу політику приватності або текст "
+"вище. Якщо ви не маєте політики приватності, <a href=\"{url}\" target=\"_blank\">дізнайтеся більше про те як її написати.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
