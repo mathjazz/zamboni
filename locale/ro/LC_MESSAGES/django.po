@@ -2720,7 +2720,7 @@ msgstr "Aplicație ștearsă."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Parolă incorectă. Aplicația nu a fost ștearsă."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2845,6 +2845,9 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> Marketplace API poate fi utilizat în două moduri: prin tradiționalul OAuth, folosit de site-uri web, sau prin unealta pentru linie de comandă. Diferențele sunt discutate la <a href=\"https://"
+"firefox-marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Documentația Marketplace</a>. Orice testare trebuie realizată pe <a href=\"https://marketplace-dev.allizom.org"
+"\">serverul de dezvoltare</a> și nu pe serverul de producție. </p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3200,11 +3203,11 @@ msgstr "Aplicațiile pot avea un număr nelimitat de membri ai echipei cu 4 rolu
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Pot gestiona toate aspectele listării aplicației, inclusiv adăugarea și eliminarea membrilor"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Pot gestiona toate aspectele listării aplicației, cu excepția adăugării sau eliminării de membri și gestionarea plăților"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3503,6 +3506,8 @@ msgstr "Notele versiunii"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Informații despre schimbările din versiunea curentă, noi funcții, defecte cunoscute și alte informații folositoare pentru această versiune. Această informație este afișată și în Managerul de "
+"aplicații când faceți actualizări."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3510,7 +3515,7 @@ msgstr "Note pentru recenzenți"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Opțional, introduceți orice informație ce ar putea fi folositoare persoanei care recenzează aplicația, cum ar fi informații despre conturi de test."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3530,7 +3535,7 @@ msgstr "Contacte Mozilla"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "O adresă de e-mail (sau adrese separate prin virgule) a persoanei de contact Mozilla care va primi o copie (CC) a tuturor e-mailurilor trimise de recenzent."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3574,6 +3579,8 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"Numele aplicației este unul din câmpurile folosite pentru a returna rezultate de căutare pe Firefox Marketplace. Numele aplicației mai apare pe pagina de detaliere a aplicației. Aveți grijă să "
+"includeți un nume descriptiv în manifestul aplicației. Dacă schimbați numele aplicației, va trebui să specificați și în manifest."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3658,11 +3665,11 @@ msgstr "Note asupra ediției"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Informații despre schimbările din ultima ediție, noi funcții, defecte cunoscute și alte informații utile de știut despre ediție/versiune."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Categoriile sunt modalitatea principală prin care utilizatorii răsfoiesc printre aplicații. Alegeți acelea care se potrivesc cel mai bine aplicației pentru expunere maximă."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3683,7 +3690,7 @@ msgstr "Pagină Web"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Dacă aplicația are o altă pagină web, introdu adresa sa aici. Dacă site-ul web este localizat în alte limbi, poți adăuga mai multe adrese specifice pentru fiecare traducere."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3734,7 +3741,7 @@ msgstr "Informații de suport pentru {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "Adresa de e-mail folosită pentru a fi contactați de utilizatori cu probleme de suport. Dacă aveți o adresă diferită pentru fiecare limbă se pot adăuga traduceri diferite pentru acest câmp."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3742,7 +3749,7 @@ msgstr "Site web"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Dacă aplicația are un site web de suport sau forum, introdu adresa sa aici. Dacă site-ul este localizat în alte limbi, se pot adăuga traduceri diferite pentru acest câmp."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3767,7 +3774,7 @@ msgstr "Statistici publice?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Dacă informații despre numărul de instalări și despre utilizarea aplicației pot fi afișate în unealta noastră de statistici online."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4089,7 +4096,7 @@ msgstr "ID propunere"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "ID-ul propunerii poate fi găsit pe certificatul care v-a fost trimis. Este o valoare numerică precum &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4097,7 +4104,7 @@ msgstr "Cod de securitate"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Codul de securitate poate fi găsit pe certificatul pe care l-ați primit. Este format dintr-o combinație de litere și numere ca &quot;AB12CD3&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4198,6 +4205,7 @@ msgstr "Chei de plată în aplicație"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"Firefox Marketplace permite aplicației să accepte plăți în aplicație. <a href=\"{guide}\">Ghidul de plăți în aplicație</a> explică cum să configurați plățile din aplicație cu parametrii de mai jos."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -5056,7 +5064,7 @@ msgstr "Proprietatea „description” nu poate fi mai lungă decât 132 de cara
 #: mkt/extensions/validation.py:37
 #, python-format
 msgid "The icon file `%(icon_path)s` is not the specified dimensions of %(icon_size)s x %(icon_size)s as defined in the manifest."
-msgstr ""
+msgstr "Fișierul iconiță „%(icon_path)s” nu are dimensiunile specificate %(icon_size)s x %(icon_size)s definite în manifest."
 
 #: mkt/extensions/validation.py:40
 #, python-format
@@ -7033,7 +7041,7 @@ msgstr "Căutare indisponibilă"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Căutarea este temporar indisponibilă. Încercați din nou în câteva minute."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7417,7 +7425,7 @@ msgstr "Escaladare recenzent"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Videoclip șters din {addon} din cauza unei probleme video."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7607,7 +7615,7 @@ msgstr "Ați încercat să faceți ceva pentru care nu aveți permisiuni."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Încearcă să revii la pagina anterioară, să reîmprospătezi și să reîncerci."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7619,11 +7627,11 @@ msgstr "Ne pare rău, nu am putut găsi ceea ce căutați."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Pagina sau fișierul cerut nu a fost găsit(ă) pe site-ul nostru. E posibil să fi dat clic pe un link expirat sau să fi tastat adresa în mod greșit."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Dacă ați scris adresa, verificați că e scrisă corect."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7718,6 +7726,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"O politică de confidențialitate explică modul în care se prelucrează datele primite prin intermediul aplicației. De exemplu, ce fel de date primești? Cum le folosești? Cui altcineva mai trimiți "
+"datele? Primești informații personale? Iei măsuri de anonimizare a datelor? Ce opțiuni le oferi utilizatorilor pentru a-și controla datele pe care le primești tu sau alții? Introdu un link sau "
+"scrie textul mai sus. Dacă nu ai o politică de confidențialitate, <a href=\"{url}\" target=\"_blank\">află cum să scrii una.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"

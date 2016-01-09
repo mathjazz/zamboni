@@ -2719,7 +2719,7 @@ msgstr "App törölve."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Hibás jelszó. Az app nem került törlésre."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -4180,6 +4180,8 @@ msgstr "Alkalmazáson belüli fizetés kulcsok"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"A Firefox Marketplace engedélyezi az alkalmazáson belüli fizetéseket. Az <a href=\"{guide}\">alkalmazáson belüli fizetés útmutató</a> magyarázatot nyújt az alkalmazás alábbi paraméterekkel történő "
+"beállítására a fizetéshez."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -7376,7 +7378,7 @@ msgstr "A vizsgálatot végző általi eszkalálás"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "A videó a hibája miatt eltávolítva ebből: {addon}."
 
 #: mkt/site/log.py:490
 msgid "Video removed"

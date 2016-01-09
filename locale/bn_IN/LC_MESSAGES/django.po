@@ -2709,7 +2709,7 @@ msgstr "অ্যাপ মুছে ফেলা হয়েছে।"
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "পাসওয়ার্ড ভুল ছিল। অ্যাপ মুছে ফেলা হয়নি।"
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2834,6 +2834,8 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p> মার্কেটপ্লেস API- র দুটি প্রধান ব্যবহার রয়েছে। অন্য ওয়েব সাইট থেকে একটি ঐতিহ্যগত OAuth flow বা একটি কমান্ড লাইন টুল ব্যবহার করে। তফাতগুলি বর্ণিত হয়েছে <a href=\"https://firefox-marketplace-api.readthedocs."
+"org/en/latest/topics/authentication.html#oauth\">মার্কেটপ্লেস দলিলে</a>। যেকোনো পরীক্ষা চলতে পারে <a href=\"https://marketplace-dev.allizom.org\">ডেভেলপমেন্ট সার্ভারে</a> এবং প্রোডাকশান সার্ভারে নয়। </p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3188,11 +3190,11 @@ msgstr "অ্যাপ এর যে কোন পরিমাণ এর টি
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "অন্যান্য দলের সদস্যদের যোগ এবং অপসারণ সহ, তালিকাভুক্ত অ্যাপগুলি সব দিক পরিচালনা করতে পারেন"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "তালিকাভুক্ত অ্যাপগুলি সব দিক পরিচালনা করতে পারেন, শুধুমাত্র অন্যান্য দলের সদস্যদের যোগ, অপসারণ এবং পেমেন্ট পরিচালনা ব্যতীত"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3486,7 +3488,7 @@ msgstr "সংস্করণ নোটসমূহ"
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
-msgstr ""
+msgstr "এই রিলিজে পরিবর্তনের ব্যাপারে নতুন তথ্য, নতুন বৈশিষ্ট্য, চেনা পরিচিত বাগসমূহ, এবং অন্যান্য উপকারী তথ্য এই রিলিজ/সংস্করণের ব্যাপারে নির্দিষ্ট। এই তথ্যটি অ্যাপ ম্যানেজারেও দেখানো হবে যখন আপডেট করা হবে।"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3494,7 +3496,7 @@ msgstr "সমালোচকদের জন্য নোট"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "বৈকল্পিকভাবে, যেকোনো তথ্য প্রবেশ করান যা রিভিউকারীর এই অ্যাপটি রিভিউ করবার সময় সাহায্য করবে, যেমন পরীক্ষা অ্যাকাউন্ট তথ্য।"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3514,7 +3516,7 @@ msgstr "Mozilla পরিচিতি"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "একটি ইমেল অ্যাড্রেস (কিমবা কমা দিয়ে আলাদা করা অনেকগুলি অ্যাড্রেস) এই অ্যাপ এর Mozilla পরিচিতি রিভিউয়ার এর ইমেলে CC করে দেওয়া হবে।"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3558,6 +3560,8 @@ msgid ""
 "The app name is one of the fields used to return search results in the Firefox Marketplace. The app name also appears on the app’s detail page. Be sure you’ve included a descriptive name in your "
 "app manifest. If you want to change the app name, you’ll need to do that in your app manifest."
 msgstr ""
+"অ্যাপ-এর বিবরণ একটি ক্ষেত্র যেটি আনুসন্ধানের ফলাফল বার করে Firefox মার্কেটপ্লেস-এ। অ্যাপ-এর বর্ণনা অ্যাপ বিবরণের পেজেও থাকে। অ্যাপ-এর ম্যানিফেস্ট ফাইলেঅ্যাপ-এর বর্ণনা আবশ্যই দেবেন। আপনি যদি আপনার অ্যাপ-এর নাম "
+"পালটাতে চান, আপনি পালটাতে পারেন অ্যাপটির মানিফেস্ট ফাইল থেকে।"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:38 mkt/reviewers/templates/reviewers/includes/details.html:40 mkt/reviewers/templates/reviewers/includes/mobile_details.html:98
 msgid "Developer Name"
@@ -3639,11 +3643,11 @@ msgstr "খোঁজার মূলশব্দ"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "এই রিলিজে পরিবর্তনের ব্যাপারে নতুন তথ্য, নতুন বৈশিষ্ট্য, চেনা পরিচিত বাগসমূহ, এবং অন্যান্য উপকারী তথ্য এই রিলিজ/সংস্করণের ব্যাপারে নির্দিষ্ট।"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "বৈশিষ্ট্যসমূহ হল প্রাথমিক উপায় যার মাধ্যমে ব্যবহারকারীরা অ্যাপসমূহ ব্রাউজ করে। সবচেয়ে বেশি এক্সপোজারের জন্য আপনার অ্যাপ্লিকেশনের কার্যকারিতার জন্য যেটা মাপসই সেটা চয়ন করুন।"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3664,7 +3668,7 @@ msgstr "হোমপেজ"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "যদি আপনার অ্যাপ্লিকেশনের অন্য হোমপেজে থাকে, তবে এখানে তার ঠিকানা লিখুন। যদি আপনার ওয়েবসাইট অন্যান্য ভাষায় অনূদিত হয়ে থাকে, এই ফিল্ডের একাধিক অনুবাদ এখানে যোগ করা যেতে পারে।"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3715,7 +3719,7 @@ msgstr "{0} এর সমর্থিত তথ্য"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "শেষ ব্যবহারকারীদের দ্বারা ব্যবহৃত ইমেইল ঠিকানা যা তাদের সাহায্য করবে আপনার সাথে যোগাযোগ করতে। আপনার যদি এই ক্ষেত্রে প্রতিটি ভাষার একাধিক অনুবাদের জন্য বিভিন্ন ঠিকানা থাকে, তাহলে তা যোগ করে দিতে পারেন।"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3723,7 +3727,7 @@ msgstr "ওয়েবসাইট"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "আপনার অ্যাপ্লিকেশনের যদি একটি সমর্থন ওয়েবসাইট বা ফোরাম থাকে, তবে এখানে তার ঠিকানা লিখুন। যদি আপনার ওয়েবসাইট অন্যান্য ভাষায় অনূদিত হয়ে থাকে, তাহলে একাধিক অনুবাদ যোগ করা যেতে পারে।"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3748,7 +3752,7 @@ msgstr "পাবলিক পরিসংখ্যান?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "আমাদের অনলাইন ভিউয়ারে আপনার অ্যাপের ইনস্টল এবং ব্যবহার সংক্রান্ত তথ্য দেখাতে চান কি না।"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4068,7 +4072,7 @@ msgstr "জমার ID"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "আপনাকে পাঠানো সার্টিফিকেটে জমার ID পাওয়া যাবে। যার সাংখ্যিক মান &quot;14&quot; এরূপ হতে পারে।"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4076,7 +4080,7 @@ msgstr "সিকিউরিটি কোড"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "সিকিউরিটি কোডটি আপনাকে পাঠানো সার্টিফিকেটে খুঁজতে পারে। এটি সংখ্যা এবং অক্ষরের একটি মিশ্রণ,যেমন &quot;AB12CD3&quot;।"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4175,7 +4179,7 @@ msgstr "ইন-অ্যাপ পেমেন্টস কি"
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
-msgstr ""
+msgstr "Firefox মার্কেটপ্লেস আপনার অ্যাপকে অনুমতি দেয় ইন-অ্যাপ পেমেন্টস নেওয়ার জন্য। এই <a href=\"{guide}\">ইন-অ্যাপ পেমেন্ট গাইড</a> ব্যাখ্যা করে আপনার অ্যাপকে কিভাবে কনফিগার করবেন নীচের প্যারামিটারগুলোর সাথে।"
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -6992,7 +6996,7 @@ msgstr "সার্চ অনুপলব্ধ"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "সার্চ কিছু সময়ের জন্য অনুপলব্ধ। অনুগ্রহ করে কিছু মিনিটের মধ্যে আবার চেষ্টা করুন।"
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7376,7 +7380,7 @@ msgstr "রিভিউয়ার এস্কালেশান"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "{addon} থেকে ভিডিও মুছে ফেলা হয়েছে কারণ ভিডিও টি তে কিছু সমস্যা ছিল।"
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7566,7 +7570,7 @@ msgstr "আপনি এমন কিছু করতে চেয়েছেন �
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "আগেই পৃষ্ঠায় যাবার চেষ্টা করুন, রিফ্রেশ অথবা পুনরায় চেষ্টা করে।"
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7578,11 +7582,11 @@ msgstr "আমরা দুঃখিত, কিন্তু আমরা খু�
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "এই পেজ বা ফাইল যেটা আপনি আবেদন করেছেন সেটা আমাদের সাইটে পাওয়া যায়নি। এটা সম্ভব যে আপনি একটা লিঙ্কে ক্লিক করেছেন যা তারিখের বাইরের, বা ঠিকানাটি ভুল টাইপ করেছেন।"
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "যদি আপনি ঠিকানা টাইপ করে থাকেন, অনুগ্রহ করে তার বানান দুইবার করে চেষ্টা করুন।"
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7677,6 +7681,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"একটি গোপনীয়তা নীতি আপনি আপনার অ্যাপ্লিকেশন মাধ্যমে প্রাপ্ত তথ্য কিভাবে হ্যান্ডেল করবেন তা ব্যাখ্যা করে। উদাহরণস্বরূপ: আপনি কি তথ্য পাবেন? আপনি কিভাবে এটা ব্যবহার করবেন? কে আপনার সাথে তা ভাগ করে নেবে? আপনি কি "
+#~ "ব্যক্তিগত তথ্য পাবেন? আপনি এটা বেনামী করতে পদক্ষেপ গ্রহণ করবেন ? ব্যবহারকারীদের আপনার এবং অন্যদের তথ্য গ্রহণ করা নিয়ন্ত্রণ করতে হবে কিনা ? আপনার গোপনীয়তা নীতির লিঙ্ক বা টেক্সট উপরে প্রবেশ করান। আপনার যদি একটি "
+#~ "গোপনীয়তার নীতি না থাকে, <a href=\"{url}\" target=\"_blank\"> কিভাবে লিখবেন তা জেনে নিন।</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8213,3 +8220,7 @@ msgstr "প্রয়োজনীয় ফিল্ডসমূহ"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "(optional)"
+
+#~ msgid "{0}%"
+#~ msgstr "{0}%"
+

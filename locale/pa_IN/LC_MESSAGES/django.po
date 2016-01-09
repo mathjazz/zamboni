@@ -2709,7 +2709,7 @@ msgstr "ਐਪ ਹਟਾਈ।"
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "ਪਾਸਵਰਡ ਗਲਤ ਸੀ। ਐਪ ਹਟਾਈ ਨਹੀਂ ਗਈ।"
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -2834,6 +2834,8 @@ msgid ""
 "marketplace-api.readthedocs.org/en/latest/topics/authentication.html#oauth\">Marketplace documentation</a>. Any testing should occur on the <a href=\"https://marketplace-dev.allizom.org"
 "\">development server</a> and not the production server. </p>"
 msgstr ""
+"<p>ਮੰਡੀ API ਲਈ ਇੱਥੇ ਦੋ ਮੁੱਖ ਵਰਤੋਂ ਹਨ। ਇੱਕ ਰਵਾਇਤੀ OAuth ਵਹਿਣ ਦੀ ਵਰਤੋਂ ਕਰਦੇ ਹੋਏ ਦੂਜੀ ਵੈੱਬਸਾਈਟ ਤੋਂ ਜਾਂ ਇੱਕ ਕਮਾਂਡ ਲਾਈਨ ਟੂਲ ਤੋਂ। ਫ਼ਰਕ ਬਾਰੇ ਚਰਚਾ <a href=\"https://firefox-marketplace-api.readthedocs.org/en/latest/topics/"
+"authentication.html#oauth\">ਮੰਡੀ ਦਸਤਾਵੇਜਾਂ</a>ਵਿੱਚ ਕੀਤੀ ਗਈ ਹੈ। ਕਿਸੇ ਵੀ ਤਰ੍ਹਾਂ ਜਾਂਚ ਨਿਰਮਾਣ ਸਰਵਰ ਤੇ ਨਹੀਂ <a href=\"https://marketplace-dev.allizom.org\">ਵਿਕਾਸ ਸਰਵਰ</a> ਤੇ ਹੋਣੀ ਚਾਹੀਦੀ ਹੈ।</p>"
 
 #: mkt/developers/templates/developers/api.html:37
 msgid "Client type"
@@ -3188,11 +3190,11 @@ msgstr "ਐਪਾਂ ਦੇ 4 ਸੰਭਵ ਫ਼ਰਜ਼ਾਂ ਦੇ ਨਾ�
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "ਐਪ ਸੂਚੀਆਂ ਦੇ ਸਾਰੇ ਪਹਿਲੂਆਂ ਦੀ ਸਾਂਭ-ਸੰਭਾਲ ਕਰ ਸਕਦੇ ਹਨ, ਹੋਰਨਾਂ ਟੀਮ ਮੈਬਰਾਂ ਨੂੰ ਜੋੜਨਾ ਜਾਂ ਹਟਾਉਣਾ ਸ਼ਾਮਲ ਕਰਦੇ ਹੋਏ"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "ਐਪ ਸੂਚੀਆਂ ਦੇ ਸਾਰੇ ਪਹਿਲੂਆਂ ਦੀ ਸਾਂਭ-ਸੰਭਾਲ ਕਰ ਸਕਦੇ ਹਨ, ਹੋਰਨਾਂ ਟੀਮ ਮੈਂਬਰਾਂ ਨੂੰ ਜੋੜਨਾ ਜਾਂ ਹਟਾਉਣਾ ਅਤੇ ਭੁਗਤਾਨਾਂ ਦੀ ਸਾਂਭ-ਸੰਭਾਲ ਨੂੰ ਛੱਡ ਕੇ।"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3486,7 +3488,7 @@ msgstr "ਵਰਜਨ ਸੂਚਨਾ"
 #: mkt/developers/templates/developers/apps/version_edit.html:26
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
-msgstr ""
+msgstr "ਇਸ ਰੀਲੀਜ਼ ਵਿੱਚ ਬਦਲਾਅਾਂ ਬਾਰੇ ਜਾਣਕਾਰੀ, ਨਵੀਆਂ ਵਿਸ਼ੇਸਤਾਵਾਂ, ਜਾਣੂ ਬੱਗ, ਅਤੇ ਇਸ ਰੀਲੀਜ਼/ਵਰਜਨ ਤੇ ਅਧਾਰਿਤ ਹੋਰ ਲਾਭਕਾਰੀ ਜਾਣਕਾਰੀ। ਇਹ ਜਾਣਕਾਰੀ ਨਾਲ ਹੀ ਐਪ ਮੈਨੇਜ਼ਰ ਵਿੱਚ ਵਿਖਾਈ ਦਿੰਦੀ ਹੈ ਜਦੋਂ ਅੱਪਡੇਟ ਹੁੰਦੀ ਹੈ।"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3494,7 +3496,7 @@ msgstr "ਸਮੀਖਿਅਕ ਲਈ ਸੂਚਨਾ"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "ਚੁਣੀਂਦਾ ਤੌਰ ਤੇ, ਕੋਈ ਵੀ ਜਾਣਕਾਰੀ ਦਰਜ ਕਰੋ ਜੋ ਸਮੀਖਿਅਕ ਨੂੰ ਇਸ ਐਪ ਦੀ ਸਮੀਖਿਆ ਕਰਨ ਦੌਰਾਨ ਲਾਭਕਾਰੀ ਹੋਵੇ, ਜਿਵੇਂ ਕਿ ਜਾਂਚ ਖਾਤਾ ਜਾਣਕਾਰੀ।"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3514,7 +3516,7 @@ msgstr "ਮੌਜ਼ੀਲਾ ਸੰਪਰਕ"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "ਐਪ ਦਾ ਮੌਜ਼ੀਲਾ ਸੰਪਰਕ ਈ-ਮੇਲ ਪਤਾ (ਜਾਂ ਕੌਮੇ ਦੁਆਰਾ ਵੱਖ ਕੀਤੇ ਪਤੇ) ਜੋ ਕਿਸੇ ਵੀ ਸਮੀਖਿਅਕ ਈਮੇਲਾਂ ਤੇ CC'd ਕੀਤੇ ਜਾਣਗੇ।"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -7469,7 +7471,7 @@ msgstr "ਸਮੀਖਿਆਕ ਤੇਜੀ"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "ਵੀਡੀਓ ਨਾਲ ਇੱਕ ਸਮੱਸਿਆ ਹੋਣ ਕਾਰਨ {addon} ਤੋਂ ਵੀਡੀਓ ਹਟਾਈ ਗਈ ।"
 
 #: mkt/site/log.py:490
 msgid "Video removed"

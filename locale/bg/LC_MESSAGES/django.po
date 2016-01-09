@@ -2728,9 +2728,11 @@ msgstr ""
 msgid "App deleted."
 msgstr ""
 
+# 89%
+# 100%
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Паролата беше грешна. Приложението не беше изтрито."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -7071,7 +7073,7 @@ msgstr "Търсенето не е налично"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Търсенето временно не е налично. Моля, опитайте след няколко минути."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"

@@ -2721,9 +2721,10 @@ msgstr "Plačane aplikacije ni mogoče izbrisati. Namesto tega jo onemogočite."
 msgid "App deleted."
 msgstr "Aplikacija zbrisana."
 
+# 89%
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "Geslo je nepravilno. Aplikacije se ni zbrisalo."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -3206,11 +3207,11 @@ msgstr "Aplikacija ima lahko poljubno število članov skupine s 4 možnimi vlog
 
 #: mkt/developers/templates/developers/apps/owner.html:89
 msgid "Can manage all aspects of the app's listing, including adding and removing other team members"
-msgstr ""
+msgstr "Lahko upravlja vse vidike objave aplikacije, vključno z dodajanjem in brisanjem članov skupine"
 
 #: mkt/developers/templates/developers/apps/owner.html:91
 msgid "Can manage all aspects of the app's listing, except for adding and removing other team members and managing payments"
-msgstr ""
+msgstr "Lahko upravlja vse vidike objave aplikacije, razen dodajanja in brisanja članov skupine ter urejanja plačil"
 
 #: mkt/developers/templates/developers/apps/owner.html:93
 msgid "Can view the app's settings but cannot make any changes"
@@ -3535,7 +3536,7 @@ msgstr "Stik z Mozillo"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "E-poštni naslov (ali naslovi, ločeni z vejico) stika z Mozillo za to aplikacijo, ki jo oz. jih bo vsak recenzent prejel kot Kp v pošti za recenzente."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -7029,7 +7030,7 @@ msgstr "Iskanje ni na voljo"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Iskanje trenutno ni na voljo. Poskusite znova čez nekaj minut."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7418,7 +7419,7 @@ msgstr "Eskalacija recenzenta"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Video odstranjen iz {addon} zaradi težav z videom."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7621,7 +7622,7 @@ msgstr ""
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "The page or file you requested wasn't found on our site. Lahko da ste kliknili na zastarelo povezavo ali pa se zatipkali pri vnosu naslova."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."

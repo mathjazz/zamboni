@@ -6,8 +6,8 @@ msgstr ""
 "Project-Id-Version: addons\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2016-01-07 11:57-0800\n"
-"PO-Revision-Date: 2015-12-27 15:17+0000\n"
-"Last-Translator: Marko Andrejić <marko.andrejic93@gmail.com>\n"
+"PO-Revision-Date: 2015-11-13 06:56+0000\n"
+"Last-Translator: Vanja Tumbas <tumbas93@gmail.com>\n"
 "Language-Team: sr\n"
 "Language: sr\n"
 "MIME-Version: 1.0\n"
@@ -3498,6 +3498,8 @@ msgstr "Beleške o verziji"
 msgid ""
 "Information about changes in this release, new features, known bugs, and other useful information specific to this release/version. This information is also shown in the Apps Manager when updating."
 msgstr ""
+"Informacije o promenama u ovom izdanju, novim mogućnostima, poznatim greškama i druge korisne informacije koje su specifične za ovo izdanje/verziju. Ova informacija je takođe prikazana u Apps "
+"Manager-u prilikom ažuriranja."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:37
 msgid "Notes for Reviewers"
@@ -3505,7 +3507,7 @@ msgstr "Napomene za recenzente"
 
 #: mkt/developers/templates/developers/apps/version_edit.html:38
 msgid "Optionally, enter any information that may be useful to the Reviewer reviewing this app, such as test account information."
-msgstr ""
+msgstr "Po izboru, unesite bilo kakve informacije koje mogu biti korisne za recenzenta koji razmatra ovu aplikaciju, kao što su informacije o test nalogu."
 
 #: mkt/developers/templates/developers/apps/version_edit.html:48 mkt/developers/templates/developers/apps/edit/technical.html:61
 msgid "Minimum Requirements"
@@ -3525,7 +3527,7 @@ msgstr "Mozilla kontakt"
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:73
 msgid "An e-mail address (or addresses separated by commas) of this app's Mozilla contact that will be CC'd on any reviewer emails."
-msgstr ""
+msgstr "Adresa e-pošte (ili adrese razdvojene zarezima) ove aplikacije je Mozilla kontakt koja će biti CC na e-poštu bilo kog recezenta."
 
 #: mkt/developers/templates/developers/apps/edit/admin.html:76
 msgid "Enter email addresses, separated by commas"
@@ -3652,11 +3654,11 @@ msgstr "Beleške o izdanju"
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:174
 msgid "Information about changes in the latest release, new features, known bugs, and other useful information specific to this release/version."
-msgstr ""
+msgstr "Informacije o promenama u poslenjem izdanju, novim karakteristikama, poznatim greškama i drugim korisnim informacijama specifičnim za ovo izdanje/verziju."
 
 #: mkt/developers/templates/developers/apps/edit/basic.html:196
 msgid "Categories are the primary way users browse through apps. Choose any that fit your app's functionality for the most exposure."
-msgstr ""
+msgstr "Kategorije su primarni način koji korisnici koriste za pretragu aplikacija. Izaberite bilo koju koja odgovara funkcionalnosti aplikacije u najvećem slučaju."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:5
 msgid "App Details"
@@ -3677,7 +3679,7 @@ msgstr "Početna"
 
 #: mkt/developers/templates/developers/apps/edit/details.html:37
 msgid "If your app has another homepage, enter its address here. If your website is localized into other languages multiple translations of this field can be added."
-msgstr ""
+msgstr "Ako aplikacija ima još jednu početnu stranicu, ukucajte njenu adresu ovde. Ako je veb sajt preveden na drugi jezik, višestruki prevodi ove oblasti se mogu dodati."
 
 #: mkt/developers/templates/developers/apps/edit/details.html:55 mkt/reviewers/templates/reviewers/includes/details.html:55 mkt/reviewers/templates/reviewers/includes/mobile_details.html:120
 #: mkt/templates/mkt/footer.html:15
@@ -3728,7 +3730,7 @@ msgstr "Informacije o podršci za {0}"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:23
 msgid "The email address used by end users to contact you with support issues. If you have different addresses for each language multiple translations of this field can be added."
-msgstr ""
+msgstr "Adresa e-pošte koja se koristi da bi krajnji korisnici kontaktirli u slučaju podrške. Ako imate različite adrese za svaki jezik, moguće je dodati više prevoda polja."
 
 #: mkt/developers/templates/developers/apps/edit/support.html:41 mkt/reviewers/templates/reviewers/includes/details.html:103 mkt/reviewers/templates/reviewers/includes/mobile_details.html:92
 msgid "Website"
@@ -3736,7 +3738,7 @@ msgstr "Veb sajt"
 
 #: mkt/developers/templates/developers/apps/edit/support.html:43
 msgid "If your app has a support website or forum, enter its address here. If your website is localized into other languages, multiple translations of this field can be added."
-msgstr ""
+msgstr "Ako aplikacija ima veb sajt za podršku ili forum, ukucajte njegovu adresu ovde. Ako je veb sajt preveden na druge jezike, višestruki prevodi ovog polja mogu biti dodati."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:5
 msgid "Technical Details"
@@ -3761,7 +3763,7 @@ msgstr "Javna statistika?"
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:37
 msgid "Whether the install and usage stats of your app can be displayed in our online viewer."
-msgstr ""
+msgstr "Bez obzira da li su instalirane i korišćene statistike Vaše aplikacije mogu biti prikazane na našem onlajn prikazivaču."
 
 #: mkt/developers/templates/developers/apps/edit/technical.html:41
 msgid "This app's stats are publicly viewable."
@@ -4081,7 +4083,7 @@ msgstr "ID podnošenja"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:112
 msgid "The submission ID can be found on the certificate sent to you. It is a numeric value like &quot;14&quot;."
-msgstr ""
+msgstr "Podnešen ID može biti nađen na sertifikatu koji Vam je poslat. Ima numeričku vrednost kao &quot;14&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:121
 msgid "Security Code"
@@ -4089,7 +4091,7 @@ msgstr "Sigurnosna lozinka"
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_edit.html:128
 msgid "The security code can be found on the certificate sent to you. It is a mix of letters and numbers like &quot;AB12CD3&quot;."
-msgstr ""
+msgstr "Sigurnosni kod može biti nađen na sertifikatu koji je poslat. To je mešavina slova i brojeva kao &quot;AB12CD3&quot;."
 
 #: mkt/developers/templates/developers/apps/ratings/ratings_summary.html:14 mkt/lookup/templates/lookup/helpers/app_header.html:15 mkt/lookup/templates/lookup/helpers/website_header.html:16
 msgid "Summary"
@@ -4190,6 +4192,8 @@ msgstr "Ključevi za plaćanja unutar aplikacije"
 #: mkt/developers/templates/developers/payments/in-app-config.html:23
 msgid "The Firefox Marketplace allows your app to take in-app payments. The <a href=\"{guide}\">in-app payment guide</a> explains how to configure your app for payments with the parameters below."
 msgstr ""
+"The Firefox Marketplace omogućava da aplikacija ima plaćanje u okviru nje. <a href=\"{guide}\">Vodič za plaćanja u okviru aplikacije</a> objašnjava kako da podesite aplikaciju za plaćanja sa "
+"parametrima ispod."
 
 #: mkt/developers/templates/developers/payments/in-app-config.html:31 mkt/developers/templates/developers/payments/in-app-keys.html:29
 msgid "Application Key"
@@ -7017,7 +7021,7 @@ msgstr "Pretraga je nedostupna"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "Pretraga je trenutno nedostupna. Pokušajte ponovo za nekoliko minuta."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7401,7 +7405,7 @@ msgstr "Eskalacija recezenta"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Video je ukloljen iz {addon} zbog problema sa snimkom."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7591,7 +7595,7 @@ msgstr "Pokušali ste da uradite nešto što nije dozvoljeno."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Pokušajte da se vratite na prethodnu stranicu, osvežite je i pokušajte ponovo."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7603,11 +7607,11 @@ msgstr "Žao nam je, ali ne možemo da pronađemo ono što tražite."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Stranica ili datoteka koju ste tražili nisu pronađeni na našem sajtu. Moguće je da ste kliknuli na vezu koja je zastarela, ili da ste otkucali adresu pogrešno."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Ako ste ukucali adresu, proverite pravopis."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
@@ -7702,6 +7706,9 @@ msgid ""
 "you take steps to make it anonymous? What choices do users have to control what data you and others receive? Enter your privacy policy link or text above.  If you don't have a privacy policy, <a "
 "href=\"{url}\" target=\"_blank\">learn more on how to write one.</a>"
 msgstr ""
+"Polisa privatnosti objašnjava kako se rukuje sa podacima koji su dobijeni kroz aplikaciju. Na primer: Koje podatke dobijate? Kako ih koristite? Sa kime ih delite? Da li dobijate lične podatke? "
+"Da li preduzimate korake da ih učinite anonimnim? Kakav izbor korisnici imaju kod kontrole podataka koje Vi i ostali dobijate? Unesite polisu privatnosti ili tekst iznad. Ako nemate polisu "
+"privatnosti, <a href=\"{url}\" target=\"_blank\">saznajte kako da je napravite.</a>"
 
 #: mkt/submit/forms.py:308
 msgid "Homepage:"
@@ -8243,3 +8250,4 @@ msgstr "Potrebna polja"
 #: templates/includes/forms.html:10
 msgid "(optional)"
 msgstr "(opciono)"
+

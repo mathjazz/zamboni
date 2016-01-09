@@ -7359,7 +7359,7 @@ msgstr "Upptrappning granskare"
 
 #: mkt/site/log.py:488
 msgid "Video removed from {addon} because of a problem with the video."
-msgstr ""
+msgstr "Video tas bort från {addon} på grund av ett problem med videon."
 
 #: mkt/site/log.py:490
 msgid "Video removed"
@@ -7549,7 +7549,7 @@ msgstr "Du försökte göra något som du inte fick."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "Försök att gå tillbaka till föregående sida, uppdatera och försök igen."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7561,11 +7561,11 @@ msgstr "Vi ber om ursäkt, men vi kan inte hitta det du letar efter."
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "Sidan eller filen du begärde hittades inte på vår webbplats. Det är möjligt att du klickat på en länk som är inaktuell eller att du har skrivit in en felaktig adress."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "Om du skrev in adressen, vänligen dubbelkolla stavningen."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format

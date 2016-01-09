@@ -2727,7 +2727,7 @@ msgstr "حُذف التطبيق."
 
 #: mkt/developers/views.py:170
 msgid "Password was incorrect. App was not deleted."
-msgstr ""
+msgstr "كلمة السر خاطئة. لم يُحذف التطبيق."
 
 #: mkt/developers/views.py:214
 msgid "App successfully resubmitted."
@@ -7058,7 +7058,7 @@ msgstr "البحث غير متوفر حاليًا"
 
 #: mkt/search/templates/search/down.html:10
 msgid "Search is temporarily unavailable. Please try again in a few minutes."
-msgstr ""
+msgstr "البحث غير متوفر مؤقتًا. رجاءً حاول مجددًا بعد بضع دقائق."
 
 #: mkt/site/context_processors.py:57
 msgid "Account Settings"
@@ -7633,7 +7633,7 @@ msgstr "لقد حاولت القيام بشيء غير مسموح به لك."
 
 #: mkt/site/templates/site/403.html:11
 msgid "Try going back to the previous page, refreshing and trying again."
-msgstr ""
+msgstr "حاول العودة إلى الصفحة السابقة، وأعد تحميل الصفحة وحاول مجددا."
 
 #: mkt/site/templates/site/404.html:4
 msgid "Page Not Found"
@@ -7645,11 +7645,11 @@ msgstr "نأسف لذلك، ولكن لا يمكننا إيجاد ما تبحث 
 
 #: mkt/site/templates/site/404.html:11
 msgid "The page or file you requested wasn't found on our site. It's possible that you clicked a link that's out of date, or typed in the address incorrectly."
-msgstr ""
+msgstr "لم يُعثر على الصفحة أو الملف الذي طلبته. من المُحتمل أن تكون قد طلبت رابطا قديما أو منتهيا، أو أنك أخطأت في كتابتك للعنوان."
 
 #: mkt/site/templates/site/404.html:16
 msgid "If you typed in the address, please double check the spelling."
-msgstr ""
+msgstr "إذا كنت كتبته في العنوان، فرجاءً راجع كتابتك مرة أخرى."
 
 #: mkt/site/templates/site/404.html:19
 #, python-format
